@@ -4,14 +4,6 @@
 
 namespace toolkit::opengl {
 
-extern math::vector3 White;
-extern math::vector3 Black;
-extern math::vector3 Red;
-extern math::vector3 Green;
-extern math::vector3 Blue;
-extern math::vector3 Yellow;
-extern math::vector3 Purple;
-
 void draw_lines(std::vector<std::pair<math::vector3, math::vector3>> &lines,
                 math::matrix4 vp, math::vector3 color = White);
 

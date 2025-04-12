@@ -16,16 +16,10 @@ class editor;
 
 class editor : public iapp {
 public:
-  void init() {
-    context::get_instance().init();
-    dm_sys = add_sys<default_mixed>();
-    transform_sys = add_sys<transform_system>();
-    script_sys = add_sys<script_system>();
-  }
-
+  void init();
   void run();
 
-  ImGuiIO *io = nullptr;
+  ImGuiIO *imgui_io = nullptr;
   stopwatch timer;
 
   bool with_translate = false, with_rotate = false, with_scale = false;
@@ -39,16 +33,17 @@ public:
 
   entt::entity active_camera = entt::null, selected_entity = entt::null;
 
-  default_mixed *dm_sys = nullptr;
+  defered_forward_mixed *dm_sys = nullptr;
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
 
+  bool assets_window_open = false;
+  std::map<std::string, bool> system_menu_open;
+
+  void draw_main_menubar();
+  void draw_entity_hierarchy();
+  void draw_entity_components();
   void draw_gizmos(bool enable = true);
 };
-
-// entt::entity CreateCube(entt::registry &registry);
-// entt::entity CreateSphere(entt::registry &registry);
-// entt::entity CreateCylinder(entt::registry &registry);
-// entt::entity CreateCone(entt::registry &registry);
 
 }; // namespace toolkit::opengl

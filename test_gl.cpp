@@ -1,29 +1,17 @@
-#include "toolkit/opengl/base.hpp"
 #include "toolkit/opengl/editor.hpp"
-#include <iostream>
+
+using namespace toolkit;
 
 int main() {
-  auto &instance = toolkit::opengl::context::get_instance();
-  instance.init();
+  toolkit::opengl::editor editor;
+  editor.init();
 
-  unsigned int frameCounter = 0;
+  for (int i = 0; i < 10; i++) {
+    auto ent = editor.registry.create();
+    auto &trans = editor.registry.emplace<transform>(ent);
+    trans.name = str_format("entity %d", i);
+  }
 
-  instance.run([&]() {
-    instance.set_window_title(toolkit::str_format("%d", frameCounter++));
-
-    instance.begin_imgui();
-
-    if (ImGui::Button("This is a button")) {
-      std::string filepath;
-      if (toolkit::open_file_dialog("select a .bvh file", {"*.bvh", "*.BVH"},
-                                    "*.bvh", filepath)) {
-        std::cout << filepath << std::endl;
-      }
-    }
-
-    instance.end_imgui();
-    instance.swap_buffer();
-  });
-
+  editor.run();
   return 0;
 }

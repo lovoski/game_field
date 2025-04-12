@@ -3,14 +3,12 @@
 #include "toolkit/reflect.hpp"
 #include "toolkit/utils.hpp"
 #include <entt.hpp>
+#include <imgui.h>
 #include <iostream>
 #include <json.hpp>
 
 namespace toolkit {
 
-/**
- * Provide a uniform way to store context variables
- */
 class isystem {
 public:
   isystem() {}
@@ -33,6 +31,10 @@ public:
   virtual void preupdate(entt::registry &registry, float dt) {}
   virtual void update(entt::registry &registry, float dt) {}
   virtual void lateupdate(entt::registry &registry, float dt) {}
+
+  virtual void draw_menu_gui() {}
+  virtual void draw_gui(entt::registry &registry, entt::entity entity) {}
+  virtual std::string get_name() { return typeid(*this).name(); }
 
   bool active = true;
 };
@@ -84,11 +86,17 @@ public:
                              std::function<void(iapp *app, nlohmann::json &)>>>
       __sys_serializer_callbacks__;
 
+  static inline std::map<
+      std::string,
+      std::vector<std::pair<
+          std::string, std::function<void(entt::registry &, entt::entity)>>>>
+      __add_comp_map__;
+
 protected:
   std::vector<std::shared_ptr<isystem>> systems;
 };
 
-#define SERIALIZABLE_COMPONENT(class_name, ...)                                \
+#define DECLARE_COMPONENT(class_name, category, ...)                           \
   REFLECT(class_name, __VA_ARGS__)                                             \
 public:                                                                        \
   static void __comp_serializer__##class_name(                                 \
@@ -104,17 +112,31 @@ public:                                                                        \
       comp.deserialize(j[get_reflect_name()]);                                 \
     }                                                                          \
   }                                                                            \
+  static void __add_comp_##class_name(entt::registry &registry,                \
+                                      entt::entity entity) {                   \
+    if (auto ptr = registry.try_get<class_name>(entity))                       \
+      return;                                                                  \
+    registry.emplace<class_name>(entity);                                      \
+  }                                                                            \
                                                                                \
 private:                                                                       \
-  static inline bool _register_serializer_##class_name = []() {                \
+  static inline bool _register_##class_name = []() {                           \
     toolkit::iapp::__comp_serializer_callbacks__.insert(                       \
         std::make_pair(get_reflect_name(),                                     \
                        std::make_pair(__comp_serializer__##class_name,         \
                                       __comp_deserializer__##class_name)));    \
+    if (toolkit::iapp::__add_comp_map__.find(#category) ==                     \
+        toolkit::iapp::__add_comp_map__.end()) {                               \
+      toolkit::iapp::__add_comp_map__[#category] = std::vector<                \
+          std::pair<std::string,                                               \
+                    std::function<void(entt::registry &, entt::entity)>>>();   \
+    }                                                                          \
+    toolkit::iapp::__add_comp_map__[#category].push_back(                      \
+        std::make_pair(get_reflect_name(), __add_comp_##class_name));          \
     return true;                                                               \
   }();
 
-#define SERIALIZABLE_SYSTEM(class_name, ...)                                   \
+#define DECLARE_SYSTEM(class_name, ...)                                        \
   REFLECT(class_name, __VA_ARGS__)                                             \
 public:                                                                        \
   static void __sys_serializer__##class_name(iapp *app, nlohmann::json &j) {   \

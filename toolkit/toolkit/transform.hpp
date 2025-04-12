@@ -1,11 +1,11 @@
 #pragma once
 
-#include <toolkit/math.hpp>
-#include <toolkit/utils.hpp>
 #include <algorithm>
 #include <entt.hpp>
 #include <queue>
 #include <stack>
+#include <toolkit/math.hpp>
+#include <toolkit/utils.hpp>
 #include <vector>
 
 #include <toolkit/reflect.hpp>
@@ -16,7 +16,7 @@ namespace toolkit {
 void on_transform_created(entt::registry &registry, entt::entity entity);
 void on_transform_destroyed(entt::registry &registry, entt::entity entity);
 
-struct transform {
+class transform {
 public:
   friend class transform_system;
   entt::registry *registry = nullptr;
@@ -31,6 +31,7 @@ public:
   math::vector3 local_position() const { return m_local_pos; }
   math::vector3 local_scale() const { return m_local_scale; }
   math::quat local_rotation() const { return m_local_rot; }
+  math::vector3 local_euler_angles() const { return m_local_euler; }
   math::vector3 local_up() const { return m_local_up; }
   math::vector3 local_forward() const { return m_local_forward; }
   math::vector3 local_left() const { return m_local_left; }
@@ -53,9 +54,24 @@ public:
     update_local_axes();
     dirty = true;
   }
-  void set_local_position(math::vector3 p) {}
-  void set_local_scale(math::vector3 s) {}
-  void set_local_rotation(math::quat q) {}
+  void set_local_position(math::vector3 p) {
+    m_local_pos = p;
+    dirty = true;
+  }
+  void set_local_scale(math::vector3 s) {
+    m_local_scale = s;
+    dirty = true;
+  }
+  void set_local_rotation(math::quat q) {
+    m_local_rot = q;
+    m_local_euler = math::rad_to_deg(math::quat_to_euler(m_local_rot));
+    dirty = true;
+  }
+  void set_local_euler_angles(math::vector3 a) {
+    m_local_rot = math::euler_to_quat(math::deg_to_rad(a));
+    m_local_euler = a;
+    dirty = true;
+  }
 
   void reset();
   math::matrix4 matrix() const { return m_matrix; }
@@ -80,8 +96,8 @@ public:
     if (cTrans.m_parent != entt::null) {
       auto &cpTrans = registry->get<transform>(cTrans.m_parent);
       // remove the entity off its parent
-      auto it =
-          std::find(cpTrans.m_children.begin(), cpTrans.m_children.end(), child);
+      auto it = std::find(cpTrans.m_children.begin(), cpTrans.m_children.end(),
+                          child);
       if (it != cpTrans.m_children.end())
         cpTrans.m_children.erase(it);
     }
@@ -95,9 +111,11 @@ public:
   void clear_relations() {
     if (m_parent != entt::null) {
       auto &pTrans = registry->get<transform>(m_parent);
-      auto it = std::find(pTrans.m_children.begin(), pTrans.m_children.end(), self);
+      auto it =
+          std::find(pTrans.m_children.begin(), pTrans.m_children.end(), self);
       if (it != pTrans.m_children.end())
         pTrans.m_children.erase(it);
+      m_parent = entt::null;
     }
     for (auto c : m_children)
       registry->get<transform>(c).m_parent = entt::null;
@@ -107,9 +125,11 @@ public:
   bool remove_parent() {
     if (m_parent != entt::null) {
       auto &pTrans = registry->get<transform>(m_parent);
-      auto it = std::find(pTrans.m_children.begin(), pTrans.m_children.end(), self);
+      auto it =
+          std::find(pTrans.m_children.begin(), pTrans.m_children.end(), self);
       if (it != pTrans.m_children.end())
         pTrans.m_children.erase(it);
+      m_parent = entt::null;
       return true;
     } else
       return false;
@@ -139,7 +159,8 @@ public:
   }
 
   void get_parent_local_axes(math::vector3 &pLocalForward,
-                          math::vector3 &pLocalLeft, math::vector3 &pLocalUp) {
+                             math::vector3 &pLocalLeft,
+                             math::vector3 &pLocalUp) {
     if (m_parent == entt::null) {
       pLocalForward = math::world_forward;
       pLocalLeft = math::world_left;
@@ -186,15 +207,16 @@ private:
 
   math::matrix3 _M, _M_p;
 
-  math::vector3 m_local_up = math::world_up, m_local_forward = math::world_forward,
+  math::vector3 m_local_up = math::world_up,
+                m_local_forward = math::world_forward,
                 m_local_left = math::world_left;
 
   math::matrix4 m_matrix = math::matrix4::Identity();
 
-  SERIALIZABLE_COMPONENT(transform, m_pos, m_local_pos, m_scale, m_local_scale,
-                         m_rot, m_local_up, m_local_forward, m_local_left,
-                         m_local_rot, m_local_euler, m_matrix, name, dirty, m_parent,
-                         m_children)
+  DECLARE_COMPONENT(transform, basic, m_pos, m_local_pos, m_scale,
+                         m_local_scale, m_rot, m_local_up, m_local_forward,
+                         m_local_left, m_local_rot, m_local_euler, m_matrix,
+                         name, dirty, m_parent, m_children)
 };
 
 class transform_system : public isystem {
@@ -205,43 +227,16 @@ public:
   }
   void init1(entt::registry &registry) override {}
 
-  void update_transform(entt::registry &registry) {
-    // find the root entities
-    auto view = registry.view<transform>();
-    int qFront = 0, qBack = 0, size = view.size();
-    entity_refresh_queue.resize(size);
-    view.each([&](entt::entity ent, transform &trans) {
-      if (trans.m_parent == entt::null)
-        entity_refresh_queue[qBack++] = std::make_pair(trans.dirty, ent);
-    });
-    // traverse the hierarchy, update transform if dirty
-    while (qFront != qBack) {
-      auto [dirty, ent] = entity_refresh_queue[qFront];
-      qFront = (qFront + 1) % size;
-      auto &trans = registry.get<transform>(ent);
-      for (auto child : trans.m_children) {
-        entity_refresh_queue[qBack] = std::make_pair(
-            dirty || registry.get<transform>(child).dirty, child);
-        qBack = (qBack + 1) % size;
-      }
-      // update global positions with local positions
-      if (dirty) {
-        trans.m_pos = trans.local_to_world(trans.m_local_pos);
-        // the global rotation is constructed from m_local_rot
-        // all dirty children will get this updated parent orientation
-        trans.m_rot = trans.parent_rotation() * trans.m_local_rot;
-        trans.m_scale = trans.parent_scale().array() * trans.m_local_scale.array();
-        trans.update_matrix();
-        trans.update_local_axes();
-        trans.dirty = false;
-      }
-    }
-  }
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+
+  void update_transform(entt::registry &registry);
+
+  std::vector<entt::entity> root_entities;
 
 private:
   std::vector<std::pair<bool, entt::entity>> entity_refresh_queue;
 
-  SERIALIZABLE_SYSTEM(transform_system)
+  DECLARE_SYSTEM(transform_system)
 };
 
 }; // namespace toolkit

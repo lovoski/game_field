@@ -45,11 +45,11 @@ public:
         script->lateupdate(app, dt);
   }
 
-  SERIALIZABLE_SYSTEM(script_system)
+  DECLARE_SYSTEM(script_system)
 };
 
 #define DECLARE_SCRIPT(class_name, ...)                                        \
-  SERIALIZABLE_COMPONENT(class_name, __VA_ARGS__)                              \
+  DECLARE_COMPONENT(class_name, __VA_ARGS__)                              \
 private:                                                                       \
   static inline bool _register_script_##class_name = []() { return true; }();
 

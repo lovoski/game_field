@@ -4,6 +4,14 @@
 
 namespace toolkit::opengl {
 
+extern math::vector3 White;
+extern math::vector3 Black;
+extern math::vector3 Red;
+extern math::vector3 Green;
+extern math::vector3 Blue;
+extern math::vector3 Yellow;
+extern math::vector3 Purple;
+
 class context {
 public:
   // Get the singleton instance
@@ -255,7 +263,7 @@ public:
     context::vertex_array_handles.insert(gl_handle);
   }
   void del() {
-    if (glIsBuffer(gl_handle))
+    if (glIsVertexArray(gl_handle))
       glDeleteVertexArrays(1, &gl_handle);
   }
 
@@ -286,13 +294,9 @@ public:
 
   // Constructor: Initializes the texture object
   void create(GLenum target = GL_TEXTURE_2D) {
-    del(); // clear existing texutre if exists
     gl_handle = 0;
     gl_target = target;
     glGenTextures(1, &gl_handle);
-    if (gl_handle == 0) {
-      throw std::runtime_error("Failed to create texture");
-    }
     context::texture_handles.insert(gl_handle);
   }
 
@@ -351,9 +355,6 @@ public:
 
   // Binds the texture to a specific texture unit (default: 0)
   void bind(GLuint unit = 0) const {
-    if (!glIsTexture(gl_handle))
-      throw std::runtime_error(
-          "gl_handle is not a valid texture, can't bind to texture slot");
     glActiveTexture(GL_TEXTURE0 + unit);
     glBindTexture(gl_target, gl_handle);
   }
@@ -448,59 +449,33 @@ public:
                prev_viewport[3]);
   }
 
-  // 附加颜色附件（支持多目标渲染）
   void attach_color_buffer(const texture &texture,
                          GLenum attachment = GL_COLOR_ATTACHMENT0,
                          int mipLevel = 0) {
-    bind();
     glFramebufferTexture2D(m_bound_target, attachment, texture.get_target(),
                            texture.get_handle(), mipLevel);
     m_color_attachments.push_back(attachment);
     update_draw_buffers();
   }
 
-  // 附加深度附件（支持纹理或Renderbuffer）
   void attach_depth_buffer(const texture &texture) {
-    bind();
     glFramebufferTexture2D(m_bound_target, GL_DEPTH_ATTACHMENT,
                            texture.get_target(), texture.get_handle(), 0);
   }
 
-  // 检查帧缓冲完整性
   bool check_status() {
-    bind();
     return glCheckFramebufferStatus(m_bound_target) == GL_FRAMEBUFFER_COMPLETE;
   }
 
-  // 设置视口与帧缓冲尺寸匹配
-  void set_viewport() const { glViewport(0, 0, m_width, m_height); }
-
-  // 读取像素数据到内存（支持多附件）
-  void read_pixels(GLint x, GLint y, GLsizei width, GLsizei height,
-                  GLenum format, GLenum type, void *data,
-                  GLenum attachment = GL_COLOR_ATTACHMENT0) {
-    bind(GL_READ_FRAMEBUFFER);
-    glReadBuffer(attachment);
-    glReadPixels(x, y, width, height, format, type, data);
-  }
-
-  // 动态调整尺寸（需重新配置所有附件）
-  void resize(GLsizei width, GLsizei height) {
-    m_width = width;
-    m_height = height;
-    // 需外部重新附加调整后的Texture/Renderbuffer
-  }
+  void set_viewport(int x, int y, int w, int h) const { glViewport(x, y, w, h); }
 
 private:
   GLuint m_fbo = 0;
   GLenum m_bound_target = GL_FRAMEBUFFER;
-  GLsizei m_width = 0;
-  GLsizei m_height = 0;
   std::vector<GLenum> m_color_attachments;
 
   int prev_fbo, prev_viewport[4];
 
-  // 更新绘制目标配置
   void update_draw_buffers() {
     if (!m_color_attachments.empty()) {
       glDrawBuffers(m_color_attachments.size(), m_color_attachments.data());

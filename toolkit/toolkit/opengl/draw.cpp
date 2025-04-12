@@ -1,16 +1,8 @@
-#include "ToolKit/OpenGL/Draw.hpp"
+#include "toolkit/opengl/draw.hpp"
 
 using namespace toolkit::math;
 
 namespace toolkit::opengl {
-
-math::vector3 White = math::vector3(1.0, 1.0, 1.0);
-math::vector3 Black = math::vector3(0.0, 0.0, 0.0);
-math::vector3 Red = math::vector3(1.0, 0.0, 0.0);
-math::vector3 Green = math::vector3(0.0, 1.0, 0.0);
-math::vector3 Blue = math::vector3(0.0, 0.0, 1.0);
-math::vector3 Yellow = math::vector3(1.0, 1.0, 0.0);
-math::vector3 Purple = math::vector3(1.0, 0.0, 1.0);
 
 const std::string lineVS = R"(
   #version 330 core

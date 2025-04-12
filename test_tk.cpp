@@ -13,7 +13,7 @@ class Renderable {
 public:
   toolkit::math::vector3 diffuse, specular, roughness;
 
-  SERIALIZABLE_COMPONENT(Renderable, diffuse, specular, roughness)
+  DECLARE_COMPONENT(Renderable, graphcis, diffuse, specular, roughness)
 };
 
 class Test1 {
@@ -69,7 +69,7 @@ public:
 
   void update(toolkit::iapp *app, float dt) {
     std::cout << "update test_script1" << std::endl;
-    if (auto ptr = dynamic_cast<toolkit::opengl::editor*>(app)) {
+    if (auto ptr = dynamic_cast<toolkit::opengl::editor *>(app)) {
       std::cout << "app is editor in test_script1" << std::endl;
     }
   }

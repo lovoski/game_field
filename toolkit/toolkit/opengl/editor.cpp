@@ -1,6 +1,19 @@
-#include "ToolKit/OpenGL/Editor.hpp"
+#include "toolkit/opengl/editor.hpp"
 
 namespace toolkit::opengl {
+
+void editor::init() {
+  auto &instance = context::get_instance();
+  instance.init();
+  transform_sys = add_sys<transform_system>();
+  dm_sys = add_sys<defered_forward_mixed>();
+  script_sys = add_sys<script_system>();
+
+  // init imgui
+  imgui_io = &ImGui::GetIO();
+  imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+}
 
 void editor::run() {
   auto &instance = context::get_instance();
@@ -31,8 +44,39 @@ void editor::run() {
 
     dm_sys->render(registry);
 
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, instance.wnd_width, instance.wnd_height);
+
     instance.begin_imgui();
+
+    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+    ImGui::Begin("Scene");
+    ImGui::BeginChild("GameRenderer");
+    auto size = ImGui::GetContentRegionAvail();
+    auto pos = ImGui::GetWindowPos();
+    instance.scene_pos_x = pos.x;
+    instance.scene_pos_y = pos.y;
+    // gcontext.activeWorld->GetSystem<GLSystem>()->ShowRenderTargetImage(
+    // {size.x, size.y});
+    if (instance.scene_width != size.x || instance.scene_height != size.y) {
+      // resize sceneFBO
+      instance.scene_width = size.x;
+      instance.scene_height = size.y;
+      // gcontext.activeWorld->GetSystem<GLSystem>()->ResizeRenderTarget(
+      //     {size.x, size.y});
+      dm_sys->render(registry);
+    }
+    draw_gizmos();
+    ImGui::EndChild();
+    ImGui::End();
+
+    draw_main_menubar();
+    draw_entity_hierarchy();
+    draw_entity_components();
+
     instance.end_imgui();
+
     instance.swap_buffer();
   });
 }
@@ -94,9 +138,272 @@ void editor::draw_gizmos(bool enable) {
   }
 }
 
-// entt::entity CreateCube(entt::registry &registry) {}
-// entt::entity CreateSphere(entt::registry &registry) {}
-// entt::entity CreateCylinder(entt::registry &registry) {}
-// entt::entity CreateCone(entt::registry &registry) {}
+void editor::draw_main_menubar() {
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("File")) {
+      // ---------------------- Scene save/load menu ----------------------
+      ImGui::MenuItem("Scene", nullptr, false, false);
+      if (ImGui::MenuItem("Reset Scene")) {
+        // handleReset(world);
+        spdlog::info("Reset scene");
+      }
+      if (ImGui::MenuItem("Save  Scene")) {
+        std::string filepath;
+        if (save_file_dialog("Serialize scene file", {"*.scene"}, "Scene File",
+                             filepath)) {
+          // if (world->Save(filepath))
+          //   spdlog::info("Save scene to {0}", filepath);
+          // else
+          //   spdlog::error("Failed to save scene to {0}", filepath);
+        }
+      }
+      if (ImGui::MenuItem("Load  Scene")) {
+        std::string filepath;
+        if (open_file_dialog("Deserialize scene file", {"*.scene"},
+                             "Scene File", filepath)) {
+          // if (world->Load(filepath))
+          //   spdlog::info("Load scene from {0}", filepath);
+          // else
+          //   spdlog::error("Failed to load scene from {0}", filepath);
+        }
+      }
+      ImGui::Separator();
+
+      // ---------------------- Assets save/load menu ----------------------
+      ImGui::MenuItem("Assets", nullptr, false, false);
+      if (ImGui::MenuItem("Import")) {
+        std::string selectedAssetFile;
+        if (open_file_dialog(
+                "Import One Asset",
+                {"*.fbx", "*.obj", "*.bvh", "*.png", "*.jpg", "*.tga"},
+                "Asset File", selectedAssetFile)) {
+          spdlog::info("Load selected asset file {0}", selectedAssetFile);
+          // handleImportAsset(selectedAssetFile);
+        }
+      }
+      ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Settings")) {
+      ImGui::MenuItem("Configure Systems", nullptr, false, false);
+      for (auto &sys : systems) {
+        if (ImGui::MenuItem(sys->get_name().c_str())) {
+          auto it = system_menu_open.find(sys->get_name());
+          if (it == system_menu_open.end())
+            system_menu_open.insert(std::make_pair(sys->get_name(), true));
+          else
+            it->second = true;
+        }
+      }
+      ImGui::EndMenu();
+    }
+    // if (ImGui::MenuItem("Assets"))
+    //   assets_window_open = true;
+
+    static stopwatch _timer;
+    static int _frameCount = 0, _displayFPS = 0;
+    static float _frameCountTimer = 0.0f, _displayFT = 0.0;
+
+    auto deltaTime = _timer.elapse_s();
+    _frameCount += 1;
+    _frameCountTimer += deltaTime;
+    if (_frameCountTimer >= 1.0f) {
+      _displayFPS = _frameCount;
+      _displayFT = 1000.0f / _frameCount;
+      _frameCount = 0;
+      _frameCountTimer = 0.0f;
+    }
+    _timer.reset();
+    ImGui::SameLine(ImGui::GetWindowWidth() -
+                    ImGui::CalcTextSize("Frame Time: 0.000 ms, FPS: 000000").x -
+                    ImGui::GetStyle().ItemSpacing.x);
+    ImGui::PushStyleColor(ImGuiCol_Text, {1.0, 1.0, 0.0, 1.0});
+    ImGui::Text("Frame Time: %.3f ms, FPS: %d", _displayFT, _displayFPS);
+    ImGui::PopStyleColor();
+
+    ImGui::EndMainMenuBar();
+
+    // ---------------------- The system menu gui ----------------------
+    for (auto &sys : systems) {
+      auto it = system_menu_open.find(sys->get_name());
+      if (it != system_menu_open.end() && it->second) {
+        ImGui::SetNextWindowSize({500, 400}, ImGuiCond_FirstUseEver);
+        ImGui::Begin((sys->get_name() + "##mainmenugui").c_str(),
+                     &(system_menu_open[sys->get_name()]));
+        ImGui::Checkbox("Active", &(sys->active));
+        ImGui::Separator();
+        sys->draw_menu_gui();
+        ImGui::End();
+      }
+    }
+
+    // ---------------------- The assets window ----------------------
+    if (assets_window_open) {
+      ImGui::SetNextWindowSize({500, 400}, ImGuiCond_FirstUseEver);
+      ImGui::Begin("Assets", &assets_window_open);
+      ImGui::End();
+    }
+  }
+}
+
+void draw_entity_hierarchy_recursive(
+    entt::registry &registry, entt::entity &selected, entt::entity current,
+    ImGuiTreeNodeFlags flag,
+    std::function<void(entt::entity)> rightClickEntity) {
+  bool currentSelected = (selected == current);
+  ImGuiTreeNodeFlags finalFlag = flag;
+  if (currentSelected)
+    finalFlag |= ImGuiTreeNodeFlags_Selected;
+  auto &current_transform = registry.get<transform>(current);
+  if (current_transform.m_children.size() == 0)
+    finalFlag |= ImGuiTreeNodeFlags_Bullet;
+
+  // Draw current node
+  bool nodeOpen =
+      ImGui::TreeNodeEx((void *)(intptr_t)entt::to_integral(current), finalFlag,
+                        current_transform.name.c_str());
+  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+    selected = current;
+
+  // Drag & Drop
+  if (ImGui::BeginDragDropSource()) {
+    ImGui::SetDragDropPayload("ENTITY", &(current), sizeof(entt::entity));
+    ImGui::Text("Drag drop to change hierarchy");
+    ImGui::EndDragDropSource();
+  }
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY")) {
+      auto entity = *(entt::entity *)payload->Data;
+      current_transform.add_children(entity);
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  // Right click context menu
+  if (currentSelected &&
+      ImGui::BeginPopupContextItem(
+          (current_transform.name + std::to_string(entt::to_integral(current)))
+              .c_str(),
+          ImGuiPopupFlags_MouseButtonRight)) {
+    rightClickEntity(current);
+    ImGui::EndPopup();
+  }
+
+  // Draw children nodes
+  if (nodeOpen) {
+    for (auto c : current_transform.m_children)
+      draw_entity_hierarchy_recursive(registry, selected, c, flag,
+                                      rightClickEntity);
+    ImGui::TreePop();
+  }
+}
+
+void editor::draw_entity_hierarchy() {
+  static ImGuiTreeNodeFlags guiTreeNodeFlags =
+      ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
+      ImGuiTreeNodeFlags_SpanAvailWidth;
+  ImGui::Begin("Entities");
+
+  static char headerBuffer[200] = {0};
+  bool selectedEntityValid = registry.valid(selected_entity);
+  sprintf(headerBuffer, "Select Entity \"%s\": %d",
+          selectedEntityValid
+              ? registry.get<transform>(selected_entity).name.c_str()
+              : "NULL",
+          selectedEntityValid ? entt::to_integral(selected_entity) : -1);
+  ImGui::Text(headerBuffer);
+  ImGui::Separator();
+
+  auto right_click_menu = [&]() {
+    ImGui::SeparatorText("Operation");
+    if (ImGui::MenuItem("Add Entity")) {
+      auto ent = registry.create();
+      auto &trans = registry.emplace<transform>(ent);
+      trans.name = "new entity";
+    }
+    ImGui::EndMenu();
+  };
+  auto right_click_entity = [&](entt::entity entity) {
+    ImGui::SeparatorText("Operation");
+    // if (ImGui::MenuItem("Rename")) {
+    //   auto &trans = registry.get<transform>(entity);
+    //   trans.name = "random";
+    // }
+    if (ImGui::MenuItem("Clear Parent")) {
+      auto &trans = registry.get<transform>(entity);
+      trans.remove_parent();
+    }
+  };
+
+  if (!ImGui::IsAnyItemHovered() &&
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows)) {
+    // open the window context menu
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+      ImGui::OpenPopup("DrawEntityHierarchy_rightclickblank");
+    // unselect entities
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+      selected_entity = entt::null;
+  }
+  // ---------------------- Right click menu ----------------------
+  if (ImGui::BeginPopup("DrawEntityHierarchy_rightclickblank")) {
+    right_click_menu();
+    ImGui::EndPopup();
+  }
+
+  // ---------------------- Entity list ----------------------
+  ImGui::BeginChild("DrawEntityHierarchy_entityhierarchy",
+                    ImGui::GetContentRegionAvail());
+  for (auto ent : transform_sys->root_entities)
+    draw_entity_hierarchy_recursive(registry, selected_entity, ent,
+                                    guiTreeNodeFlags, right_click_entity);
+  ImGui::EndChild();
+  ImGui::End();
+}
+
+void editor::draw_entity_components() {
+  ImGui::Begin("Components");
+  static char headerBuffer[200] = {0};
+  static entt::entity current_entity = entt::null;
+  bool selectedEntityValid = registry.valid(current_entity);
+  sprintf(headerBuffer, "Inspect Entity \"%s\": %d",
+          selectedEntityValid
+              ? registry.get<transform>(current_entity).name.c_str()
+              : "NULL",
+          selectedEntityValid ? entt::to_integral(current_entity) : -1);
+  static bool pinCurrentEntity = false;
+  ImGui::Text(headerBuffer);
+  if (ImGui::Checkbox("Pin", &pinCurrentEntity) && pinCurrentEntity)
+    current_entity = selected_entity;
+  if (!pinCurrentEntity)
+    current_entity = selected_entity;
+  ImGui::Separator();
+
+  if (registry.valid(current_entity)) {
+    if (ImGui::Button("Add Component", {-1, 30})) {
+      ImGui::OpenPopup("DrawEntityComponents_addcomponent");
+    }
+    if (ImGui::BeginPopup("DrawEntityComponents_addcomponent")) {
+      for (auto &p : toolkit::iapp::__add_comp_map__) {
+        if (ImGui::BeginMenu(p.first.c_str())) {
+          for (auto &i : p.second) {
+            if (ImGui::MenuItem(i.first.c_str())) {
+              spdlog::info("create component {0} for entity {1}", i.first,
+                           entt::to_integral(current_entity));
+              i.second(registry, current_entity);
+            }
+          }
+          ImGui::EndMenu();
+        }
+      }
+      ImGui::EndPopup();
+    }
+    ImGui::Separator();
+
+    for (auto &sys : systems)
+      sys->draw_gui(registry, current_entity);
+  } else
+    current_entity = entt::null;
+
+  ImGui::End();
+}
 
 }; // namespace toolkit::opengl

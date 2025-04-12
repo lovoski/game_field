@@ -1,6 +1,14 @@
-#include "ToolKit/OpenGL/Base.hpp"
+#include "toolkit/opengl/base.hpp"
 
 namespace toolkit::opengl {
+
+math::vector3 White = math::vector3(1.0, 1.0, 1.0);
+math::vector3 Black = math::vector3(0.0, 0.0, 0.0);
+math::vector3 Red = math::vector3(1.0, 0.0, 0.0);
+math::vector3 Green = math::vector3(0.0, 1.0, 0.0);
+math::vector3 Blue = math::vector3(0.0, 0.0, 1.0);
+math::vector3 Yellow = math::vector3(1.0, 1.0, 0.0);
+math::vector3 Purple = math::vector3(1.0, 0.0, 1.0);
 
 void context::init(unsigned int width, unsigned int height, const char *title,
                    int majorVersion, int minorVersion) {
@@ -44,20 +52,15 @@ void context::init(unsigned int width, unsigned int height, const char *title,
 context::~context() {
   // free opengl handles
   for (auto handle : buffer_handles)
-    if (glIsBuffer(handle))
-      glDeleteBuffers(1, &handle);
+    glDeleteBuffers(1, &handle);
   for (auto handle : vertex_array_handles)
-    if (glIsVertexArray(handle))
-      glDeleteVertexArrays(1, &handle);
+    glDeleteVertexArrays(1, &handle);
   for (auto handle : texture_handles)
-    if (glIsTexture(handle))
-      glDeleteTextures(1, &handle);
+    glDeleteTextures(1, &handle);
   for (auto handle : program_handles)
-    if (glIsProgram(handle))
-      glDeleteProgram(handle);
+    glDeleteProgram(handle);
   for (auto handle : framebuffer_handles)
-    if (glIsFramebuffer(handle))
-      glDeleteFramebuffers(1, &handle);
+    glDeleteFramebuffers(1, &handle);
 
   window = nullptr;
   ImPlot::DestroyContext();
@@ -145,7 +148,7 @@ bool context::loop_cursor_in_window() {
 
 // Load shader from path, compile and link them into a program
 bool shader::compile_shader_from_path(std::string vsp, std::string fsp,
-                                   std::string gsp) {
+                                      std::string gsp) {
   // delete previous program if exists
   if (gl_handle != 0) {
     // free old shader if there's any
@@ -186,7 +189,7 @@ bool shader::compile_shader_from_path(std::string vsp, std::string fsp,
 
 // Load shader code directly, create and link program
 bool shader::compile_shader_from_source(std::string vss, std::string fss,
-                                     std::string gss) {
+                                        std::string gss) {
   unsigned int vertex, fragment;
   // vertex shader
   const char *vShaderCode = vss.c_str();

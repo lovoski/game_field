@@ -8,6 +8,7 @@ add_subdirectory("ufbx")
 add_subdirectory("zlib_embed")
 add_subdirectory("glad")
 add_subdirectory("glfw")
+add_subdirectory("spdlog")
 
 file(GLOB IMGUI_SRC_FILES "imgui/*.cpp")
 list(APPEND IMGUI_SRC_FILES
@@ -16,5 +17,5 @@ list(APPEND IMGUI_SRC_FILES
 )
 
 add_library(${PROJECT_NAME} ${IMGUI_SRC_FILES})
-target_link_libraries(${PROJECT_NAME} PUBLIC cnpy zlib ufbx tinyfd glad glfw)
+target_link_libraries(${PROJECT_NAME} PUBLIC cnpy zlib ufbx tinyfd glad glfw spdlog::spdlog)
 target_include_directories(${PROJECT_NAME} PUBLIC "headers" "imgui" "imgui/backends")

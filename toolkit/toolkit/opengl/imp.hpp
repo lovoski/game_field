@@ -15,6 +15,8 @@
 #include <toolkit/utils.hpp>
 #include <toolkit/loaders/image.hpp>
 
+#include <spdlog/spdlog.h>
+
 #include <fstream>
 #include <iostream>
 #include <set>
