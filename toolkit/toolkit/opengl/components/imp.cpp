@@ -1,6 +1,5 @@
 #include "toolkit/opengl/components/camera.hpp"
 #include "toolkit/opengl/components/lights.hpp"
-#include "toolkit/opengl/components/mesh.hpp"
 
 namespace toolkit::opengl {
 

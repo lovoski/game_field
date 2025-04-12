@@ -5,29 +5,31 @@ using namespace toolkit::math;
 namespace toolkit::opengl {
 
 const std::string lineVS = R"(
-  #version 330 core
-  layout (location = 0) in vec3 pos;
-  uniform mat4 vp;
-  void main() {
-    gl_Position = vp * vec4(pos, 1.0);
-  }
-  )";
+#version 330 core
+layout (location = 0) in vec3 pos;
+uniform mat4 vp;
+void main() {
+  gl_Position = vp * vec4(pos, 1.0);
+}
+)";
 const std::string lineFS = R"(
-  #version 330 core
-  uniform vec3 color;
-  out vec4 FragColor;
-  void main() {
-    FragColor = vec4(color, 1.0);
-  }
-  )";
+#version 330 core
+uniform vec3 color;
+out vec4 FragColor;
+void main() {
+  FragColor = vec4(color, 1.0);
+}
+)";
 
 void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
                 vector3 color) {
-  static shader shader;
   static bool initialized = false;
+  static shader shader;
   static vao vao;
   static buffer vbo;
   if (!initialized) {
+    vao.create();
+    vbo.create();
     shader.compile_shader_from_source(lineVS, lineFS);
     initialized = true;
   }
@@ -49,11 +51,13 @@ void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
 
 void draw_linestrip(std::vector<vector3> &lineStrip, matrix4 vp,
                     vector3 color) {
-  static shader shader;
   static bool initialized = false;
+  static shader shader;
   static vao vao;
   static buffer vbo;
   if (!initialized) {
+    vao.create();
+    vbo.create();
     shader.compile_shader_from_source(lineVS, lineFS);
     initialized = true;
   }
@@ -82,6 +86,8 @@ void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
   static shader lineShader;
   static bool lineShaderLoaded = false;
   if (!lineShaderLoaded) {
+    vao.create();
+    vbo.create();
     lineShader.compile_shader_from_source(lineVS, lineFS);
     lineShaderLoaded = true;
   }
@@ -204,76 +210,76 @@ void draw_cube(math::vector3 position, math::vector3 forward,
 }
 
 std::string boneVS = R"(
-  #version 330 core
-  layout(location = 0) in vec3 aPos;
-  
-  void main() {
-      gl_Position = vec4(aPos, 1.0);
-  }
-  )";
+#version 330 core
+layout(location = 0) in vec3 aPos;
+
+void main() {
+    gl_Position = vec4(aPos, 1.0);
+}
+)";
 std::string boneGS = R"(
-  #version 330 core
-  layout(lines) in;
-  layout(line_strip, max_vertices = 24) out;
-  
-  uniform mat4 mvp;
-  uniform float radius;
-  
-  void main() {
-      vec3 start = gl_in[0].gl_Position.xyz;
-      vec3 end = gl_in[1].gl_Position.xyz;
-  
-      // Compute direction and orthogonal vectors
-      vec3 dir = end - start;
-      float boneLength = length(dir);
-      float normalOffset = radius * boneLength;
-      vec3 direction = normalize(dir);
-      vec3 up = normalize(vec3(0.0, 1.0, 1e-3));
-      vec3 right = normalize(cross(direction, up));
-      float dirOffset = 0.17;
-      up = cross(right, direction);
-  
-      // Define the four offset vectors for the octahedral shape
-      vec3 offsets[4];
-      offsets[0] = right * normalOffset + dirOffset * dir;
-      offsets[1] = up * normalOffset + dirOffset * dir;
-      offsets[2] = -right * normalOffset + dirOffset * dir;
-      offsets[3] = -up * normalOffset + dirOffset * dir;
-  
-      // Generate the edges of the octahedron
-      for (int i = 0; i < 4; ++i) {
-          // Lines connecting start point to the offset points
-          gl_Position = mvp * vec4(start, 1.0);
-          EmitVertex();
-          gl_Position = mvp * vec4(start + offsets[i], 1.0);
-          EmitVertex();
-          EndPrimitive();
-  
-          gl_Position = mvp * vec4(start + offsets[(i+1)%4], 1.0);
-          EmitVertex();
-          gl_Position = mvp * vec4(start + offsets[i], 1.0);
-          EmitVertex();
-          EndPrimitive();
-  
-          // Lines connecting the start and end offset points
-          gl_Position = mvp * vec4(start + offsets[i], 1.0);
-          EmitVertex();
-          gl_Position = mvp * vec4(end, 1.0);
-          EmitVertex();
-          EndPrimitive();
-      }
-  }
-  )";
+#version 330 core
+layout(lines) in;
+layout(line_strip, max_vertices = 24) out;
+
+uniform mat4 mvp;
+uniform float radius;
+
+void main() {
+    vec3 start = gl_in[0].gl_Position.xyz;
+    vec3 end = gl_in[1].gl_Position.xyz;
+
+    // Compute direction and orthogonal vectors
+    vec3 dir = end - start;
+    float boneLength = length(dir);
+    float normalOffset = radius * boneLength;
+    vec3 direction = normalize(dir);
+    vec3 up = normalize(vec3(0.0, 1.0, 1e-3));
+    vec3 right = normalize(cross(direction, up));
+    float dirOffset = 0.17;
+    up = cross(right, direction);
+
+    // Define the four offset vectors for the octahedral shape
+    vec3 offsets[4];
+    offsets[0] = right * normalOffset + dirOffset * dir;
+    offsets[1] = up * normalOffset + dirOffset * dir;
+    offsets[2] = -right * normalOffset + dirOffset * dir;
+    offsets[3] = -up * normalOffset + dirOffset * dir;
+
+    // Generate the edges of the octahedron
+    for (int i = 0; i < 4; ++i) {
+        // Lines connecting start point to the offset points
+        gl_Position = mvp * vec4(start, 1.0);
+        EmitVertex();
+        gl_Position = mvp * vec4(start + offsets[i], 1.0);
+        EmitVertex();
+        EndPrimitive();
+
+        gl_Position = mvp * vec4(start + offsets[(i+1)%4], 1.0);
+        EmitVertex();
+        gl_Position = mvp * vec4(start + offsets[i], 1.0);
+        EmitVertex();
+        EndPrimitive();
+
+        // Lines connecting the start and end offset points
+        gl_Position = mvp * vec4(start + offsets[i], 1.0);
+        EmitVertex();
+        gl_Position = mvp * vec4(end, 1.0);
+        EmitVertex();
+        EndPrimitive();
+    }
+}
+)";
 std::string boneFS = R"(
-  #version 330 core
-  out vec4 FragColor;
-  
-  uniform vec3 color; // Color of the wireframe
-  
-  void main() {
-      FragColor = vec4(color, 1.0);
-  }
-  )";
+#version 330 core
+out vec4 FragColor;
+
+uniform vec3 color; // Color of the wireframe
+
+void main() {
+    FragColor = vec4(color, 1.0);
+}
+)";
 void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
                 math::vector2 viewport, math::matrix4 vp, math::vector3 color) {
   static vao vao;
@@ -281,6 +287,8 @@ void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
   static shader boneShader;
   static bool shaderInitialized = false;
   if (!shaderInitialized) {
+    vao.create();
+    vbo.create();
     boneShader.compile_shader_from_source(boneVS, boneFS, boneGS);
     shaderInitialized = true;
   }
@@ -344,6 +352,82 @@ void quad_draw_call() {
   quad.bind();
   glDrawArrays(GL_TRIANGLES, 0, 6);
   quad.unbind();
+}
+
+std::string quad_vs = R"(
+#version 330 core
+layout(location = 0) in vec3 aPos;
+
+void main() {
+  gl_Position = vec4(aPos, 1.0);
+}
+)";
+std::string quad_gs = R"(
+#version 330 core
+layout(points) in;
+layout(triangle_strip, max_vertices = 4) out;
+
+uniform mat4 mvp;
+uniform float size;
+
+uniform vec3 right;
+uniform vec3 up;
+
+void main() {
+  vec3 pos = gl_in[0].gl_Position.xyz;
+  vec3 offsets[4];
+  offsets[0] = 0.5*size*(-right+up);
+  offsets[1] = 0.5*size*(right+up);
+  offsets[2] = 0.5*size*(-right-up);
+  offsets[3] = 0.5*size*(right-up);
+
+  // Generate the edges of the octahedron
+  for (int i = 0; i < 4; ++i) {
+    gl_Position = mvp * vec4(pos+offsets[i], 1.0);
+    EmitVertex();
+  }
+  EndPrimitive();
+}
+)";
+std::string quad_fs = R"(
+#version 330 core
+out vec4 FragColor;
+
+uniform vec3 color; // Color of the wireframe
+
+void main() {
+  FragColor = vec4(color, 1.0);
+}
+)";
+void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
+                math::vector3 up, math::matrix4 vp, float size,
+                math::vector3 color) {
+  static vao vao;
+  static buffer vbo;
+  static shader program;
+  static bool shaderInitialized = false;
+  if (!shaderInitialized) {
+    vao.create();
+    vbo.create();
+    program.compile_shader_from_source(quad_vs, quad_fs, quad_gs);
+    shaderInitialized = true;
+  }
+  // initialize vbo with `bones`
+  vao.bind();
+  vbo.set_data_as(GL_ARRAY_BUFFER, positions);
+  vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
+  program.use();
+
+  program.set_float("size", size);
+  program.set_vec3("color", color);
+  program.set_vec3("right", right);
+  program.set_vec3("up", up);
+  program.set_mat4("mvp", vp);
+
+  glDrawArrays(GL_POINTS, 0, positions.size());
+
+  vao.unbind();
+  vbo.unbind_as(GL_ARRAY_BUFFER);
 }
 
 }; // namespace toolkit::opengl

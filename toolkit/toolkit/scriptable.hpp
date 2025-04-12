@@ -25,9 +25,7 @@ public:
 
 class script_system : public isystem {
 public:
-  void init0(entt::registry &registry) override {
-    scriptable::scripts.clear();
-  }
+  void init0(entt::registry &registry) override { scriptable::scripts.clear(); }
 
   void preupdate(iapp *app, float dt) {
     for (auto script : scriptable::scripts)
@@ -48,8 +46,8 @@ public:
   DECLARE_SYSTEM(script_system)
 };
 
-#define DECLARE_SCRIPT(class_name, ...)                                        \
-  DECLARE_COMPONENT(class_name, __VA_ARGS__)                              \
+#define DECLARE_SCRIPT(class_name, category, ...)                              \
+  DECLARE_COMPONENT(class_name, category, __VA_ARGS__)                         \
 private:                                                                       \
   static inline bool _register_script_##class_name = []() { return true; }();
 

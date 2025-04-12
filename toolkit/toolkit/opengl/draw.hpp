@@ -32,4 +32,8 @@ void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
 
 void quad_draw_call();
 
+void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
+                math::vector3 up, math::matrix4 vp, float size = 0.2f,
+                math::vector3 color = White);
+
 }; // namespace toolkit::opengl

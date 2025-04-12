@@ -31,7 +31,7 @@ public:
   };
   ImGuizmo::MODE current_gizmo_mode = ImGuizmo::MODE::WORLD;
 
-  entt::entity active_camera = entt::null, selected_entity = entt::null;
+  entt::entity selected_entity = entt::null;
 
   defered_forward_mixed *dm_sys = nullptr;
   transform_system *transform_sys = nullptr;

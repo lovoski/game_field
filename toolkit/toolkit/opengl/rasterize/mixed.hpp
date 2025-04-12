@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolkit/opengl/base.hpp"
+#include "toolkit/opengl/draw.hpp"
 #include "toolkit/system.hpp"
 
 #include "toolkit/opengl/components/camera.hpp"
@@ -18,11 +19,16 @@ public:
   void preupdate(entt::registry &registry, float dt) override;
   void render(entt::registry &registry);
 
+  texture get_target_texture() const { return color_tex; }
+
   void draw_gui(entt::registry &registry, entt::entity entity) override;
 
 protected:
-  framebuffer fb;
+  framebuffer gbuffer, cbuffer;
+  shader gbuffer_geometry_pass;
   texture pos_tex, normal_tex, depth_tex;
+
+  texture color_tex;
 
   DECLARE_SYSTEM(defered_forward_mixed)
 };

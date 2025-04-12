@@ -63,14 +63,14 @@ void editor::run() {
     auto pos = ImGui::GetWindowPos();
     instance.scene_pos_x = pos.x;
     instance.scene_pos_y = pos.y;
-    // gcontext.activeWorld->GetSystem<GLSystem>()->ShowRenderTargetImage(
-    // {size.x, size.y});
+    ImGui::Image((void *)static_cast<std::uintptr_t>(
+                     dm_sys->get_target_texture().get_handle()),
+                 {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
     if (instance.scene_width != size.x || instance.scene_height != size.y) {
       // resize sceneFBO
       instance.scene_width = size.x;
       instance.scene_height = size.y;
-      // gcontext.activeWorld->GetSystem<GLSystem>()->ResizeRenderTarget(
-      //     {size.x, size.y});
+      dm_sys->resize(size.x, size.y);
       dm_sys->render(registry);
     }
     draw_gizmos();
@@ -109,13 +109,13 @@ void editor::draw_gizmos(bool enable) {
     }
   }
 
-  if (enable && registry.valid(active_camera)) {
+  if (enable && registry.valid(instance.active_camera)) {
     ImGuizmo::AllowAxisFlip(false);
     ImGuizmo::SetDrawlist();
     ImGuizmo::SetRect(instance.scene_pos_x, instance.scene_pos_y,
                       instance.scene_width, instance.scene_height);
-    auto &camTrans = registry.get<transform>(active_camera);
-    auto &camComp = registry.get<camera>(active_camera);
+    auto &camTrans = registry.get<transform>(instance.active_camera);
+    auto &camComp = registry.get<camera>(instance.active_camera);
     if (registry.valid(selected_entity)) {
       auto &selTrans = registry.get<transform>(selected_entity);
       math::matrix4 transform = selTrans.matrix();

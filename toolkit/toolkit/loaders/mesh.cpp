@@ -31,60 +31,60 @@ quat Convert(ufbx_quat q) {
 }
 struct TmpVertexFBXLoading {
   vector4 Position;
-  vector4 Normal;
-  vector4 TexCoords;
-  vector4 Color;
+  vector4 normal;
+  vector4 tex_coords;
+  vector4 color;
   int BoneId[MAX_BONES_PER_MESH];
   float BoneWeight[MAX_BONES_PER_MESH];
   vector3 BlendShapeOffset[MAX_BLEND_SHAPES_PER_MESH];
   vector3 BlendShapeNormal[MAX_BLEND_SHAPES_PER_MESH];
 };
-Mesh processMesh(ufbx_mesh *mesh, ufbx_mesh_part &part,
+mesh processMesh(ufbx_mesh *mesh_instance, ufbx_mesh_part &part,
                  std::map<std::string, std::size_t> &boneMapping,
-                 std::string modelPath) {
+                 std::string model_path) {
   std::vector<TmpVertexFBXLoading> vertices;
-  std::vector<unsigned int> indices(mesh->max_face_triangles * 3);
+  std::vector<unsigned int> indices(mesh_instance->max_face_triangles * 3);
   std::map<std::string, std::size_t> blendShapeMapping;
-  std::vector<BlendShape> blendShapes;
+  std::vector<blend_shape> blend_shapes;
   for (auto faceInd : part.face_indices) {
-    ufbx_face face = mesh->faces[faceInd];
+    ufbx_face face = mesh_instance->faces[faceInd];
     auto numTriangles =
-        ufbx_triangulate_face(indices.data(), indices.size(), mesh, face);
+        ufbx_triangulate_face(indices.data(), indices.size(), mesh_instance, face);
     for (auto i = 0; i < numTriangles * 3; ++i) {
       auto index = indices[i];
       TmpVertexFBXLoading v;
-      v.Position.x() = mesh->vertex_position[index].x;
-      v.Position.y() = mesh->vertex_position[index].y;
-      v.Position.z() = mesh->vertex_position[index].z;
+      v.Position.x() = mesh_instance->vertex_position[index].x;
+      v.Position.y() = mesh_instance->vertex_position[index].y;
+      v.Position.z() = mesh_instance->vertex_position[index].z;
       v.Position.w() = 1.0f;
 
-      v.Normal.x() = mesh->vertex_normal[index].x;
-      v.Normal.y() = mesh->vertex_normal[index].y;
-      v.Normal.z() = mesh->vertex_normal[index].z;
-      v.Normal.w() = 0.0f;
+      v.normal.x() = mesh_instance->vertex_normal[index].x;
+      v.normal.y() = mesh_instance->vertex_normal[index].y;
+      v.normal.z() = mesh_instance->vertex_normal[index].z;
+      v.normal.w() = 0.0f;
 
       // for multiple sets of uv, refer to mesh->uv_sets
       // this is by default the first uv set
-      if (mesh->uv_sets.count > 0) {
-        v.TexCoords.x() = mesh->vertex_uv[index].x;
-        v.TexCoords.y() = mesh->vertex_uv[index].y;
-        if (mesh->uv_sets.count > 1) {
-          v.TexCoords.z() = mesh->uv_sets[1].vertex_uv[index].x;
-          v.TexCoords.w() = mesh->uv_sets[1].vertex_uv[index].y;
+      if (mesh_instance->uv_sets.count > 0) {
+        v.tex_coords.x() = mesh_instance->vertex_uv[index].x;
+        v.tex_coords.y() = mesh_instance->vertex_uv[index].y;
+        if (mesh_instance->uv_sets.count > 1) {
+          v.tex_coords.z() = mesh_instance->uv_sets[1].vertex_uv[index].x;
+          v.tex_coords.w() = mesh_instance->uv_sets[1].vertex_uv[index].y;
         } else {
-          v.TexCoords.z() = 0.0f;
-          v.TexCoords.w() = 0.0f;
+          v.tex_coords.z() = 0.0f;
+          v.tex_coords.w() = 0.0f;
         }
       } else
-        v.TexCoords = vector4::Zero();
+        v.tex_coords = vector4::Zero();
 
-      if (mesh->vertex_color.exists) {
-        v.Color.x() = mesh->vertex_color[index].x;
-        v.Color.y() = mesh->vertex_color[index].y;
-        v.Color.z() = mesh->vertex_color[index].z;
-        v.Color.w() = mesh->vertex_color[index].w;
+      if (mesh_instance->vertex_color.exists) {
+        v.color.x() = mesh_instance->vertex_color[index].x;
+        v.color.y() = mesh_instance->vertex_color[index].y;
+        v.color.z() = mesh_instance->vertex_color[index].z;
+        v.color.w() = mesh_instance->vertex_color[index].w;
       } else
-        v.Color = vector4::Ones();
+        v.color = vector4::Ones();
 
       for (int boneCounter = 0; boneCounter < MAX_BONES_PER_MESH;
            ++boneCounter) {
@@ -93,8 +93,8 @@ Mesh processMesh(ufbx_mesh *mesh, ufbx_mesh_part &part,
       }
       // setup skin deformers
       // if there's skin_deformers, the boneMapping won't be empty
-      for (auto skin : mesh->skin_deformers) {
-        auto vertex = mesh->vertex_indices[index];
+      for (auto skin : mesh_instance->skin_deformers) {
+        auto vertex = mesh_instance->vertex_indices[index];
         auto skinVertex = skin->vertices[vertex];
         auto numWeights = skinVertex.num_weights;
         if (numWeights > MAX_BONES_PER_MESH)
@@ -125,8 +125,8 @@ Mesh processMesh(ufbx_mesh *mesh, ufbx_mesh_part &part,
         }
       }
       // blend shapes
-      for (auto deformer : mesh->blend_deformers) {
-        uint32_t vertex = mesh->vertex_indices[index];
+      for (auto deformer : mesh_instance->blend_deformers) {
+        uint32_t vertex = mesh_instance->vertex_indices[index];
 
         size_t num_blends = deformer->channels.count;
         if (num_blends > MAX_BLEND_SHAPES_PER_MESH) {
@@ -140,12 +140,12 @@ Mesh processMesh(ufbx_mesh *mesh, ufbx_mesh_part &part,
           int blendShapeIndex = blendShapeMapping.size();
           if (it == blendShapeMapping.end()) {
             blendShapeMapping[shape->name.data] = blendShapeIndex;
-            blendShapes.push_back(BlendShape());
+            blend_shapes.push_back(blend_shape());
           } else {
             blendShapeIndex = it->second;
           }
           assert(shape); // In theory this could be missing in broken files
-          auto &bs = blendShapes[blendShapeIndex];
+          auto &bs = blend_shapes[blendShapeIndex];
           bs.name = shape->name.data;
           v.BlendShapeOffset[blendShapeIndex] =
               Convert(ufbx_get_blend_shape_vertex_offset(shape, vertex));
@@ -166,34 +166,34 @@ Mesh processMesh(ufbx_mesh *mesh, ufbx_mesh_part &part,
   vertices.resize(numVertices);
 
   // create the final mesh
-  std::vector<MeshVertex> actualVertices(vertices.size());
+  std::vector<mesh_vertex> actualVertices(vertices.size());
   for (int i = 0; i < numVertices; i++) {
-    actualVertices[i].Position = vertices[i].Position;
-    actualVertices[i].Normal = vertices[i].Normal;
-    actualVertices[i].TexCoords = vertices[i].TexCoords;
-    actualVertices[i].Color = vertices[i].Color;
+    actualVertices[i].position = vertices[i].Position;
+    actualVertices[i].normal = vertices[i].normal;
+    actualVertices[i].tex_coords = vertices[i].tex_coords;
+    actualVertices[i].color = vertices[i].color;
     for (int j = 0; j < MAX_BONES_PER_MESH; j++) {
-      actualVertices[i].BoneIndices[j] = vertices[i].BoneId[j];
-      actualVertices[i].BoneWeights[j] = vertices[i].BoneWeight[j];
+      actualVertices[i].bond_indices[j] = vertices[i].BoneId[j];
+      actualVertices[i].bone_weights[j] = vertices[i].BoneWeight[j];
     }
   }
-  Mesh result;
+  mesh result;
   result.vertices = actualVertices;
   result.indices = indices;
-  result.meshName = mesh->name.data;
-  result.modelPath = modelPath;
+  result.mesh_name = mesh_instance->name.data;
+  result.model_path = model_path;
 
   if (blendShapeMapping.size() > 0) {
     // update blend shapes
     for (const auto &bsm : blendShapeMapping) {
-      blendShapes[bsm.second].data.resize(vertices.size());
+      blend_shapes[bsm.second].data.resize(vertices.size());
       for (int vertId = 0; vertId < vertices.size(); ++vertId) {
-        blendShapes[bsm.second].data[vertId].PosOffset
+        blend_shapes[bsm.second].data[vertId].offset_pos
             << vertices[vertId].BlendShapeOffset[bsm.second],
             0.0;
       }
     }
-    result.blendShapes = blendShapes;
+    result.blend_shapes = blend_shapes;
   }
 
   return result;
@@ -219,8 +219,8 @@ struct KeyFrame {
 
 }; // namespace FBX
 
-FBXPackage LoadFBX(std::string path) {
-  FBXPackage package;
+fbx_package load_fbx(std::string path) {
+  fbx_package package;
   package.motion = nullptr;
 
   ufbx_load_opts opts = {};
@@ -233,7 +233,7 @@ FBXPackage LoadFBX(std::string path) {
     return package;
   }
 
-  package.modelPath = path;
+  package.model_path = path;
   std::vector<FBX::BoneInfo> globalBones;
   std::map<std::string, std::size_t> boneMapping;
   std::map<int, int> oldBoneInd2NewInd;
@@ -406,8 +406,8 @@ vector3 FaceNormal(vector3 v0, vector3 v1, vector3 v2) {
   return (e01.cross(e02)).normalized();
 }
 
-OBJPackage LoadOBJ(std::string path) {
-  OBJPackage package;
+obj_package load_obj(std::string path) {
+  obj_package package;
   auto &meshes = package.meshes;
 
   tinyobj::attrib_t attrib;
@@ -416,11 +416,11 @@ OBJPackage LoadOBJ(std::string path) {
   std::string err, warn;
   if (tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
                        path.c_str())) {
-    package.modelPath = path;
+    package.model_path = path;
     for (auto &shape : shapes) {
       std::size_t indexOffset = 0;
 
-      std::vector<MeshVertex> vertices;
+      std::vector<mesh_vertex> vertices;
       std::vector<uint32_t> indices;
 
       for (auto f = 0; f < shape.mesh.num_face_vertices.size(); ++f) {
@@ -431,36 +431,36 @@ OBJPackage LoadOBJ(std::string path) {
           indexOffset += fv;
           continue;
         }
-        MeshVertex vert[3];
+        mesh_vertex vert[3];
 
         bool withoutNormal = false;
         for (auto v = 0; v < 3; ++v) {
           auto idx = shape.mesh.indices[indexOffset + v];
-          vert[v].Position << attrib.vertices[3 * idx.vertex_index + 0],
+          vert[v].position << attrib.vertices[3 * idx.vertex_index + 0],
               attrib.vertices[3 * idx.vertex_index + 1],
               attrib.vertices[3 * idx.vertex_index + 2], 1.0f;
           if (idx.normal_index >= 0) {
-            vert[v].Normal << attrib.normals[3 * idx.normal_index + 0],
+            vert[v].normal << attrib.normals[3 * idx.normal_index + 0],
                 attrib.normals[3 * idx.normal_index + 1],
                 attrib.normals[3 * idx.normal_index + 2], 0.0f;
           } else {
             withoutNormal = true;
-            vert[v].Normal = vector4::Zero();
+            vert[v].normal = vector4::Zero();
           }
           if (idx.texcoord_index >= 0) {
-            vert[v].TexCoords << attrib.texcoords[2 * idx.texcoord_index + 0],
+            vert[v].tex_coords << attrib.texcoords[2 * idx.texcoord_index + 0],
                 attrib.texcoords[2 * idx.texcoord_index + 1], 0.0, 0.0;
           } else
-            vert[v].TexCoords = vector4::Zero();
+            vert[v].tex_coords = vector4::Zero();
         }
         if (withoutNormal) {
           // manually compute the normal
           auto faceNormal =
-              FaceNormal(vert[0].Position.head<3>(), vert[1].Position.head<3>(),
-                         vert[2].Position.head<3>());
-          vert[0].Normal << faceNormal, 0.0f;
-          vert[1].Normal << faceNormal, 0.0f;
-          vert[2].Normal << faceNormal, 0.0f;
+              FaceNormal(vert[0].position.head<3>(), vert[1].position.head<3>(),
+                         vert[2].position.head<3>());
+          vert[0].normal << faceNormal, 0.0f;
+          vert[1].normal << faceNormal, 0.0f;
+          vert[2].normal << faceNormal, 0.0f;
         }
 
         vertices.push_back(vert[0]);
@@ -472,9 +472,9 @@ OBJPackage LoadOBJ(std::string path) {
 
         indexOffset += fv;
       }
-      Mesh mesh;
-      mesh.meshName = shape.name;
-      mesh.modelPath = path;
+      mesh mesh;
+      mesh.mesh_name = shape.name;
+      mesh.model_path = path;
       mesh.vertices = vertices;
       mesh.indices = indices;
       meshes.emplace_back(mesh);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolkit/opengl/imp.hpp"
+#include "toolkit/system.hpp"
 
 namespace toolkit::opengl {
 
@@ -38,14 +39,14 @@ public:
 
   // GLFW Callbacks
   static void framebuffer_resize_callback(GLFWwindow *window, int width,
-                                        int height) {
+                                          int height) {
     auto &context = context::get_instance();
     context.wnd_width = width;
     context.wnd_height = height;
   }
 
-  static void key_callback(GLFWwindow *window, int key, int scancode, int action,
-                          int mods) {
+  static void key_callback(GLFWwindow *window, int key, int scancode,
+                           int action, int mods) {
     auto &context = context::get_instance();
     if (context.key_states.count(key) == 0)
       context.key_states[key] = false;
@@ -59,7 +60,7 @@ public:
   }
 
   static void mouse_button_callback(GLFWwindow *window, int button, int action,
-                                  int mods) {
+                                    int mods) {
     auto &context = context::get_instance();
     if (context.mouse_button_states.count(button) == 0)
       context.mouse_button_states[button] = false;
@@ -72,14 +73,15 @@ public:
     context.mouse_button_states[button] = curState;
   }
 
-  static void cursor_pos_callback(GLFWwindow *window, double xpos, double ypos) {
+  static void cursor_pos_callback(GLFWwindow *window, double xpos,
+                                  double ypos) {
     auto &context = context::get_instance();
     context.mouse_x = xpos;
     context.mouse_y = ypos;
   }
 
   static void scroll_callback(GLFWwindow *window, double xoffset,
-                             double yoffset) {
+                              double yoffset) {
     auto &context = context::get_instance();
     context.scroll_offset.x() += xoffset;
     context.scroll_offset.y() += yoffset;
@@ -121,6 +123,8 @@ public:
   uint32_t wnd_width = 0, wnd_height = 0, scene_width = 0, scene_height = 0,
            scene_pos_x = 0, scene_pos_y = 0;
 
+  entt::entity active_camera = entt::null;
+
   static inline std::set<unsigned int> buffer_handles, vertex_array_handles,
       texture_handles, program_handles, framebuffer_handles;
 
@@ -155,7 +159,7 @@ public:
   // Bind the buffer to target, setup the filled data in it.
   template <typename T>
   void set_data_as(GLenum TARGET_BUFFER_NAME, const std::vector<T> &data,
-                 GLenum usage = GL_STATIC_DRAW) {
+                   GLenum usage = GL_STATIC_DRAW) {
     glBindBuffer(TARGET_BUFFER_NAME, gl_handle);
     // setting a buffer of size 0 is a invalid operation
     // use a buffer of size 1 byte with null datq instead
@@ -166,7 +170,8 @@ public:
                    (void *)data.data(), usage);
   }
   template <typename T>
-  void set_data_ssbo(const std::vector<T> &data, GLenum usage = GL_DYNAMIC_DRAW) {
+  void set_data_ssbo(const std::vector<T> &data,
+                     GLenum usage = GL_DYNAMIC_DRAW) {
     set_data_as(GL_SHADER_STORAGE_BUFFER, data, usage);
   }
   void set_data_ssbo(unsigned int byteSize, GLenum usage = GL_DYNAMIC_DRAW) {
@@ -180,7 +185,7 @@ public:
   // has enough space for update.
   template <typename T>
   void update_data_as(GLenum TARGET_BUFFER_NAME, const std::vector<T> &data,
-                    size_t offset) {
+                      size_t offset) {
     glBindBuffer(TARGET_BUFFER_NAME, gl_handle);
     if (data.size() == 0)
       glBufferSubData(TARGET_BUFFER_NAME, offset, 1, nullptr);
@@ -223,7 +228,7 @@ public:
   }
   template <typename T>
   std::vector<T> map_data_range_as_vector(unsigned int elementOffset,
-                                      unsigned int elementSize) {
+                                          unsigned int elementSize) {
     T *ptr =
         (T *)map_data_range(elementOffset * sizeof(T), elementSize * sizeof(T));
     std::vector<T> vec(elementSize);
@@ -237,7 +242,7 @@ public:
     return glMapBuffer(GL_SHADER_STORAGE_BUFFER, access);
   }
   void *map_data_range(unsigned int offset, unsigned int byteSize,
-                     GLbitfield access = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT) {
+                       GLbitfield access = GL_MAP_READ_BIT | GL_MAP_WRITE_BIT) {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl_handle);
     return glMapBufferRange(GL_SHADER_STORAGE_BUFFER, offset, byteSize, access);
   }
@@ -267,15 +272,11 @@ public:
       glDeleteVertexArrays(1, &gl_handle);
   }
 
-  void bind() const {
-    if (!glIsVertexArray(gl_handle))
-      throw std::runtime_error("gl_handle is not a valid vertex array");
-    glBindVertexArray(gl_handle);
-  }
+  void bind() const { glBindVertexArray(gl_handle); }
   void unbind() const { glBindVertexArray(0); }
 
   void link_attribute(buffer &vbo, GLuint layout, GLint size, GLenum type,
-                  GLsizei stride, void *offset) {
+                      GLsizei stride, void *offset) {
     vbo.bind_as(GL_ARRAY_BUFFER);
     glVertexAttribPointer(layout, size, type, GL_FALSE, stride, offset);
     glEnableVertexAttribArray(layout);
@@ -319,7 +320,7 @@ public:
       format = GL_RG;
     }
     set_data(img.width, img.height, iformat, format, GL_UNSIGNED_BYTE,
-            img.data.data());
+             img.data.data());
   }
   void create_from_image(assets::image &img) {
     create();
@@ -364,8 +365,8 @@ public:
 
   // Sets the texture data and allocates storage
   void set_data(GLsizei width, GLsizei height, GLint internalFormat = GL_RGBA8,
-               GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE,
-               const void *data = nullptr) {
+                GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE,
+                const void *data = nullptr) {
     m_width = width;
     m_height = height;
     m_internal_format = internalFormat;
@@ -383,8 +384,8 @@ public:
     m_internal_format = GL_RGBA8;
     m_format = GL_RGBA;
     bind();
-    glTexImage2D(gl_target, 0, m_internal_format, m_width, m_height, 0, m_format,
-                 GL_UNSIGNED_BYTE, whitePixel);
+    glTexImage2D(gl_target, 0, m_internal_format, m_width, m_height, 0,
+                 m_format, GL_UNSIGNED_BYTE, whitePixel);
     unbind();
   }
 
@@ -412,9 +413,9 @@ private:
   GLuint gl_handle; // texture object ID
   GLenum gl_target; // texture target (e.g., GL_TEXTURE_2D)
 
-  GLsizei m_width;        // texture width
-  GLsizei m_height;       // texture height
-  GLenum m_format;        // GL_RGBA
+  GLsizei m_width;         // texture width
+  GLsizei m_height;        // texture height
+  GLenum m_format;         // GL_RGBA
   GLint m_internal_format; // GL_RGBA8
 };
 
@@ -450,15 +451,19 @@ public:
   }
 
   void attach_color_buffer(const texture &texture,
-                         GLenum attachment = GL_COLOR_ATTACHMENT0,
-                         int mipLevel = 0) {
+                           GLenum attachment = GL_COLOR_ATTACHMENT0,
+                           int mipLevel = 0) {
+    glBindTexture(texture.get_target(), texture.get_handle());
     glFramebufferTexture2D(m_bound_target, attachment, texture.get_target(),
                            texture.get_handle(), mipLevel);
-    m_color_attachments.push_back(attachment);
-    update_draw_buffers();
+    attachments[attachment_counter++] = attachment;
   }
 
+  void begin_draw_buffers() { attachment_counter = 0; }
+  void end_draw_buffers() { glDrawBuffers(attachment_counter, attachments); }
+
   void attach_depth_buffer(const texture &texture) {
+    glBindTexture(texture.get_target(), texture.get_handle());
     glFramebufferTexture2D(m_bound_target, GL_DEPTH_ATTACHMENT,
                            texture.get_target(), texture.get_handle(), 0);
   }
@@ -467,20 +472,17 @@ public:
     return glCheckFramebufferStatus(m_bound_target) == GL_FRAMEBUFFER_COMPLETE;
   }
 
-  void set_viewport(int x, int y, int w, int h) const { glViewport(x, y, w, h); }
+  void set_viewport(int x, int y, int w, int h) const {
+    glViewport(x, y, w, h);
+  }
 
 private:
   GLuint m_fbo = 0;
   GLenum m_bound_target = GL_FRAMEBUFFER;
-  std::vector<GLenum> m_color_attachments;
+  unsigned int attachment_counter = 0;
+  GLenum attachments[100];
 
   int prev_fbo, prev_viewport[4];
-
-  void update_draw_buffers() {
-    if (!m_color_attachments.empty()) {
-      glDrawBuffers(m_color_attachments.size(), m_color_attachments.data());
-    }
-  }
 };
 
 void check_compile_errors(GLuint shader, std::string type);
@@ -500,11 +502,11 @@ public:
 
   // Load shader code directly, create and link program
   bool compile_shader_from_source(std::string vss, std::string fss,
-                               std::string gss = "none");
+                                  std::string gss = "none");
 
   // Load shader from path, compile and link them into a program
   bool compile_shader_from_path(std::string vsp, std::string fsp,
-                             std::string gsp = "none");
+                                std::string gsp = "none");
 
   void use() { glUseProgram(gl_handle); }
   void set_bool(const std::string &name, bool value) const {
@@ -517,19 +519,22 @@ public:
     glUniform1f(glGetUniformLocation(gl_handle, name.c_str()), value);
   }
   void set_vec2(const std::string &name, const math::vector2 &value) const {
-    glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1, value.data());
+    glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
+                 value.data());
   }
   void set_vec2(const std::string &name, float x, float y) const {
     glUniform2f(glGetUniformLocation(gl_handle, name.c_str()), x, y);
   }
   void set_vec3(const std::string &name, const math::vector3 &value) const {
-    glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1, value.data());
+    glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
+                 value.data());
   }
   void set_vec3(const std::string &name, float x, float y, float z) const {
     glUniform3f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z);
   }
   void set_vec4(const std::string &name, const math::vector4 &value) const {
-    glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1, value.data());
+    glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
+                 value.data());
   }
   void set_vec4(const std::string &name, float x, float y, float z, float w) {
     glUniform4f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z, w);
@@ -580,19 +585,22 @@ public:
     glUniform1f(glGetUniformLocation(gl_handle, name.c_str()), value);
   }
   void set_vec2(const std::string &name, const math::vector2 &value) const {
-    glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1, value.data());
+    glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
+                 value.data());
   }
   void set_vec2(const std::string &name, float x, float y) const {
     glUniform2f(glGetUniformLocation(gl_handle, name.c_str()), x, y);
   }
   void set_vec3(const std::string &name, const math::vector3 &value) const {
-    glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1, value.data());
+    glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
+                 value.data());
   }
   void set_vec3(const std::string &name, float x, float y, float z) const {
     glUniform3f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z);
   }
   void set_vec4(const std::string &name, const math::vector4 &value) const {
-    glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1, value.data());
+    glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
+                 value.data());
   }
   void set_vec4(const std::string &name, float x, float y, float z, float w) {
     glUniform4f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z, w);
