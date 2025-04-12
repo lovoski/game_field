@@ -40,6 +40,8 @@ public:
   bool assets_window_open = false;
   std::map<std::string, bool> system_menu_open;
 
+  void late_deserialize(nlohmann::json &j) override;
+
   void draw_main_menubar();
   void draw_entity_hierarchy();
   void draw_entity_components();

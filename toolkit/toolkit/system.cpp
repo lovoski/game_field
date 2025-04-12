@@ -20,6 +20,7 @@ nlohmann::json iapp::serialize() {
   }
   all["registry"] = reg;
   all["systems"] = sys;
+  late_serialize(all);
   return all;
 }
 
@@ -54,6 +55,8 @@ void iapp::deserialize(nlohmann::json &j) {
   // system init1
   for (auto &ptr : systems)
     ptr->init1(registry);
+  // application post-deserialization
+  late_deserialize(j);
 }
 
 void iapp::update(float dt) {

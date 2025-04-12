@@ -15,6 +15,12 @@ void editor::init() {
   imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 }
 
+void editor::late_deserialize(nlohmann::json &j) {
+  transform_sys = get_sys<transform_system>();
+  dm_sys = get_sys<defered_forward_mixed>();
+  script_sys = get_sys<script_system>();
+}
+
 void editor::run() {
   auto &instance = context::get_instance();
   timer.reset();
@@ -151,20 +157,31 @@ void editor::draw_main_menubar() {
         std::string filepath;
         if (save_file_dialog("Serialize scene file", {"*.scene"}, "Scene File",
                              filepath)) {
-          // if (world->Save(filepath))
-          //   spdlog::info("Save scene to {0}", filepath);
-          // else
-          //   spdlog::error("Failed to save scene to {0}", filepath);
+          auto data = serialize();
+          std::ofstream output(filepath);
+          if (output.is_open()) {
+            output << data.dump(2) << std::endl;
+            output.close();
+            spdlog::info("Save scene to {0}", filepath);
+          } else {
+            spdlog::error("Failed to save scene to {0}", filepath);
+          }
         }
       }
       if (ImGui::MenuItem("Load  Scene")) {
         std::string filepath;
         if (open_file_dialog("Deserialize scene file", {"*.scene"},
                              "Scene File", filepath)) {
-          // if (world->Load(filepath))
-          //   spdlog::info("Load scene from {0}", filepath);
-          // else
-          //   spdlog::error("Failed to load scene from {0}", filepath);
+          std::ifstream input(filepath);
+          if (input.is_open()) {
+            auto data = nlohmann::json::parse(
+                std::string((std::istreambuf_iterator<char>(input)),
+                            std::istreambuf_iterator<char>()));
+            deserialize(data);
+            spdlog::info("Load scene from {0}", filepath);
+          } else {
+            spdlog::error("Failed to load scene from {0}", filepath);
+          }
         }
       }
       ImGui::Separator();
@@ -331,6 +348,9 @@ void editor::draw_entity_hierarchy() {
     if (ImGui::MenuItem("Clear Parent")) {
       auto &trans = registry.get<transform>(entity);
       trans.remove_parent();
+    }
+    if (ImGui::MenuItem("Delete Entity")) {
+      registry.destroy(entity);
     }
   };
 

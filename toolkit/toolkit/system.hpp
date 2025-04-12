@@ -71,7 +71,9 @@ public:
   void update(float dt);
 
   virtual nlohmann::json serialize();
+  virtual void late_serialize(nlohmann::json &j) {}
   virtual void deserialize(nlohmann::json &j);
+  virtual void late_deserialize(nlohmann::json &j) {}
 
   entt::registry registry;
 
