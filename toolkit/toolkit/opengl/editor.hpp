@@ -18,6 +18,7 @@ class editor : public iapp {
 public:
   void init();
   void run();
+  void shutdown();
 
   void reset();
   void add_default_objects();

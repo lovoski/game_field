@@ -16,6 +16,8 @@ void editor::init() {
   imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 }
 
+void editor::shutdown() { g_instance.shutdown(); }
+
 void editor::late_serialize(nlohmann::json &j) {
   nlohmann::json editor_settings;
   editor_settings["active_camera"] =

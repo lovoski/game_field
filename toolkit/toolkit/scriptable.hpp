@@ -8,15 +8,17 @@ class scriptable {
 public:
   scriptable() { __registered_scripts__.insert(this); }
 
+  virtual void start() {}
+  virtual void destroy() {}
+
+  virtual void init1() {}
+
   virtual void draw_to_scene(iapp *app) {}
   virtual void draw_gui(iapp *app) {}
 
   virtual void preupdate(iapp *app, float dt) {}
   virtual void update(iapp *app, float dt) {}
   virtual void lateupdate(iapp *app, float dt) {}
-
-  virtual nlohmann::json serialize() const { return nlohmann::json(); }
-  virtual void deserialize(const nlohmann::json &j) {}
 
   virtual std::string get_name() { return typeid(*this).name(); }
 
@@ -37,6 +39,11 @@ public:
     scriptable::__registered_scripts__.clear();
     for (auto &f : __construct_destroy_registry__)
       f(registry);
+  }
+
+  void init1(entt::registry &registry) override {
+    for (auto script : scriptable::__registered_scripts__)
+      script->init1();
   }
 
   void draw_gui(entt::registry &registry, entt::entity entity) override {
@@ -86,6 +93,13 @@ DECLARE_SYSTEM(script_system)
     auto &script = registry.get<class_name>(entity);                           \
     script.registry = &registry;                                               \
     script.entity = entity;                                                    \
+    script.start();                                                            \
+  }                                                                            \
+  inline void __on_destroy_##class_name(entt::registry &registry,              \
+                                        entt::entity entity) {                 \
+    auto &script = registry.get<class_name>(entity);                           \
+    scriptable::__registered_scripts__.erase(&script);                         \
+    script.destroy();                                                          \
   }                                                                            \
   struct __register_construct_destroy_##class_name {                           \
     __register_construct_destroy_##class_name() {                              \
@@ -93,6 +107,8 @@ DECLARE_SYSTEM(script_system)
           [](entt::registry &registry) {                                       \
             registry.on_construct<class_name>()                                \
                 .connect<&__on_construct_##class_name>();                      \
+            registry.on_destroy<class_name>()                                  \
+                .connect<&__on_destroy_##class_name>();                        \
           });                                                                  \
     }                                                                          \
   };                                                                           \
