@@ -15,7 +15,28 @@ void editor::init() {
   imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 }
 
+void editor::late_serialize(nlohmann::json &j) {
+  nlohmann::json editor_settings;
+  editor_settings["active_camera"] =
+      std::to_string(entt::to_integral(g_instance.active_camera));
+  j["editor"] = editor_settings;
+}
+
 void editor::late_deserialize(nlohmann::json &j) {
+  if (j.contains("editor")) {
+    std::string active_camera_str =
+        j["editor"]["active_camera"].get<std::string>();
+    g_instance.active_camera =
+        entt::entity{static_cast<std::uint32_t>(std::stoul(active_camera_str))};
+  } else {
+    // use the first camera as active camera, otherwise no active camera
+    auto cam_view = registry.view<camera>();
+    if (cam_view.size() == 0)
+      g_instance.active_camera = entt::null;
+    else
+      g_instance.active_camera = *(cam_view.begin());
+  }
+
   transform_sys = get_sys<transform_system>();
   dm_sys = get_sys<defered_forward_mixed>();
   script_sys = get_sys<script_system>();
@@ -225,7 +246,6 @@ void editor::draw_main_menubar() {
       ImGui::MenuItem("Configure Systems", nullptr, false, false);
       for (auto &sys : systems) {
         if (ImGui::BeginMenu(sys->get_name().c_str())) {
-          ImGui::SeparatorText(sys->get_name().c_str());
           ImGui::Checkbox("Active", &(sys->active));
           ImGui::Separator();
           sys->draw_menu_gui();

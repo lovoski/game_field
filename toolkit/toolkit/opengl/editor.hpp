@@ -41,6 +41,7 @@ public:
   script_system *script_sys = nullptr;
 
   void late_deserialize(nlohmann::json &j) override;
+  void late_serialize(nlohmann::json &j) override;
 
   void draw_main_menubar();
   void draw_entity_hierarchy();
