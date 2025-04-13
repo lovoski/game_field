@@ -6,10 +6,21 @@
 namespace toolkit::opengl {
 
 void editor_camera::draw_to_scene(iapp *app) {
-  // if (auto editor_ptr = dynamic_cast<editor *>(app)) {
-  //   if (auto cam_trans =
-  //   editor_ptr->registry.try_get<transform>(g_instance.active_camera)) {}
-  // }
+  if (auto editor_ptr = dynamic_cast<editor *>(app)) {
+    if (auto cam_trans =
+            editor_ptr->registry.try_get<transform>(g_instance.active_camera)) {
+      auto &cam_comp =
+          editor_ptr->registry.get<camera>(g_instance.active_camera);
+      if (vis_pivot)
+        draw_quads({camera_pivot}, cam_trans->local_left(),
+                   cam_trans->local_up(), cam_comp.vp, vis_pivot_size, Purple);
+    }
+  }
+}
+
+void editor_camera::draw_gui(iapp *app) {
+  ImGui::Checkbox("Show Pivot", &vis_pivot);
+  ImGui::DragFloat("Show Pivot Size", &vis_pivot_size, 0.01f, 0.0f, 100.0f);
 }
 
 void editor_camera::preupdate(iapp *app, float dt) {

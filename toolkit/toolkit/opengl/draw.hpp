@@ -25,7 +25,9 @@ void draw_cube(math::vector3 position, math::vector3 forward,
                math::vector3 left, math::vector3 up, math::matrix4 vp,
                math::vector3 size, math::vector3 color = White);
 
-// Visualize a list of bones, with <start, end> pair.
+/**
+ * Visualize a list of bones, with <start, end> pair.
+ */
 void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
                 math::vector2 viewport, math::matrix4 vp,
                 math::vector3 color = Green);
@@ -35,5 +37,16 @@ void quad_draw_call();
 void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
                 math::vector3 up, math::matrix4 vp, float size = 0.2f,
                 math::vector3 color = White);
+
+/**
+ * Taken from: https://theorangeduck.com/page/debug-draw-text-lines
+ *
+ * The parameter `location` is the position for the left most corner, by
+ * default, texts are plot on the xy plane, facing +z axis.
+ */
+void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
+                 math::matrix4 vp, float thick = 0.0f, float scale = 1.0f,
+                 float width = 1.0f, float height = 1.0f, float spacing = 0.0f,
+                 float lineheight = 1.0f, math::vector3 color = White);
 
 }; // namespace toolkit::opengl

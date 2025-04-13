@@ -1,6 +1,7 @@
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/scripts/camera.hpp"
+#include "toolkit/opengl/scripts/test_draw.hpp"
 
 namespace toolkit::opengl {
 
@@ -460,6 +461,8 @@ void editor::draw_entity_components() {
       ImGui::OpenPopup("DrawEntityComponents_addcomponent");
     }
     if (ImGui::BeginPopup("DrawEntityComponents_addcomponent")) {
+      ImGui::MenuItem("Component List", nullptr, nullptr, false);
+      ImGui::Separator();
       for (auto &p : toolkit::iapp::__add_comp_map__) {
         if (ImGui::BeginMenu(p.first.c_str())) {
           for (auto &i : p.second) {
