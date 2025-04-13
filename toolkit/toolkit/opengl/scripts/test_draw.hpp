@@ -9,7 +9,7 @@ namespace toolkit::opengl {
 
 struct test_draw : public scriptable {
   float text_width = 1.0, text_height = 1.0, text_scale = 1.0,
-        text_spacing = 0.0, text_line_height = 1.0;
+        text_spacing = 0.0, text_line_height = 1.0, text_thickness = 0.0f;
 
   void start() override {
     spdlog::info("test_draw start called, entity={0}",
@@ -27,6 +27,7 @@ struct test_draw : public scriptable {
   void draw_gui(iapp *app) override;
   void draw_to_scene(iapp *app) override;
 };
-DECLARE_SCRIPT(test_draw, debug)
+DECLARE_SCRIPT(test_draw, debug, text_width, text_height, text_scale,
+               text_spacing, text_line_height, text_thickness)
 
 }; // namespace toolkit::opengl

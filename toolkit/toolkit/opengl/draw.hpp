@@ -7,6 +7,10 @@ namespace toolkit::opengl {
 void draw_lines(std::vector<std::pair<math::vector3, math::vector3>> &lines,
                 math::matrix4 vp, math::vector3 color = White);
 
+void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
+                   math::matrix4 vp, math::vector3 color = White,
+                   float column_radius = 0.1f, float cap_height = 0.1f);
+
 void draw_linestrip(std::vector<math::vector3> &lineStrip, math::matrix4 vp,
                     math::vector3 color = White);
 
@@ -45,8 +49,9 @@ void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
  * default, texts are plot on the xy plane, facing +z axis.
  */
 void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
-                 math::matrix4 vp, float thick = 0.0f, float scale = 1.0f,
-                 float width = 1.0f, float height = 1.0f, float spacing = 0.0f,
-                 float lineheight = 1.0f, math::vector3 color = White);
+                 math::matrix4 vp, math::vector3 color = White,
+                 float thick = 0.0f, float scale = 1.0f, float width = 1.0f,
+                 float height = 1.0f, float spacing = 0.0f,
+                 float lineheight = 1.0f);
 
 }; // namespace toolkit::opengl

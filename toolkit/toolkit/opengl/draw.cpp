@@ -48,6 +48,92 @@ void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
 }
+const std::string capsule_vs = R"(
+#version 330 core
+layout (location = 0) in vec3 pos;
+void main() {
+  gl_Position = vec4(pos, 1.0);
+}
+)";
+std::string capsule_gs = R"(
+#version 330 core
+#define S0 8
+#define S1 4
+#define PI 3.14159265
+layout(lines) in;
+layout(triangle_strip, max_vertices=144) out;
+
+uniform mat4 vp;
+uniform float column_radius;
+uniform float cap_height;
+
+void main() {
+  vec3 up_dir = normalize(vec3(0,1,0.01));
+
+  vec3 start = gl_in[0].gl_Position.xyz;
+  vec3 end = gl_in[1].gl_Position.xyz;
+
+  vec3 dir = normalize(end-start);
+  vec3 x_axis = normalize(cross(dir,up_dir));
+  vec3 y_axis = normalize(cross(x_axis, dir));
+
+  for (int i = 0; i < S0; i++) {
+    float angle0 = 2.0 * PI * float(i) / float(S0);
+    float angle1 = 2.0 * PI * float(i+1) / float(S0);
+    vec3 offset0 = column_radius * (cos(angle0) * x_axis + sin(angle0) * y_axis);
+    vec3 offset1 = column_radius * (cos(angle1) * x_axis + sin(angle1) * y_axis);
+
+    gl_Position = vp * vec4(start-cap_height*dir, 1.0);
+    EmitVertex();
+    for (int j = 0; j < S1; j++) {
+      float step_angle = float(j+1)/float(S1)*PI*0.5;
+      gl_Position = vp*vec4(start-cap_height*cos(step_angle)*dir+(sin(step_angle))*offset0,1.0);
+      EmitVertex();
+      gl_Position = vp*vec4(start-cap_height*cos(step_angle)*dir+(sin(step_angle))*offset1,1.0);
+      EmitVertex();
+    }
+    for (int j = 0; j < S1; j++) {
+      float step_angle = float(S1-j)/float(S1)*PI*0.5;
+      gl_Position = vp*vec4(end+cap_height*cos(step_angle)*dir+(sin(step_angle))*offset0,1.0);
+      EmitVertex();
+      gl_Position = vp*vec4(end+cap_height*cos(step_angle)*dir+(sin(step_angle))*offset1,1.0);
+      EmitVertex();
+    }
+    gl_Position = vp * vec4(end+cap_height*dir, 1.0);
+    EmitVertex();
+    EndPrimitive();
+  }
+}
+)";
+void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
+                   math::matrix4 vp, math::vector3 color, float column_radius, float cap_height) {
+  static bool initialized = false;
+  static shader shader;
+  static vao vao;
+  static buffer vbo;
+  if (!initialized) {
+    vao.create();
+    vbo.create();
+    shader.compile_shader_from_source(capsule_vs, lineFS, capsule_gs);
+    initialized = true;
+  }
+  vao.bind();
+  std::vector<vector3> points;
+  for (auto &p : lines) {
+    points.push_back(p.first);
+    points.push_back(p.second);
+  }
+  vbo.set_data_as(GL_ARRAY_BUFFER, points);
+  vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
+  shader.use();
+  shader.set_mat4("vp", vp);
+  shader.set_vec3("color", color);
+  shader.set_float("column_radius", column_radius);
+  shader.set_float("cap_height", cap_height);
+  glDrawArrays(GL_LINES, 0, points.size());
+  vbo.unbind_as(GL_ARRAY_BUFFER);
+  vao.unbind();
+}
 
 void draw_linestrip(std::vector<vector3> &lineStrip, matrix4 vp,
                     vector3 color) {
@@ -550,9 +636,9 @@ static const int consolines_lines[596] = {
     0x3F35392D, 0x47373F35};
 
 void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
-                 math::matrix4 vp, float thick, float scale, float width,
-                 float height, float spacing, float lineheight,
-                 math::vector3 color) {
+                 math::matrix4 vp, math::vector3 color, float thick,
+                 float scale, float width, float height, float spacing,
+                 float lineheight) {
   int slen = text.size();
 
   float xOffset = 0.0;
@@ -602,20 +688,25 @@ void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
 
         end = rotation * end + location;
 
-        // If thickness is zero draw as a line otherwise draw as a capsule
-        if (thick == 0.0f) {
-          start_ends.emplace_back(std::make_pair(start, end));
-        } else {
-          // DrawCapsule(start, end, thick, 5, 2, color);
-        }
+        start_ends.emplace_back(std::make_pair(start, end));
       }
 
       // Shift forward to next location
       xOffset += 0.5f * scale * width + spacing;
     }
   }
-
-  draw_lines(start_ends, vp, color);
+  if (thick == 0.0f)
+    draw_lines(start_ends, vp, color);
+  else {
+    float cap_height = thick;
+    float column_radius = thick;
+    for (auto &line : start_ends) {
+      math::vector3 dir = (line.second-line.first).normalized();
+      line.second -= 0.7*cap_height*dir;
+      line.first += 0.7*cap_height*dir;
+    }
+    draw_capsules(start_ends, vp, color, column_radius, cap_height);
+  }
 }
 
 }; // namespace toolkit::opengl
