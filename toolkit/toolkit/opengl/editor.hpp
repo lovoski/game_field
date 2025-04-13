@@ -37,9 +37,6 @@ public:
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
 
-  bool assets_window_open = false;
-  std::map<std::string, bool> system_menu_open;
-
   void late_deserialize(nlohmann::json &j) override;
 
   void draw_main_menubar();

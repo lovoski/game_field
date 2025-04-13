@@ -1,4 +1,6 @@
 #include "toolkit/opengl/editor.hpp"
+#include "toolkit/opengl/gui/utils.hpp"
+#include "toolkit/opengl/scripts/camera.hpp"
 
 namespace toolkit::opengl {
 
@@ -201,20 +203,39 @@ void editor::draw_main_menubar() {
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Settings")) {
+      // system configuration
       ImGui::MenuItem("Configure Systems", nullptr, false, false);
       for (auto &sys : systems) {
-        if (ImGui::MenuItem(sys->get_name().c_str())) {
-          auto it = system_menu_open.find(sys->get_name());
-          if (it == system_menu_open.end())
-            system_menu_open.insert(std::make_pair(sys->get_name(), true));
-          else
-            it->second = true;
+        if (ImGui::BeginMenu(sys->get_name().c_str())) {
+          ImGui::SeparatorText(sys->get_name().c_str());
+          ImGui::Checkbox("Active", &(sys->active));
+          ImGui::Separator();
+          sys->draw_menu_gui();
+          ImGui::EndMenu();
         }
       }
+
+      ImGui::Separator();
+      ImGui::MenuItem("Editor Settings", nullptr, false, false);
+      int active_camera_index = -1;
+      std::vector<std::string> valid_camera_names;
+      std::vector<entt::entity> valid_cameras;
+      registry.view<camera, transform>().each(
+          [&](entt::entity entity, camera &cam, transform &trans) {
+            valid_cameras.push_back(entity);
+            valid_camera_names.push_back(str_format(
+                "%s: %d", trans.name.c_str(), entt::to_integral(entity)));
+          });
+      gui::combo_default("active camera", active_camera_index,
+                         valid_camera_names, [&](int current) {
+                           if (current == -1)
+                             g_instance.active_camera = entt::null;
+                           else
+                             g_instance.active_camera = valid_cameras[current];
+                         });
+
       ImGui::EndMenu();
     }
-    // if (ImGui::MenuItem("Assets"))
-    //   assets_window_open = true;
 
     static stopwatch _timer;
     static int _frameCount = 0, _displayFPS = 0;
@@ -238,27 +259,6 @@ void editor::draw_main_menubar() {
     ImGui::PopStyleColor();
 
     ImGui::EndMainMenuBar();
-
-    // ---------------------- The system menu gui ----------------------
-    for (auto &sys : systems) {
-      auto it = system_menu_open.find(sys->get_name());
-      if (it != system_menu_open.end() && it->second) {
-        ImGui::SetNextWindowSize({500, 400}, ImGuiCond_FirstUseEver);
-        ImGui::Begin((sys->get_name() + "##mainmenugui").c_str(),
-                     &(system_menu_open[sys->get_name()]));
-        ImGui::Checkbox("Active", &(sys->active));
-        ImGui::Separator();
-        sys->draw_menu_gui();
-        ImGui::End();
-      }
-    }
-
-    // ---------------------- The assets window ----------------------
-    if (assets_window_open) {
-      ImGui::SetNextWindowSize({500, 400}, ImGuiCond_FirstUseEver);
-      ImGui::Begin("Assets", &assets_window_open);
-      ImGui::End();
-    }
   }
 }
 
@@ -332,19 +332,24 @@ void editor::draw_entity_hierarchy() {
 
   auto right_click_menu = [&]() {
     ImGui::SeparatorText("Operation");
-    if (ImGui::MenuItem("Add Entity")) {
-      auto ent = registry.create();
-      auto &trans = registry.emplace<transform>(ent);
-      trans.name = "new entity";
+    if (ImGui::BeginMenu("Create")) {
+      if (ImGui::MenuItem("New Entity")) {
+        auto ent = registry.create();
+        auto &trans = registry.emplace<transform>(ent);
+        trans.name = str_format("new entity: %d", entt::to_integral(ent));
+      }
+      ImGui::EndMenu();
     }
-    ImGui::EndMenu();
+    if (ImGui::BeginMenu("Modify")) {
+      if (ImGui::MenuItem("Rename Entity")) {
+      }
+      if (ImGui::MenuItem("Delete Entity")) {
+      }
+      ImGui::EndMenu();
+    }
   };
   auto right_click_entity = [&](entt::entity entity) {
     ImGui::SeparatorText("Operation");
-    // if (ImGui::MenuItem("Rename")) {
-    //   auto &trans = registry.get<transform>(entity);
-    //   trans.name = "random";
-    // }
     if (ImGui::MenuItem("Clear Parent")) {
       auto &trans = registry.get<transform>(entity);
       trans.remove_parent();

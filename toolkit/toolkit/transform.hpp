@@ -105,7 +105,7 @@ public:
 
   void update_transform(entt::registry &registry);
 
-  std::vector<entt::entity> root_entities;
+  std::set<entt::entity> root_entities;
 
 private:
   std::vector<std::pair<bool, entt::entity>> entity_refresh_queue;

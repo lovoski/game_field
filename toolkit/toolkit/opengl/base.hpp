@@ -141,6 +141,8 @@ private:
   math::vector2 scroll_offset{0.0, 0.0};
 };
 
+static context &g_instance = context::get_instance();
+
 // opengl buffer object
 class buffer {
 public:

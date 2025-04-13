@@ -245,7 +245,7 @@ void transform_system::update_transform(entt::registry &registry) {
   entity_refresh_queue.resize(size);
   view.each([&](entt::entity ent, transform &trans) {
     if (trans.m_parent == entt::null) {
-      root_entities.push_back(ent);
+      root_entities.insert(ent);
       entity_refresh_queue[qBack++] = std::make_pair(trans.dirty, ent);
     }
   });

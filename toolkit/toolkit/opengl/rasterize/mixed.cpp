@@ -1,4 +1,5 @@
 #include "toolkit/opengl/rasterize/mixed.hpp"
+#include "toolkit/scriptable.hpp"
 
 namespace toolkit::opengl {
 
@@ -174,6 +175,12 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     draw_wire_sphere(math::vector3(-1, -0.5, 1), cam_ptr->vp, 0.1);
     draw_wire_sphere(math::vector3(2, 1, -3), cam_ptr->vp, 0.1);
+
+    // debug rendering
+    if (auto app_ptr = registry.ctx().get<iapp*>()) {
+      auto script_sys = app_ptr->get_sys<script_system>();
+      script_sys->draw_to_scene(app_ptr);
+    }
 
     cbuffer.unbind();
   }

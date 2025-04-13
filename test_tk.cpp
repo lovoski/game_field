@@ -53,7 +53,7 @@ public:
 
 #include "toolkit/opengl/base.hpp"
 #include "toolkit/opengl/editor.hpp"
-class test_script0 : public toolkit::scriptable {
+class test_script0 : public toolkit::scriptable<test_script0> {
 public:
   int a = 10;
 
@@ -63,7 +63,7 @@ public:
 
   DECLARE_SCRIPT(test_script0, a)
 };
-class test_script1 : public toolkit::scriptable {
+class test_script1 : public toolkit::scriptable<test_script1> {
 public:
   int b = 10;
 

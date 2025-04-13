@@ -41,7 +41,7 @@ public:
 
 class iapp {
 public:
-  iapp() {}
+  iapp() { registry.ctx().emplace<iapp *>(this); }
   ~iapp() {}
 
   template <typename SystemType> SystemType *get_sys() {
