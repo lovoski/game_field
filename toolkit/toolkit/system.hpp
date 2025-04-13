@@ -109,7 +109,7 @@ protected:
       entt::registry &registry, entt::entity entity, nlohmann::json &j) {      \
     if (j.contains(#class_name)) {                                             \
       auto &comp = registry.emplace<class_name>(entity);                       \
-      comp = j[#class_name].get<class_name>();                                 \
+      from_json(j[#class_name], comp);                                         \
     }                                                                          \
   }                                                                            \
   inline void __add_comp_##class_name(entt::registry &registry,                \
@@ -130,7 +130,7 @@ protected:
                      std::function<void(entt::registry &, entt::entity)>>();   \
       }                                                                        \
       toolkit::iapp::__add_comp_map__[std::string(#category)].insert(          \
-          std::make_pair(std::string(#class_name), __add_comp_##class_name));                  \
+          std::make_pair(std::string(#class_name), __add_comp_##class_name));  \
     }                                                                          \
   };                                                                           \
   static __register_serializer_##class_name                                    \
@@ -147,7 +147,7 @@ protected:
   inline void __sys_deserializer__##class_name(iapp *app, nlohmann::json &j) { \
     if (j.contains(#class_name)) {                                             \
       auto sys = app->add_sys<class_name>();                                   \
-      *sys = j[#class_name].get<class_name>();                                 \
+      from_json(j[#class_name], *sys);                                         \
     }                                                                          \
   }                                                                            \
   struct __register_serializer_##class_name {                                  \

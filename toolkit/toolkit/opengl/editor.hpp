@@ -19,6 +19,9 @@ public:
   void init();
   void run();
 
+  void reset();
+  void add_default_objects();
+
   ImGuiIO *imgui_io = nullptr;
   stopwatch timer;
 

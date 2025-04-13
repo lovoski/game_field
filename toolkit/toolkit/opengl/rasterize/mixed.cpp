@@ -51,6 +51,12 @@ void main() {
 }
 )";
 
+void defered_forward_mixed::draw_menu_gui() {
+  ImGui::Checkbox("Show Grid", &should_draw_grid);
+  ImGui::InputInt("Grid Size", &grid_size);
+  ImGui::InputInt("Grid Spacing", &grid_spacing);
+}
+
 void defered_forward_mixed::draw_gui(entt::registry &registry,
                                      entt::entity entity) {
   if (auto ptr = registry.try_get<camera>(entity)) {
@@ -134,10 +140,12 @@ void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
 }
 
 void defered_forward_mixed::render(entt::registry &registry) {
-  auto &instance = context::get_instance();
-  if (auto cam_ptr = registry.try_get<camera>(instance.active_camera)) {
+  if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
+    auto &cam_trans = registry.get<transform>(g_instance.active_camera);
+    auto &cam_comp = *cam_ptr;
+
     gbuffer.bind();
-    gbuffer.set_viewport(0, 0, instance.scene_width, instance.scene_height);
+    gbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
 
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -148,7 +156,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
     registry.view<mesh_data, transform>().each(
         [&](entt::entity entity, mesh_data &mesh, transform &trans) {
           gbuffer_geometry_pass.set_mat4("gModel", trans.matrix());
-          gbuffer_geometry_pass.set_mat4("gVP", cam_ptr->vp);
+          gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
           draw_mesh_data(mesh);
         });
 
@@ -156,25 +164,13 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     // render color buffer
     cbuffer.bind();
-    cbuffer.set_viewport(0, 0, instance.scene_width, instance.scene_height);
+    cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
 
     glClear(GL_COLOR_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
 
-    auto &cam_trans = registry.get<transform>(instance.active_camera);
-    draw_quads({math::vector3(0, 0, 0), math::vector3(1, 0, 2),
-                math::vector3(1, 1, -2)},
-               cam_trans.local_left(), cam_trans.local_up(), cam_ptr->vp);
-    draw_arrow(math::vector3(-1, 1, 0), math::vector3(2, -1, 1), cam_ptr->vp);
-
-    std::vector<std::pair<math::vector3, math::vector3>> bones = {
-        std::make_pair(math::vector3(-1, -0.5, 1), math::vector3(2, 1, -3))};
-    draw_bones(bones,
-               math::vector2(instance.scene_width, instance.scene_height),
-               cam_ptr->vp);
-
-    draw_wire_sphere(math::vector3(-1, -0.5, 1), cam_ptr->vp, 0.1);
-    draw_wire_sphere(math::vector3(2, 1, -3), cam_ptr->vp, 0.1);
+    if (should_draw_grid)
+      draw_grid(grid_size, grid_spacing, cam_comp.vp);
 
     // debug rendering
     if (auto app_ptr = registry.ctx().get<iapp*>()) {

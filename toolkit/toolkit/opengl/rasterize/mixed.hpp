@@ -23,6 +23,11 @@ public:
 
   void draw_gui(entt::registry &registry, entt::entity entity) override;
 
+  void draw_menu_gui() override;
+
+  bool should_draw_grid = true;
+  int grid_spacing = 10, grid_size = 100;
+
 protected:
   framebuffer gbuffer, cbuffer;
   shader gbuffer_geometry_pass;

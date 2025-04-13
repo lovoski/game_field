@@ -7,9 +7,7 @@ namespace toolkit::opengl {
 void editor::init() {
   auto &instance = context::get_instance();
   instance.init();
-  transform_sys = add_sys<transform_system>();
-  dm_sys = add_sys<defered_forward_mixed>();
-  script_sys = add_sys<script_system>();
+  reset();
 
   // init imgui
   imgui_io = &ImGui::GetIO();
@@ -26,6 +24,9 @@ void editor::late_deserialize(nlohmann::json &j) {
 void editor::run() {
   auto &instance = context::get_instance();
   timer.reset();
+
+  add_default_objects();
+
   instance.run([&]() {
     float dt = timer.elapse_s();
     timer.reset();
@@ -84,6 +85,25 @@ void editor::run() {
 
     instance.swap_buffer();
   });
+}
+
+void editor::reset() {
+  registry.clear();
+  systems.clear();
+
+  transform_sys = add_sys<transform_system>();
+  dm_sys = add_sys<defered_forward_mixed>();
+  script_sys = add_sys<script_system>();
+}
+
+void editor::add_default_objects() {
+  auto ent = registry.create();
+  auto &trans = registry.emplace<transform>(ent);
+  trans.name = "main camera";
+  trans.set_global_position(math::vector3(0, 0, 5));
+  auto &cam_comp = registry.emplace<camera>(ent);
+  g_instance.active_camera = ent;
+  auto &editor_cam = registry.emplace<editor_camera>(ent);
 }
 
 void editor::draw_gizmos(bool enable) {
@@ -149,7 +169,8 @@ void editor::draw_main_menubar() {
       // ---------------------- Scene save/load menu ----------------------
       ImGui::MenuItem("Scene", nullptr, false, false);
       if (ImGui::MenuItem("Reset Scene")) {
-        // handleReset(world);
+        reset();
+        add_default_objects();
         spdlog::info("Reset scene");
       }
       if (ImGui::MenuItem("Save  Scene")) {
@@ -214,14 +235,17 @@ void editor::draw_main_menubar() {
 
       ImGui::Separator();
       ImGui::MenuItem("Editor Settings", nullptr, false, false);
-      int active_camera_index = -1;
       std::vector<std::string> valid_camera_names;
       std::vector<entt::entity> valid_cameras;
+      int active_camera_index = -1, tmp_counter = 0;
       registry.view<camera, transform>().each(
           [&](entt::entity entity, camera &cam, transform &trans) {
+            if (entity == g_instance.active_camera)
+              active_camera_index = tmp_counter;
             valid_cameras.push_back(entity);
             valid_camera_names.push_back(str_format(
                 "%s: %d", trans.name.c_str(), entt::to_integral(entity)));
+            tmp_counter++;
           });
       gui::combo_default("active camera", active_camera_index,
                          valid_camera_names, [&](int current) {
@@ -230,6 +254,15 @@ void editor::draw_main_menubar() {
                            else
                              g_instance.active_camera = valid_cameras[current];
                          });
+
+      int gizmo_mode_idx = 0;
+      gui::combo("gizmo mode", gizmo_mode_idx, {"world", "local"},
+                 [&](int current) {
+                   if (current == 1)
+                     current_gizmo_mode = ImGuizmo::MODE::LOCAL;
+                   else
+                     current_gizmo_mode = ImGuizmo::MODE::WORLD;
+                 });
 
       ImGui::EndMenu();
     }
@@ -341,6 +374,9 @@ void editor::draw_entity_hierarchy() {
       if (ImGui::MenuItem("Rename Entity")) {
       }
       if (ImGui::MenuItem("Delete Entity")) {
+        if (selected_entity == g_instance.active_camera)
+          g_instance.active_camera = entt::null;
+        registry.destroy(selected_entity);
       }
       ImGui::EndMenu();
     }

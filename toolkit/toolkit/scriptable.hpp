@@ -4,10 +4,6 @@
 
 namespace toolkit {
 
-class __script_base__ {
-public:
-};
-
 class scriptable {
 public:
   scriptable() { __registered_scripts__.insert(this); }
