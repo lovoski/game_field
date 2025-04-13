@@ -47,6 +47,9 @@ void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
  *
  * The parameter `location` is the position for the left most corner, by
  * default, texts are plot on the xy plane, facing +z axis.
+ *
+ * The parameter `thick` range [0.0,1.0], when set to 0.0, the texts are plot as
+ * pixel lines.
  */
 void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
                  math::matrix4 vp, math::vector3 color = White,

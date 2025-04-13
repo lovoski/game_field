@@ -698,6 +698,8 @@ void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
   if (thick == 0.0f)
     draw_lines(start_ends, vp, color);
   else {
+    thick = std::clamp(thick,0.0f,1.0f);
+    thick = 0.032*thick*scale;
     float cap_height = thick;
     float column_radius = thick;
     for (auto &line : start_ends) {
