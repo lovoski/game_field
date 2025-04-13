@@ -49,7 +49,7 @@ void context::init(unsigned int width, unsigned int height, const char *title,
   ImPlot::CreateContext();
 }
 
-context::~context() {
+void context::shutdown() {
   // free opengl handles
   for (auto handle : buffer_handles)
     glDeleteBuffers(1, &handle);

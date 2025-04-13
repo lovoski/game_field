@@ -399,11 +399,6 @@ template <typename Tuple, typename Func> void for_each(Tuple &&t, Func &&f) {
       std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{});
 }
 
-template <typename T, typename = void> struct reflected : std::false_type {};
-template <typename T>
-struct reflected<T, std::void_t<typename T::_Reflectable_Flag_>>
-    : std::true_type {};
-
 /**
  * Decide whether a class is reflectable or not.
  */
@@ -429,43 +424,35 @@ template <typename T> bool is_reflectable() {
  * `nlohmann::json`.
  */
 #define REFLECT(class_name, ...)                                               \
-private:                                                                       \
-  static inline bool _register_reflect_##class_name = []() {                   \
-    toolkit::_Reflect_Imp::class_registry::instance()                          \
-        .register_class<class_name>();                                         \
-    return true;                                                               \
-  }();                                                                         \
-                                                                               \
-public:                                                                        \
-  using _Reflectable_Flag_ = std::true_type;                                   \
-  static auto get_reflect_fields() {                                           \
+  struct __registry_##class_name {                                             \
+    __registry_##class_name() {                                                \
+      toolkit::_Reflect_Imp::class_registry::instance()                        \
+          .register_class<class_name>();                                       \
+    }                                                                          \
+  };                                                                           \
+  static __registry_##class_name __registry_instance_##class_name =            \
+      __registry_##class_name();                                               \
+  inline auto get_reflect_fields_##class_name() {                              \
     return std::make_tuple(__VA_OPT__(                                         \
         REFLECT_FOR_EACH(class_name, MAKE_REFLECT_FIELD, __VA_ARGS__)));       \
   }                                                                            \
-  friend void to_json(nlohmann::json &j, const class_name &obj) {              \
-    j = obj.serialize();                                                       \
-  }                                                                            \
-  friend void from_json(const nlohmann::json &j, class_name &obj) {            \
-    obj.deserialize(j);                                                        \
-  }                                                                            \
-  nlohmann::json serialize() const {                                           \
-    nlohmann::json j;                                                          \
-    toolkit::for_each(get_reflect_fields(), [&](auto field) {                  \
-      using FieldType = std::decay_t<decltype(this->*(field.ptr))>;            \
-      j[field.name] = this->*(field.ptr);                                      \
+  inline void to_json(nlohmann::json &j, const class_name &obj) {              \
+    toolkit::for_each(get_reflect_fields_##class_name(), [&](auto field) {     \
+      using FieldType = std::decay_t<decltype(obj.*(field.ptr))>;              \
+      j[field.name] = obj.*(field.ptr);                                        \
     });                                                                        \
-    return j;                                                                  \
   }                                                                            \
-  void deserialize(const nlohmann::json &j) {                                  \
-    toolkit::for_each(get_reflect_fields(), [&](auto field) {                  \
-      using FieldType = std::decay_t<decltype(this->*(field.ptr))>;            \
+  inline void from_json(const nlohmann::json &j, class_name &obj) {            \
+    toolkit::for_each(get_reflect_fields_##class_name(), [&](auto field) {     \
+      using FieldType = std::decay_t<decltype(obj.*(field.ptr))>;              \
       if (j.contains(field.name))                                              \
-        this->*(field.ptr) = j[field.name].get<FieldType>();                   \
+        obj.*(field.ptr) = j[field.name].get<FieldType>();                     \
     });                                                                        \
-  }                                                                            \
-  template <typename Func> void for_each_reflect_field(Func &&f) {             \
-    toolkit::for_each(get_reflect_fields(), f);                                \
-  }                                                                            \
-  static std::string get_reflect_name() { return #class_name; }
+  }
+
+#define REFLECT_PRIVATE(class_name)                                            \
+  friend void to_json(nlohmann::json &j, const class_name &obj);               \
+  friend void from_json(const nlohmann::json &j, class_name &obj);             \
+  friend auto get_reflect_fields_##class_name();
 
 }; // namespace toolkit

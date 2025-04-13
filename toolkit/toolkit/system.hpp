@@ -89,9 +89,8 @@ public:
       __sys_serializer_callbacks__;
 
   static inline std::map<
-      std::string,
-      std::vector<std::pair<
-          std::string, std::function<void(entt::registry &, entt::entity)>>>>
+      std::string, std::map<std::string, std::function<void(entt::registry &,
+                                                            entt::entity)>>>
       __add_comp_map__;
 
 protected:
@@ -100,66 +99,66 @@ protected:
 
 #define DECLARE_COMPONENT(class_name, category, ...)                           \
   REFLECT(class_name, __VA_ARGS__)                                             \
-public:                                                                        \
-  static void __comp_serializer__##class_name(                                 \
+  inline void __comp_serializer__##class_name(                                 \
       entt::registry &registry, entt::entity entity, nlohmann::json &j) {      \
     if (auto *ptr = registry.try_get<class_name>(entity)) {                    \
-      j[get_reflect_name()] = ptr->serialize();                                \
+      j[#class_name] = *ptr;                                                   \
     }                                                                          \
   }                                                                            \
-  static void __comp_deserializer__##class_name(                               \
+  inline void __comp_deserializer__##class_name(                               \
       entt::registry &registry, entt::entity entity, nlohmann::json &j) {      \
-    if (j.contains(get_reflect_name())) {                                      \
+    if (j.contains(#class_name)) {                                             \
       auto &comp = registry.emplace<class_name>(entity);                       \
-      comp.deserialize(j[get_reflect_name()]);                                 \
+      comp = j[#class_name].get<class_name>();                                 \
     }                                                                          \
   }                                                                            \
-  static void __add_comp_##class_name(entt::registry &registry,                \
+  inline void __add_comp_##class_name(entt::registry &registry,                \
                                       entt::entity entity) {                   \
     if (auto ptr = registry.try_get<class_name>(entity))                       \
       return;                                                                  \
     registry.emplace<class_name>(entity);                                      \
   }                                                                            \
-                                                                               \
-private:                                                                       \
-  static inline bool _register_##class_name = []() {                           \
-    toolkit::iapp::__comp_serializer_callbacks__.insert(                       \
-        std::make_pair(get_reflect_name(),                                     \
-                       std::make_pair(__comp_serializer__##class_name,         \
+  struct __register_serializer_##class_name {                                  \
+    __register_serializer_##class_name() {                                     \
+      toolkit::iapp::__comp_serializer_callbacks__.insert(std::make_pair(      \
+          #class_name, std::make_pair(__comp_serializer__##class_name,         \
                                       __comp_deserializer__##class_name)));    \
-    if (toolkit::iapp::__add_comp_map__.find(#category) ==                     \
-        toolkit::iapp::__add_comp_map__.end()) {                               \
-      toolkit::iapp::__add_comp_map__[#category] = std::vector<                \
-          std::pair<std::string,                                               \
-                    std::function<void(entt::registry &, entt::entity)>>>();   \
+      if (toolkit::iapp::__add_comp_map__.find(std::string(#category)) ==      \
+          toolkit::iapp::__add_comp_map__.end()) {                             \
+        toolkit::iapp::__add_comp_map__[std::string(#category)] =              \
+            std::map<std::string,                                              \
+                     std::function<void(entt::registry &, entt::entity)>>();   \
+      }                                                                        \
+      toolkit::iapp::__add_comp_map__[std::string(#category)].insert(          \
+          std::make_pair(std::string(#class_name), __add_comp_##class_name));                  \
     }                                                                          \
-    toolkit::iapp::__add_comp_map__[#category].push_back(                      \
-        std::make_pair(get_reflect_name(), __add_comp_##class_name));          \
-    return true;                                                               \
-  }();
+  };                                                                           \
+  static __register_serializer_##class_name                                    \
+      __register_serializer_instance_##class_name =                            \
+          __register_serializer_##class_name();
 
 #define DECLARE_SYSTEM(class_name, ...)                                        \
   REFLECT(class_name, __VA_ARGS__)                                             \
-public:                                                                        \
-  static void __sys_serializer__##class_name(iapp *app, nlohmann::json &j) {   \
+  inline void __sys_serializer__##class_name(iapp *app, nlohmann::json &j) {   \
     if (auto *ptr = app->get_sys<class_name>()) {                              \
-      j[get_reflect_name()] = ptr->serialize();                                \
+      j[#class_name] = *ptr;                                                   \
     }                                                                          \
   }                                                                            \
-  static void __sys_deserializer__##class_name(iapp *app, nlohmann::json &j) { \
-    if (j.contains(get_reflect_name())) {                                      \
+  inline void __sys_deserializer__##class_name(iapp *app, nlohmann::json &j) { \
+    if (j.contains(#class_name)) {                                             \
       auto sys = app->add_sys<class_name>();                                   \
-      sys->deserialize(j[get_reflect_name()]);                                 \
+      *sys = j[#class_name].get<class_name>();                                 \
     }                                                                          \
   }                                                                            \
-                                                                               \
-private:                                                                       \
-  static inline bool _register_serializer_##class_name = []() {                \
-    toolkit::iapp::__sys_serializer_callbacks__.insert(                        \
-        std::make_pair(get_reflect_name(),                                     \
-                       std::make_pair(__sys_serializer__##class_name,          \
+  struct __register_serializer_##class_name {                                  \
+    __register_serializer_##class_name() {                                     \
+      toolkit::iapp::__sys_serializer_callbacks__.insert(std::make_pair(       \
+          #class_name, std::make_pair(__sys_serializer__##class_name,          \
                                       __sys_deserializer__##class_name)));     \
-    return true;                                                               \
-  }();
+    }                                                                          \
+  };                                                                           \
+  static __register_serializer_##class_name                                    \
+      __register_serializer_instance_##class_name =                            \
+          __register_serializer_##class_name();
 
 }; // namespace toolkit

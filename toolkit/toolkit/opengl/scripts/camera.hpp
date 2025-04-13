@@ -5,7 +5,8 @@
 
 namespace toolkit::opengl {
 
-struct editor_camera : public scriptable<editor_camera> {
+class editor_camera : public scriptable {
+public:
   bool mouseFirstMove = true;
   math::vector2 mouseLastPos;
   math::vector3 cameraPivot{0.0, 0.0, 0.0};
@@ -18,9 +19,8 @@ struct editor_camera : public scriptable<editor_camera> {
 
   void preupdate(iapp *app, float dt) override;
   void draw_to_scene(iapp *app) override;
-
-  DECLARE_SCRIPT(editor_camera, basic, mouseFirstMove, mouseLastPos, cameraPivot,
-                 initialFactor, speedPow, maxSpeed, fpsSpeed)
 };
+DECLARE_SCRIPT(editor_camera, basic, mouseFirstMove, mouseLastPos, cameraPivot,
+               initialFactor, speedPow, maxSpeed, fpsSpeed)
 
 }; // namespace toolkit::opengl

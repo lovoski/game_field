@@ -6,6 +6,7 @@
 namespace toolkit::opengl {
 
 void editor_camera::draw_to_scene(iapp *app) {
+  spdlog::info("call draw to scene");
   if (auto editor_ptr = dynamic_cast<editor *>(app)) {
     if (auto cam_trans = editor_ptr->registry.try_get<transform>(g_instance.active_camera)) {
       auto cam_comp = editor_ptr->registry.get<camera>(g_instance.active_camera);

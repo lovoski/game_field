@@ -87,11 +87,11 @@ private:
 
   math::matrix4 m_matrix = math::matrix4::Identity();
 
-  DECLARE_COMPONENT(transform, basic, m_pos, m_local_pos, m_scale,
-                         m_local_scale, m_rot, m_local_up, m_local_forward,
-                         m_local_left, m_local_rot, m_local_euler, m_matrix,
-                         name, dirty, m_parent, m_children)
+  REFLECT_PRIVATE(transform)
 };
+DECLARE_COMPONENT(transform, basic, m_pos, m_local_pos, m_scale, m_local_scale,
+                  m_rot, m_local_up, m_local_forward, m_local_left, m_local_rot,
+                  m_local_euler, m_matrix, name, dirty, m_parent, m_children)
 
 class transform_system : public isystem {
 public:
@@ -109,8 +109,7 @@ public:
 
 private:
   std::vector<std::pair<bool, entt::entity>> entity_refresh_queue;
-
-  DECLARE_SYSTEM(transform_system)
 };
+DECLARE_SYSTEM(transform_system)
 
 }; // namespace toolkit

@@ -16,9 +16,8 @@ struct mesh_data {
   vao vertex_array;
   buffer vertex_buffer, index_buffer;
   buffer blend_shape_buffer, blend_shape_weights_buffer;
-
-  DECLARE_COMPONENT(mesh_data, data, mesh_name, model_path)
 };
+DECLARE_COMPONENT(mesh_data, data, mesh_name, model_path)
 
 void draw_mesh_data(mesh_data &data, GLenum mode = GL_TRIANGLES);
 

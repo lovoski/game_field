@@ -29,8 +29,7 @@ protected:
   texture pos_tex, normal_tex, depth_tex;
 
   texture color_tex;
-
-  DECLARE_SYSTEM(defered_forward_mixed)
 };
+DECLARE_SYSTEM(defered_forward_mixed)
 
 }; // namespace toolkit::opengl

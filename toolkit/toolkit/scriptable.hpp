@@ -6,7 +6,11 @@ namespace toolkit {
 
 class __script_base__ {
 public:
-  __script_base__() { __registered_scripts__.insert(this); }
+};
+
+class scriptable {
+public:
+  scriptable() { __registered_scripts__.insert(this); }
 
   virtual void draw_to_scene(iapp *app) {}
   virtual void draw_gui(iapp *app) {}
@@ -18,72 +22,86 @@ public:
   virtual nlohmann::json serialize() const { return nlohmann::json(); }
   virtual void deserialize(const nlohmann::json &j) {}
 
-  virtual bool belong_to_entity(entt::registry &registry, entt::entity entity) {
-    return false;
-  }
-
-  virtual std::string get_name() { return ""; }
+  virtual std::string get_name() { return typeid(*this).name(); }
 
   bool enabled = true;
 
-  static inline std::set<__script_base__ *> __registered_scripts__;
-};
+  entt::registry *registry = nullptr;
+  entt::entity entity = entt::null;
 
-template <typename derived> class scriptable : public __script_base__ {
-public:
-  virtual bool belong_to_entity(entt::registry &registry, entt::entity entity) {
-    return registry.try_get<std::decay_t<derived>>(entity) != nullptr;
-  }
-  virtual std::string get_name() {
-    return typeid(std::decay_t<derived>).name();
-  }
+  static inline std::set<scriptable *> __registered_scripts__;
 };
 
 class script_system : public isystem {
 public:
+  static inline std::vector<std::function<void(entt::registry &)>>
+      __construct_destroy_registry__;
+
   void init0(entt::registry &registry) override {
-    __script_base__::__registered_scripts__.clear();
+    scriptable::__registered_scripts__.clear();
+    for (auto &f : __construct_destroy_registry__)
+      f(registry);
   }
 
   void draw_gui(entt::registry &registry, entt::entity entity) override {
     auto ptr = registry.ctx().get<iapp *>();
-    for (auto script : __script_base__::__registered_scripts__) {
-      if (script->enabled && script->belong_to_entity(registry, entity)) {
+    for (auto script : scriptable::__registered_scripts__) {
+      if (script->entity == entity) {
         if (ImGui::CollapsingHeader(script->get_name().c_str())) {
           ImGui::Checkbox("Active", &script->enabled);
+          ImGui::Separator();
+          if (!script->enabled)
+            ImGui::BeginDisabled();
           script->draw_gui(ptr);
+          if (!script->enabled)
+            ImGui::EndDisabled();
         }
       }
     }
   }
   void draw_to_scene(iapp *app) {
-    for (auto script : __script_base__::__registered_scripts__)
+    for (auto script : scriptable::__registered_scripts__)
       if (script->enabled)
         script->draw_to_scene(app);
   }
 
   void preupdate(iapp *app, float dt) {
-    for (auto script : __script_base__::__registered_scripts__)
+    for (auto script : scriptable::__registered_scripts__)
       if (script->enabled)
         script->preupdate(app, dt);
   }
   void update(iapp *app, float dt) {
-    for (auto script : __script_base__::__registered_scripts__)
+    for (auto script : scriptable::__registered_scripts__)
       if (script->enabled)
         script->update(app, dt);
   }
   void lateupdate(iapp *app, float dt) {
-    for (auto script : __script_base__::__registered_scripts__)
+    for (auto script : scriptable::__registered_scripts__)
       if (script->enabled)
         script->lateupdate(app, dt);
   }
-
-  DECLARE_SYSTEM(script_system)
 };
+DECLARE_SYSTEM(script_system)
 
 #define DECLARE_SCRIPT(class_name, category, ...)                              \
   DECLARE_COMPONENT(class_name, category, __VA_ARGS__)                         \
-private:                                                                       \
-  static inline bool _register_script_##class_name = []() { return true; }();
+  inline void __on_construct_##class_name(entt::registry &registry,            \
+                                          entt::entity entity) {               \
+    auto &script = registry.get<class_name>(entity);                           \
+    script.registry = &registry;                                               \
+    script.entity = entity;                                                    \
+  }                                                                            \
+  struct __register_construct_destroy_##class_name {                           \
+    __register_construct_destroy_##class_name() {                              \
+      toolkit::script_system::__construct_destroy_registry__.push_back(        \
+          [](entt::registry &registry) {                                       \
+            registry.on_construct<class_name>()                                \
+                .connect<&__on_construct_##class_name>();                      \
+          });                                                                  \
+    }                                                                          \
+  };                                                                           \
+  static __register_construct_destroy_##class_name                             \
+      __register_construct_destroy_instance_##class_name =                     \
+          __register_construct_destroy_##class_name();
 
 }; // namespace toolkit

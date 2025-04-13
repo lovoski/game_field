@@ -31,24 +31,21 @@ void editor::run() {
     timer.reset();
 
     transform_sys->update_transform(registry);
-    for (auto sys : systems) {
+    for (auto sys : systems)
       if (sys->active)
         sys->preupdate(registry, dt);
-      if (script_sys->active)
-        script_sys->preupdate(this, dt);
-    }
-    for (auto sys : systems) {
+    if (script_sys->active)
+      script_sys->preupdate(this, dt);
+    for (auto sys : systems)
       if (sys->active)
         sys->update(registry, dt);
-      if (script_sys->active)
-        script_sys->update(this, dt);
-    }
-    for (auto sys : systems) {
+    if (script_sys->active)
+      script_sys->update(this, dt);
+    for (auto sys : systems)
       if (sys->active)
         sys->lateupdate(registry, dt);
-      if (script_sys->active)
-        script_sys->lateupdate(this, dt);
-    }
+    if (script_sys->active)
+      script_sys->lateupdate(this, dt);
 
     dm_sys->render(registry);
 

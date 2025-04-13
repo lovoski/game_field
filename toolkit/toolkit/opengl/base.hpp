@@ -22,13 +22,13 @@ public:
   }
 
   context(const context &) = delete;
-  ~context();
   context &operator=(const context &) = delete;
 
   void init(unsigned int width = 1920, unsigned int height = 1080,
             const char *title = "App", int majorVersion = 4,
             int minorVersion = 3);
   void run(std::function<void(void)> mainLoop);
+  void shutdown();
 
   void begin_imgui();
   void end_imgui();
