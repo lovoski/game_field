@@ -23,14 +23,12 @@ void draw_mesh_data(mesh_data &data, GLenum mode = GL_TRIANGLES);
 
 entt::entity create_cube(entt::registry &registry,
                          math::matrix4 t = math::matrix4::Identity());
-// entt::entity create_plane(entt::registry &registry,
-//                           math::matrix4 t = math::matrix4::Identity());
-// entt::entity create_sphere(entt::registry &registry,
-//                            math::matrix4 t = math::matrix4::Identity());
-// entt::entity create_cylinder(entt::registry &registry,
-//                              math::matrix4 t = math::matrix4::Identity());
-// entt::entity create_cone(entt::registry &registry,
-//                          math::matrix4 t = math::matrix4::Identity());
+entt::entity create_plane(entt::registry &registry,
+                          math::matrix4 t = math::matrix4::Identity());
+entt::entity create_sphere(entt::registry &registry,
+                           math::matrix4 t = math::matrix4::Identity());
+entt::entity create_cylinder(entt::registry &registry,
+                             math::matrix4 t = math::matrix4::Identity());
 
 // entt::entity create_model(entt::registry &registry, std::string filepath,
 //                           math::matrix4 t = math::matrix4::Identity());

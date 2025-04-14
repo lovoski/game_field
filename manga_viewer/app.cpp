@@ -1,0 +1,827 @@
+#include "app.hpp"
+#include <codecvt>
+#include <filesystem>
+#include <locale>
+
+using namespace toolkit;
+
+/*
+The page has the same ratio as the loaded page, width=w/h, height = 1.0.
+Centered at origin.
+
+The heigh for this generated page is fixed to 1.0, but the width may vary.
+ */
+std::string createPageGeometry = R"(
+#version 430
+#define WORK_GROUP_SIZE %d
+layout(local_size_x = WORK_GROUP_SIZE, local_size_y = WORK_GROUP_SIZE, local_size_z = 1) in;
+
+struct vert_data {
+  vec4 pos;
+  vec4 texCoord;
+};
+layout(std430, binding = 0) buffer VertexBuffer {
+  vert_data gVertex[];
+};
+
+uniform float gGridCellSizeX;
+uniform float gGridCellSizeY;
+
+uniform int gGridPointHorizontal;
+uniform int gGridPointVertical;
+
+void main() {
+  ivec2 vertIdx = ivec2(gl_GlobalInvocationID.xy);
+  if (vertIdx.x >= gGridPointHorizontal || vertIdx.y >= gGridPointVertical) return;
+  vec3 basicPos = vec3(gGridCellSizeX * vertIdx.x, gGridCellSizeY * vertIdx.y, 0.0);
+
+  vert_data vd;
+  vd.pos = vec4(basicPos, 1.0);
+  vd.texCoord.xy = vec2(vertIdx.x/float(gGridPointHorizontal-1), 1.0-vertIdx.y/float(gGridPointVertical-1));
+  gVertex[gGridPointHorizontal * vertIdx.y + vertIdx.x] = vd;
+}
+)";
+
+/*
+Assume the input page always have height=1.0 and varied width.
+*/
+std::string curlPageGeometry = R"(
+#version 430
+#define WORK_GROUP_SIZE %d
+layout(local_size_x = WORK_GROUP_SIZE, local_size_y = WORK_GROUP_SIZE, local_size_z = 1) in;
+
+struct vert_data {
+  vec4 pos;
+  vec4 texCoord;
+};
+layout(std430, binding = 0) buffer VertexBuffer {
+  vert_data gVertex[];
+};
+layout(std430, binding = 1) buffer DeformedVertexBuffer {
+  vert_data gDeformedVertex[];
+};
+
+uniform float gGridCellSizeX;
+uniform float gGridCellSizeY;
+
+uniform int gGridPointHorizontal;
+uniform int gGridPointVertical;
+
+uniform bool gPageFromRightToLeft;
+
+uniform float gFoldK;
+uniform float gFoldB;
+uniform float gFoldKInterpStart;
+uniform float gFoldKInterpEnd;
+
+const float bMargin = 0;
+const float pi = 3.1415926535;
+const float R = 0.05;
+
+void main() {
+  ivec2 vertIdx = ivec2(gl_GlobalInvocationID.xy);
+  if (vertIdx.x >= gGridPointHorizontal || vertIdx.y >= gGridPointVertical) return;
+  int index = gGridPointHorizontal * vertIdx.y + vertIdx.x;
+  float width = gGridCellSizeX * (gGridPointHorizontal-1);
+  float height = gGridCellSizeY * (gGridPointVertical-1);
+  vert_data vd = gVertex[index];
+  vec3 p = vd.pos.xyz;
+  int pageTurnBit;
+  if (!gPageFromRightToLeft) {
+    p.x -= width;
+    pageTurnBit = -1;
+  } else {
+    pageTurnBit = 1;
+  }
+  float k = gFoldK;
+  float b = gFoldB;
+  // map `k` value
+  k = sign(k)*min(abs(k), gFoldKInterpEnd);
+  float theta = 0;
+  if (abs(k) > gFoldKInterpStart) {
+    theta = pi*(abs(k)-gFoldKInterpStart)/(gFoldKInterpEnd-gFoldKInterpStart);
+  }
+  // clamp `b` value
+  if (k*pageTurnBit>0) {
+    if (b > -height*bMargin) {
+      b = -height*bMargin;
+    }
+  } else {
+    if (b < height*(1+bMargin)) {
+      b = height*(1+bMargin);
+    }
+  }
+
+  float tx, ty, tz, tw = 1.0;
+  float r = R;
+  float cx = (p.x+(p.y-b)*k)/(1+k*k);
+  float cy = k*cx+b;
+  float dist = length(vec2(cx, cy)-p.xy);
+  bool noFold = pageTurnBit*k*(k*p.x+b-p.y) <= 0;
+  if (noFold) {
+    tx = p.x;
+    ty = p.y;
+    tz = p.z;
+  } else {
+    if (dist < (pi-theta)*r) {
+      float alpha = dist/r;
+      float relativeDist = r*(sin(alpha+theta)-sin(theta));
+      float m = sign(relativeDist)*sqrt(pow(relativeDist,2)*k*k/(k*k+1))*pageTurnBit;
+      tx = cx+m;
+      ty = cy-m/k;
+      tz = r*(cos(theta)-cos(alpha+theta));
+      tw = abs(cos(alpha+theta));
+    } else {
+      float relativeDist = -(dist-(pi-theta-sin(theta))*r);
+      float m = sign(relativeDist)*sqrt(pow(relativeDist,2)*k*k/(1+k*k))*pageTurnBit;
+      tx = cx+m;
+      ty = cy-m/k;
+      tz = r*(1+cos(theta));
+    }
+  }
+
+  // interpolate between the final position and current position
+  // to ensure the page folds to target in the end
+  float cxr0 = abs(b/(abs(k)+1e-5))/width;
+  float cxr1 = abs((height-b)/(abs(k)+1e-5))/width;
+  if (min(cxr0, cxr1) <= 0.15) {
+    vec3 tp = vec3(-p.x, p.y, p.z);
+    float alpha = clamp(pow(abs(k)/gFoldKInterpEnd, 2), 0, 1);
+    tx = alpha*tp.x+(1-alpha)*tx;
+    ty = alpha*tp.y+(1-alpha)*ty;
+    tz = alpha*tp.z+(1-alpha)*tz;
+  }
+
+  vd.pos = vec4(tx, ty, tz, tw);
+  gDeformedVertex[index] = vd;
+  vd.texCoord.x = 1.0-vd.texCoord.x;
+  vd.texCoord += vec4(2.0, 2.0, 0.0, 0.0);
+  gDeformedVertex[index + gGridPointHorizontal * gGridPointVertical] = vd;
+}
+)";
+
+std::string pageVS = R"(
+#version 430
+layout(location = 0) in vec4 aPos;
+layout(location = 1) in vec4 aTexCoord;
+
+out vec2 texCoord;
+out float curlFactor;
+
+uniform float gOffsetX;
+uniform mat4 gVP;
+
+void main() {
+  texCoord = aTexCoord.xy;
+  curlFactor = aPos.w;
+  vec3 pos = aPos.xyz;
+  pos.x += gOffsetX;
+  gl_Position = gVP * vec4(pos, 1.0);
+}
+)";
+
+std::string pageFS = R"(
+#version 430
+
+in vec2 texCoord;
+in float curlFactor;
+
+uniform sampler2D gPageTex;
+uniform sampler2D gBackPageTex;
+uniform bool gColored;
+uniform bool gBackColored;
+
+uniform vec3 gEyeProtectionColor;
+
+out vec4 FragColor;
+
+void main() {
+  vec4 pageColor;
+  vec2 uv;
+  if (texCoord.x > 1.5) {
+    uv = texCoord-vec2(2.0);
+    pageColor = texture(gBackPageTex, uv);
+    if (!gBackColored)
+      pageColor = vec4(vec3(pageColor.r), 1.0);
+  } else {
+    uv = texCoord;
+    pageColor = texture(gPageTex, uv);
+    if (!gColored)
+      pageColor = vec4(vec3(pageColor.r), 1.0);
+  }
+  float mx = 2*uv.x-1, my = 2*uv.y-1;
+  float mx4 = mx*mx*mx*mx, my4 = my*my*my*my;
+  float mx16 = mx4*mx4*mx4*mx4, my16 = my4*my4*my4*my4;
+  float mx64 = mx16*mx16*mx16*mx16, my64 = my16*my16*my16*my16;
+  float edgeFactor = (mx64-1)*(my64-1);
+  float mixFactor = mix(0.95, curlFactor*0.5+0.5, edgeFactor);
+  vec3 color = mixFactor * pageColor.xyz * gEyeProtectionColor;
+  FragColor = vec4(color, 1.0);
+}
+)";
+
+struct vert_data {
+  math::vector4 pos;
+  math::vector4 texCoord;
+};
+
+/**
+ * Get the index buffer for triangle grid with `x` horizontal grid points and
+ * `y` vertical grid points.
+ */
+std::vector<unsigned int> getGridIndexBuffer(unsigned int x, unsigned y) {
+  std::vector<unsigned int> result((x - 1) * (y - 1) * 6, 0);
+  for (int i = 0; i < x - 1; i++) {
+    for (int j = 0; j < y - 1; j++) {
+      int k = i + j * x;
+      int offset = (k - j) * 6;
+      result[offset + 0] = k;
+      result[offset + 1] = k + 1;
+      result[offset + 2] = k + x;
+      result[offset + 3] = k + x;
+      result[offset + 4] = k + 1;
+      result[offset + 5] = k + 1 + x;
+    }
+  }
+  return result;
+}
+
+void manga_viewer::resizePageGrid() {
+  createPageGeometryProgram.create(
+      toolkit::str_format(createPageGeometry.c_str(), 8));
+  deformPageGeometryProgram.create(
+      toolkit::str_format(curlPageGeometry.c_str(), 8));
+  pageIndexBuffer.create();
+  pageVertexBuffer.create();
+  deformedPageVertexBuffer.create();
+  whiteTexture.create();
+  whiteTexture.clear_data();
+
+  auto tmpIndices = getGridIndexBuffer(gridPointHorizontal, gridPointVertical);
+  unsigned int numIndices = tmpIndices.size();
+  std::vector<unsigned int> indices(numIndices * 2);
+  for (int i = 0; i < numIndices * 2; i++) {
+    if (i < numIndices) {
+      indices[i] = tmpIndices[i];
+    } else {
+      int mod = (i - numIndices) % 3, index;
+      if (mod == 0)
+        index = i - numIndices;
+      else if (mod == 1)
+        index = i - numIndices + 1;
+      else
+        index = i - numIndices - 1;
+      indices[i] = tmpIndices[index] + gridPointHorizontal * gridPointVertical;
+    }
+  }
+  pageIndexBuffer.set_data_ssbo(indices);
+
+  pageVertexBuffer.set_data_ssbo(
+      std::vector<vert_data>(gridPointHorizontal * gridPointVertical));
+  deformedPageVertexBuffer.set_data_ssbo(
+      std::vector<vert_data>(gridPointHorizontal * gridPointVertical * 2));
+}
+
+void manga_viewer::drawBook() {
+  applyHighResQueue();
+
+  static toolkit::opengl::vao vao;
+  static toolkit::opengl::shader shader;
+  static bool initialized = false;
+  if (!initialized) {
+    vao.create();
+    shader.compile_shader_from_source(pageVS, pageFS);
+    initialized = true;
+  }
+
+  // limit the range of leadingPageIdx
+  leadingPageIdx =
+      std::clamp(leadingPageIdx, -1,
+                 pageCount.load() + (pageCount.load() % 2 == 0 ? -1 : 0));
+
+  // create page geometry
+  float pageHeight = 1.0f;
+  float pageWidth = firstPageWidth / (float)firstPageHeight;
+  gridCellSizeY = 1.0f / (gridPointVertical - 1);
+  gridCellSizeX = gridCellSizeY * firstPageWidth / firstPageHeight;
+  createPageGeometryProgram.use();
+  createPageGeometryProgram.set_float("gGridCellSizeX", gridCellSizeX);
+  createPageGeometryProgram.set_float("gGridCellSizeY", gridCellSizeY);
+  createPageGeometryProgram.set_int("gGridPointHorizontal",
+                                    gridPointHorizontal);
+  createPageGeometryProgram.set_int("gGridPointVertical", gridPointVertical);
+  createPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0);
+  createPageGeometryProgram.dispath((gridPointHorizontal + 7) / 8,
+                                    (gridPointVertical + 7) / 8, 1);
+  createPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
+                                    GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+  // bool altPressed = gcontext.IsKeyPressed(GLFW_KEY_LEFT_ALT);
+  // bool lmbPressed = gcontext.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+  // bool rmbPressed = gcontext.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
+  if (!autoTurnPage && !(leadingPageIdx == -1 && pageFlowRTL) &&
+      !(leadingPageIdx >= pageCount.load() - 1 && !pageFlowRTL) &&
+      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT))) {
+    pageFromRightToLeft = false;
+    autoTurnPage = true;
+    foldB = -1;
+    foldK = foldB / pageWidth;
+  }
+  if (!autoTurnPage &&
+      !(leadingPageIdx >= pageCount.load() - 1 && pageFlowRTL) &&
+      !(leadingPageIdx == -1 && !pageFlowRTL) &&
+      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT))) {
+    pageFromRightToLeft = true;
+    autoTurnPage = true;
+    foldB = -1;
+    foldK = -foldB / pageWidth;
+  }
+
+  bool turnToNextPage = (pageFromRightToLeft && pageFlowRTL) ||
+                        (!pageFromRightToLeft && !pageFlowRTL);
+  bool turnToPreviousPage = (!pageFromRightToLeft && pageFlowRTL) ||
+                            (pageFromRightToLeft && !pageFlowRTL);
+  if (autoTurnPage) {
+    if (std::abs(foldK) >= foldKInterpEnd) {
+      // stop auto turn page
+      autoTurnPage = false;
+      // reset loadingPageIdx
+      if (turnToNextPage)
+        leadingPageIdx += 2;
+      else
+        leadingPageIdx -= 2;
+    } else {
+      // tune parameters automatically
+      float alpha = std::pow(
+          std::clamp(std::abs(foldK) / foldKInterpEnd, 0.0f, 1 - 1e-3f), 1);
+      float delta = (alpha * 0.1 * autoTurnPageSpeed +
+                     (1 - alpha) * 0.7 * autoTurnPageSpeed) *
+                    deltaTime * (pageFromRightToLeft ? 1 : -1);
+      float newFoldK =
+          (foldK + std::tan(delta)) / (1 - foldK * std::tan(delta));
+      foldK = newFoldK * foldK > 0
+                  ? newFoldK
+                  : (foldKInterpEnd + 1e-3) * (pageFromRightToLeft ? 1 : -1);
+    }
+  }
+
+  // the deformed page won't get rendered when:
+  // 1. not at autoTurnPage state
+  // 2. trying to turn previous page at the front page
+  // 3. trying to turn next page at the ending page
+  bool renderDeformedPage =
+      autoTurnPage &&
+      !(leadingPageIdx >= pageCount.load() - 1 && turnToNextPage) &&
+      !(leadingPageIdx <= -1 && turnToPreviousPage);
+
+  // render the leading background page
+  int leadingBackgroundPageIdx;
+  if (renderDeformedPage) {
+    if (turnToNextPage)
+      leadingBackgroundPageIdx = leadingPageIdx;
+    else
+      leadingBackgroundPageIdx = leadingPageIdx - 2;
+  } else {
+    leadingBackgroundPageIdx = leadingPageIdx;
+  }
+  if (leadingPageIdx != -1 &&
+      !(renderDeformedPage && leadingPageIdx == 1 && turnToPreviousPage)) {
+    vao.bind();
+    pageVertexBuffer.bind_as(GL_ARRAY_BUFFER);
+    pageIndexBuffer.bind_as(GL_ELEMENT_ARRAY_BUFFER);
+    vao.link_attribute(pageVertexBuffer, 0, 4, GL_FLOAT, sizeof(vert_data), 0);
+    vao.link_attribute(pageVertexBuffer, 1, 4, GL_FLOAT, sizeof(vert_data),
+                       (void *)(offsetof(vert_data, texCoord)));
+    shader.use();
+    shader.set_float("gOffsetX", pageFlowRTL ? -pageWidth : 0);
+    shader.set_mat4("gVP", vp);
+    shader.set_vec3("gEyeProtectionColor",
+                    eyeProtection ? eyeProtectionColor : math::vector3::Ones());
+    shader.set_bool(
+        "gColored",
+        leadingBackgroundPageIdx >= pageCount.load()
+            ? whiteTexture.get_format() != GL_RED
+            : getTextureFromPool(leadingBackgroundPageIdx).get_format() !=
+                  GL_RED);
+    shader.set_texture2d(
+        "gPageTex",
+        (leadingBackgroundPageIdx >=
+         pageCount.load() + (padAfterFirstPage ? 1 : 0))
+            ? whiteTexture.get_handle()
+            : getTextureFromPool(leadingBackgroundPageIdx).get_handle(),
+        0);
+    glDrawElements(GL_TRIANGLES,
+                   (gridPointVertical - 1) * (gridPointHorizontal - 1) * 6,
+                   GL_UNSIGNED_INT, 0);
+    vao.unbind();
+  }
+
+  // render the following background page if valid
+  int followingBackgroundPageIdx;
+  if (renderDeformedPage) {
+    if (turnToNextPage)
+      followingBackgroundPageIdx = leadingPageIdx + 3;
+    else
+      followingBackgroundPageIdx = leadingPageIdx + 1;
+  } else {
+    followingBackgroundPageIdx = leadingPageIdx + 1;
+  }
+  if (!(followingBackgroundPageIdx >=
+        (pageCount.load() + (padAfterFirstPage ? 1 : 0)))) {
+    vao.bind();
+    pageVertexBuffer.bind_as(GL_ARRAY_BUFFER);
+    pageIndexBuffer.bind_as(GL_ELEMENT_ARRAY_BUFFER);
+    vao.link_attribute(pageVertexBuffer, 0, 4, GL_FLOAT, sizeof(vert_data),
+                   0);
+    vao.link_attribute(pageVertexBuffer, 1, 4, GL_FLOAT, sizeof(vert_data),
+                   (void *)(offsetof(vert_data, texCoord)));
+    shader.use();
+    shader.set_float("gOffsetX", pageFlowRTL ? 0 : -pageWidth);
+    shader.set_mat4("gVP", vp);
+    shader.set_vec3("gEyeProtectionColor",
+                   eyeProtection ? eyeProtectionColor : math::vector3::Ones());
+    shader.set_bool(
+        "gColored",
+        (followingBackgroundPageIdx >=
+         (pageCount + (padAfterFirstPage ? 1 : 0)))
+            ? whiteTexture.get_format() != GL_RED
+            : getTextureFromPool(followingBackgroundPageIdx).get_format() !=
+                  GL_RED);
+    shader.set_texture2d(
+        "gPageTex",
+        (followingBackgroundPageIdx >=
+         (pageCount + (padAfterFirstPage ? 1 : 0)))
+            ? whiteTexture.get_handle()
+            : getTextureFromPool(followingBackgroundPageIdx).get_handle(),
+        0);
+    glDrawElements(GL_TRIANGLES,
+                   (gridPointVertical - 1) * (gridPointHorizontal - 1) * 6,
+                   GL_UNSIGNED_INT, 0);
+    vao.unbind();
+  }
+
+  if (renderDeformedPage) {
+    // deform page geometry
+    deformPageGeometryProgram.use();
+    deformPageGeometryProgram.set_bool("gPageFromRightToLeft",
+                                       pageFromRightToLeft);
+    deformPageGeometryProgram.set_float("gFoldK", foldK);
+    deformPageGeometryProgram.set_float("gFoldB", foldB);
+    deformPageGeometryProgram.set_float("gFoldKInterpStart", foldKInterpStart);
+    deformPageGeometryProgram.set_float("gFoldKInterpEnd", foldKInterpEnd);
+    deformPageGeometryProgram.set_float("gGridCellSizeX", gridCellSizeX);
+    deformPageGeometryProgram.set_float("gGridCellSizeY", gridCellSizeY);
+    deformPageGeometryProgram.set_int("gGridPointHorizontal",
+                                      gridPointHorizontal);
+    deformPageGeometryProgram.set_int("gGridPointVertical", gridPointVertical);
+    deformPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0)
+        .bind_buffer(deformedPageVertexBuffer.get_handle(), 1);
+    deformPageGeometryProgram.dispath((gridPointHorizontal + 7) / 8,
+                                        (gridPointVertical + 7) / 8, 1);
+    deformPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
+                                       GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+    vao.bind();
+    deformedPageVertexBuffer.bind_as(GL_ARRAY_BUFFER);
+    pageIndexBuffer.bind_as(GL_ELEMENT_ARRAY_BUFFER);
+    vao.link_attribute(deformedPageVertexBuffer, 0, 4, GL_FLOAT,
+                   sizeof(vert_data), 0);
+    vao.link_attribute(deformedPageVertexBuffer, 1, 4, GL_FLOAT,
+                   sizeof(vert_data), (void *)(offsetof(vert_data, texCoord)));
+    shader.use();
+    shader.set_float("gOffsetX", 0);
+    shader.set_mat4("gVP", vp);
+    shader.set_vec3("gEyeProtectionColor",
+                   eyeProtection ? eyeProtectionColor : math::vector3::Ones());
+    if (turnToNextPage) {
+      shader.set_bool("gColored",
+                     getTextureFromPool(leadingPageIdx + 1).get_format() !=
+                         GL_RED);
+      shader.set_bool(
+          "gBackColored",
+          leadingPageIdx + 2 >= pageCount + (padAfterFirstPage ? 1 : 0)
+              ? whiteTexture.get_format() != GL_RED
+              : getTextureFromPool(leadingPageIdx + 2).get_format() != GL_RED);
+      shader.set_texture2d("gPageTex",
+                          getTextureFromPool(leadingPageIdx + 1).get_handle(), 0);
+      shader.set_texture2d("gBackPageTex",
+                          leadingPageIdx + 2 >=
+                                  pageCount + (padAfterFirstPage ? 1 : 0)
+                              ? whiteTexture.get_handle()
+                              : getTextureFromPool(leadingPageIdx + 2).get_handle(),
+                          1);
+    } else {
+      shader.set_bool("gColored",
+                     leadingPageIdx >= pageCount + (padAfterFirstPage ? 1 : 0)
+                         ? whiteTexture.get_handle() != GL_RED
+                         : getTextureFromPool(leadingPageIdx).get_format() !=
+                               GL_RED);
+      shader.set_bool("gBackColored",
+                     getTextureFromPool(leadingPageIdx - 1).get_format() !=
+                         GL_RED);
+      shader.set_texture2d("gPageTex",
+                          leadingPageIdx >=
+                                  pageCount + (padAfterFirstPage ? 1 : 0)
+                              ? whiteTexture.get_handle()
+                              : getTextureFromPool(leadingPageIdx).get_handle(),
+                          0);
+      shader.set_texture2d("gBackPageTex",
+                          getTextureFromPool(leadingPageIdx - 1).get_handle(), 1);
+    }
+    glDrawElements(GL_TRIANGLES,
+                   (gridPointVertical - 1) * (gridPointHorizontal - 1) * 12,
+                   GL_UNSIGNED_INT, 0);
+    vao.unbind();
+  }
+}
+
+void manga_viewer::sceneLogic() {
+  auto wndSize = toolkit::opengl::g_instance.get_window_size();
+  float aspect = wndSize.x() / wndSize.y();
+  auto scrollOffsets = toolkit::opengl::g_instance.get_scroll_offsets();
+  mouseCurrentPos = toolkit::opengl::g_instance.get_mouse_position();
+  bool mouseMidBtnPressed =
+  toolkit::opengl::g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_MIDDLE);
+  bool mouseLeftBtnPressed =
+  toolkit::opengl::g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_LEFT);
+
+  // reset camera back to default
+  if (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_R)) {
+    spdlog::info("Reset camera parameters");
+    cameraPos << 0.0f, 0.5f, 1.0f;
+    cameraHalfRangeY = defaultCameraHalfRangeY;
+  }
+
+  // handle page translation
+  if (mouseMidBtnPressed || mouseLeftBtnPressed) {
+    // move around the camera
+    if (mouseFirstMove) {
+      mouseLastPos = mouseCurrentPos;
+      mouseFirstMove = false;
+    }
+
+    // mid button pressed, left button not pressed, move camera position
+    if (mouseMidBtnPressed && !mouseLeftBtnPressed) {
+      // from screen space delta to camera space delta
+      math::vector3 cameraSpaceDelta;
+      cameraSpaceDelta << 2 * cameraHalfRangeY / wndSize.y() *
+                              (mouseCurrentPos - mouseLastPos),
+          0.0f;
+      cameraSpaceDelta.x() *= -1;
+      cameraPos += cameraSpaceDelta;
+    }
+
+    // mid button not pressed, left button pressed, flip page
+    if (!mouseMidBtnPressed && mouseLeftBtnPressed) {
+      math::vector2 mouseMoveDelta = mouseCurrentPos - mouseLastPos;
+      math::vector2 mouseMoveDir = mouseMoveDelta.normalized();
+      math::vector2 perpDir{mouseMoveDir.y(), -mouseMoveDir.x()};
+      perpDir.normalize();
+      float mouseMoveLength = mouseMoveDir.norm();
+      // project the world position for cursor
+      float convertRatio = 2 * cameraHalfRangeY / wndSize.y();
+      float cursorX = cameraPos.x() +
+                      (mouseCurrentPos.x() - 0.5 * wndSize.x()) * convertRatio;
+      float cursorY = cameraPos.y() -
+                      (mouseCurrentPos.y() - 0.5 * wndSize.y()) * convertRatio;
+    }
+
+    mouseLastPos = mouseCurrentPos;
+  } else {
+    mouseFirstMove = true;
+  }
+
+  // render the page geometry at different scale
+  cameraHalfRangeY -= deltaTime * scrollOffsets.y();
+  cameraHalfRangeY = std::clamp(cameraHalfRangeY, 0.1f, 3.0f);
+
+  // update vp matrix for scene camera
+  vp = math::ortho(-cameraHalfRangeY * aspect, cameraHalfRangeY * aspect,
+                   cameraHalfRangeY, -cameraHalfRangeY, 1e-3f, 1e2f) *
+       math::lookat(cameraPos, cameraPos - math::world_forward, math::world_up);
+}
+
+void manga_viewer::mainLoop() {
+  glClearColor(backgroundColor.x(), backgroundColor.y(), backgroundColor.z(),
+               1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0, 0, toolkit::opengl::g_instance.wnd_width, toolkit::opengl::g_instance.wnd_height);
+
+  if (bookLoaded && !isLoadingBook) {
+    sceneLogic();
+    drawBook();
+  } else {
+    // these variables should always gets reseted when not in use
+    leadingPageIdx = -1;
+    autoTurnPage = false;
+    padAfterFirstPage = false;
+  }
+
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+
+  drawGUI();
+
+  ImGui::EndFrame();
+  ImGui::Render();
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+  glfwSwapBuffers(toolkit::opengl::g_instance.window);
+  deltaTime = (float)timer.elapse_s();
+  timer.reset();
+}
+
+void manga_viewer::drawGUI() {
+  static bool openSettingsWindow = false;
+  static bool openSwitchPageWnd = false;
+  if (ImGui::BeginMainMenuBar()) {
+    if (ImGui::BeginMenu("File")) {
+      ImGui::MenuItem("Import Books", nullptr, nullptr, false);
+      ImGui::Separator();
+      if (ImGui::MenuItem("Load Single File")) {
+        std::string filepath;
+        if (toolkit::open_file_dialog("Select a .pdf or .epub file",
+                           {"*.PDF", "*.EPUB", "*.pdf", "*.epub"},
+                           "*.pdf, *.epub", filepath)) {
+          std::thread t(&manga_viewer::loadSingleFile, this, filepath);
+          t.detach();
+        }
+      }
+      ImGui::SetItemTooltip("Import an ebook from .pdf or .epub format file.");
+      if (ImGui::MenuItem("Load Folder File")) {
+        std::string dirPath;
+        if (toolkit::open_folder_dialog("Select a folder containing images", dirPath)) {
+          std::thread t(&manga_viewer::loadFolderFile, this, dirPath);
+          t.detach();
+        }
+      }
+      ImGui::SetItemTooltip("Import an ebook from a folder containging .png or "
+                            ".jpg image sequences.");
+      ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem("Setting")) {
+      openSettingsWindow = true;
+    }
+
+    ImGui::SameLine(ImGui::GetWindowWidth() -
+                    ImGui::CalcTextSize("000 / 000   ").x -
+                    ImGui::GetStyle().ItemSpacing.x);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0, 1.0, 0.0, 1.0));
+    if (ImGui::Button(
+            toolkit::str_format(" %3d /%3d ", leadingPageIdx + 1, pageCount.load())
+                .c_str())) {
+      if (bookLoaded.load()) {
+        openSwitchPageWnd = true;
+        spdlog::info("Open popup");
+      }
+    }
+    ImGui::PopStyleColor(1);
+
+    ImGui::EndMainMenuBar();
+  }
+
+  static int pageNumber = 0;
+  if (bookLoaded.load() && openSwitchPageWnd) {
+    ImGui::OpenPopup("Jump To Page##jumptopage");
+    auto size = ImGui::GetContentRegionAvail();
+    auto center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowSize({0.7f * size.x, -1.0f}, ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Jump To Page##jumptopage", &openSwitchPageWnd,
+                               ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoMove)) {
+      ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+      ImGui::InputInt("##Page Number", &pageNumber);
+
+      float spacing = ImGui::GetStyle().ItemSpacing.x;
+      float button_width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
+      if (ImGui::Button("Confirm", ImVec2(button_width, 0))) {
+        pageNumber = std::clamp(pageNumber, 1, pageCount.load());
+        pageNumber -= 1;
+        leadingPageIdx = pageNumber % 2 == 0 ? pageNumber - 1 : pageNumber;
+
+        openSwitchPageWnd = false;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::SameLine(0, spacing);
+      if (ImGui::Button("Cancel", ImVec2(button_width, 0))) {
+        openSwitchPageWnd = false;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
+    }
+  } else {
+    pageNumber = 0;
+  }
+
+  if (openSettingsWindow) {
+    ImGui::SetNextWindowSize({400, 400}, ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Settings", &openSettingsWindow)) {
+      // ImGui::SeparatorText("Import DPI");
+      // ImGui::SetItemTooltip(
+      //     "Setup the import dpi for ebooks of .pdf and .epub format.");
+      // ImGui::RadioButton("72", &dpi, 72);
+      // ImGui::SameLine();
+      // ImGui::RadioButton("150", &dpi, 150);
+      // ImGui::SameLine();
+      // ImGui::RadioButton("200", &dpi, 200);
+
+      ImGui::SeparatorText("Page Turning");
+      ImGui::Checkbox("Page Flow RTL", &pageFlowRTL);
+      ImGui::SetItemTooltip(
+          "Most ebooks are published in RTL page flow, but most Japanese manga "
+          "and light novel are in LTR.\nThis option provides a more natually "
+          "way to read these contents.");
+      ImGui::Checkbox("Pad After First Page", &padAfterFirstPage);
+      ImGui::SetItemTooltip("Insert a blank page after the first page, can be "
+                            "utilized to align cross pages.");
+      ImGui::SliderFloat("Speed", &autoTurnPageSpeed, 0.1f, 10.0f);
+
+      ImGui::SeparatorText("Rendering");
+      gui::color_edit_3("Background", backgroundColor);
+      ImGui::Checkbox("Eye Protection", &eyeProtection);
+      if (!eyeProtection)
+        ImGui::BeginDisabled();
+      gui::color_edit_3("Color", eyeProtectionColor);
+      if (!eyeProtection)
+        ImGui::EndDisabled();
+
+      ImGui::SeparatorText("Book Caching");
+      ImGui::Text("%s", cacheDirPath.c_str());
+      if (ImGui::Button("Delete Book Cache", {-1, 30})) {
+        if (std::filesystem::exists(cacheDirPath)) {
+          std::filesystem::remove_all(cacheDirPath);
+          spdlog::info("Delete caching dir {0}", cacheDirPath);
+        } else {
+          spdlog::error("Cache dir {0} doesn't exists", cacheDirPath);
+        }
+      }
+
+      ImGui::SeparatorText("IO Options");
+      if (ImGui::Button("Dump Settings", {-1, 30}))
+        dumpPreference();
+      if (ImGui::Button("Load Settings", {-1, 30}))
+        loadPreference();
+
+      ImGui::End();
+    }
+  }
+
+  if (!bookLoaded && isLoadingBook) {
+    ImGui::OpenPopup("Loading...##modalwindow");
+    auto size = ImGui::GetContentRegionAvail();
+    auto center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowSize({0.7f * size.x, -1.0f}, ImGuiCond_Appearing);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (ImGui::BeginPopupModal("Loading...##modalwindow", nullptr,
+                               ImGuiWindowFlags_NoResize |
+                                   ImGuiWindowFlags_NoMove)) {
+      ImGui::ProgressBar(loadingProgress.load());
+      ImGui::EndPopup();
+    }
+  }
+}
+
+manga_viewer::manga_viewer() {
+  toolkit::opengl::g_instance.init();
+
+  // enable vsync to save batery
+  glfwSwapInterval(1);
+
+  // prepare page geometry
+  resizePageGrid();
+
+  glEnable(GL_CULL_FACE);
+
+  loadPreference();
+
+  resetTexturePool(8);
+
+  ctx = fz_new_context(NULL, NULL, FZ_STORE_UNLIMITED);
+  if (!ctx) {
+    spdlog::error("Failed to create MuPDF context");
+    return;
+  }
+
+  fz_try(ctx) fz_register_document_handlers(ctx);
+  fz_catch(ctx) {
+    spdlog::error("Cannot register document handlers");
+    fz_drop_context(ctx);
+    return;
+  }
+}
+manga_viewer::~manga_viewer() {
+  toolkit::opengl::g_instance.shutdown();
+
+  if (doc)
+    fz_drop_document(ctx, doc);
+  if (ctx)
+    fz_drop_context(ctx);
+}
+
+void manga_viewer::run() {
+  toolkit::opengl::g_instance.run([&]() { mainLoop(); });
+}

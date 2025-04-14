@@ -91,7 +91,7 @@ public:
   bool is_key_pressed(int key) const;
 
   // The specified `key` went from unpressed to pressed at this frame
-  bool is_key_reiggered(int key) const;
+  bool is_key_triggered(int key) const;
 
   // The specified `key` went from pressed to unpressed at this frame
   bool is_key_untriggered(int key) const;

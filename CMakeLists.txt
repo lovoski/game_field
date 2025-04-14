@@ -4,7 +4,8 @@ project(vk_test)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_subdirectory("ToolKit")
+add_subdirectory("toolkit")
+add_subdirectory("manga_viewer")
 
 add_executable(test_tk test_tk.cpp)
 target_link_libraries(test_tk PRIVATE toolkit)

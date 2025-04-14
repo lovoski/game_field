@@ -109,29 +109,70 @@ entt::entity create_cube(entt::registry &registry, math::matrix4 t) {
   init_opengl_buffers(mesh);
   return ent;
 }
-// entt::entity create_plane(entt::registry &registry, math::matrix4 t) {
-//   auto ent = registry.create();
-//   auto &trans = registry.emplace<transform>(ent);
-//   auto &mesh = registry.emplace<mesh_data>(ent);
-//   trans.set_transform_matrix(t);
-//   mesh.indices.resize(plane_nindicies);
-//   for (int i = 0; i < plane_nindicies; i++)
-//     mesh.indices[i] = plane_indices[i];
-//   mesh.mesh_name = "Plane Primitive";
-//   mesh.model_path = "::";
-//   mesh.vertices.resize(plane_nvertices);
-//   for (int i = 0; i < plane_nvertices; i++) {
-//     mesh.vertices[i].position << plane_positions[i * 3],
-//         plane_positions[i * 3 + 1], plane_positions[i * 3 + 2], 1.0;
-//     mesh.vertices[i].normal << plane_normals[i * 3], plane_normals[i * 3 +
-//     1],
-//         plane_normals[i * 3 + 2], 0.0;
-//   }
-//   return ent;
-// }
-// entt::entity create_sphere(entt::registry &registry, math::matrix4 t) {}
-// entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {}
-// entt::entity create_cone(entt::registry &registry, math::matrix4 t) {}
+entt::entity create_plane(entt::registry &registry, math::matrix4 t) {
+  auto ent = registry.create();
+  auto &trans = registry.emplace<transform>(ent);
+  auto &mesh = registry.emplace<mesh_data>(ent);
+  trans.set_transform_matrix(t);
+  trans.name = "Plane";
+  mesh.indices.resize(plane_nindicies);
+  for (int i = 0; i < plane_nindicies; i++)
+    mesh.indices[i] = plane_indices[i];
+  mesh.mesh_name = "Plane Primitive";
+  mesh.model_path = "::";
+  mesh.vertices.resize(plane_nvertices);
+  for (int i = 0; i < plane_nvertices; i++) {
+    mesh.vertices[i].position << plane_positions[i * 3],
+        plane_positions[i * 3 + 1], plane_positions[i * 3 + 2], 1.0;
+    mesh.vertices[i].normal << plane_normals[i * 3], plane_normals[i * 3 + 1],
+        plane_normals[i * 3 + 2], 0.0;
+  }
+  init_opengl_buffers(mesh);
+  return ent;
+}
+entt::entity create_sphere(entt::registry &registry, math::matrix4 t) {
+  auto ent = registry.create();
+  auto &trans = registry.emplace<transform>(ent);
+  auto &mesh = registry.emplace<mesh_data>(ent);
+  trans.set_transform_matrix(t);
+  trans.name = "Sphere";
+  mesh.indices.resize(sphere_nindicies);
+  for (int i = 0; i < sphere_nindicies; i++)
+    mesh.indices[i] = sphere_indices[i];
+  mesh.mesh_name = "Sphere Primitive";
+  mesh.model_path = "::";
+  mesh.vertices.resize(sphere_nvertices);
+  for (int i = 0; i < sphere_nvertices; i++) {
+    mesh.vertices[i].position << sphere_positions[i * 3],
+        sphere_positions[i * 3 + 1], sphere_positions[i * 3 + 2], 1.0;
+    mesh.vertices[i].normal << sphere_normals[i * 3], sphere_normals[i * 3 + 1],
+        sphere_normals[i * 3 + 2], 0.0;
+  }
+  init_opengl_buffers(mesh);
+  return ent;
+}
+entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
+  auto ent = registry.create();
+  auto &trans = registry.emplace<transform>(ent);
+  auto &mesh = registry.emplace<mesh_data>(ent);
+  trans.set_transform_matrix(t);
+  trans.name = "Cylinder";
+  mesh.indices.resize(cylinder_nindicies);
+  for (int i = 0; i < cylinder_nindicies; i++)
+    mesh.indices[i] = cylinder_indices[i];
+  mesh.mesh_name = "Cylinder Primitive";
+  mesh.model_path = "::";
+  mesh.vertices.resize(cylinder_nvertices);
+  for (int i = 0; i < cylinder_nvertices; i++) {
+    mesh.vertices[i].position << cylinder_positions[i * 3],
+        cylinder_positions[i * 3 + 1], cylinder_positions[i * 3 + 2], 1.0;
+    mesh.vertices[i].normal << cylinder_normals[i * 3],
+        cylinder_normals[i * 3 + 1], cylinder_normals[i * 3 + 2], 0.0;
+  }
+  init_opengl_buffers(mesh);
+  return ent;
+}
+
 // entt::entity create_model(entt::registry &registry, std::string filepath,
 //                           math::matrix4 t) {}
 

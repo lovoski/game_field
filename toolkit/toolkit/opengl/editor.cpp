@@ -391,6 +391,16 @@ void editor::draw_entity_hierarchy() {
         auto &trans = registry.emplace<transform>(ent);
         trans.name = str_format("new entity: %d", entt::to_integral(ent));
       }
+
+      ImGui::Separator();
+      if (ImGui::MenuItem("New Cube"))
+        create_cube(registry);
+      if (ImGui::MenuItem("New Sphere"))
+        create_sphere(registry);
+      if (ImGui::MenuItem("New Cylinder"))
+        create_cylinder(registry);
+      if (ImGui::MenuItem("New Plane"))
+        create_plane(registry);
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Modify")) {

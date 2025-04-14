@@ -102,7 +102,7 @@ bool context::is_key_pressed(int key) const {
   auto it = key_states.find(key);
   return it != key_states.end() && it->second;
 }
-bool context::is_key_reiggered(int key) const {
+bool context::is_key_triggered(int key) const {
   return triggered_keys.count(key) != 0;
 }
 bool context::is_key_untriggered(int key) const {
