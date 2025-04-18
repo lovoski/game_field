@@ -636,7 +636,6 @@ void manga_viewer::main_loop() {
 }
 
 void manga_viewer::draw_gui() {
-  static bool openSettingsWindow = false;
   static bool openSwitchPageWnd = false;
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::MenuItem("Import")) {
@@ -649,8 +648,46 @@ void manga_viewer::draw_gui() {
       }
     }
     ImGui::SetItemTooltip("Import an ebook from .pdf or .epub format file.");
-    if (ImGui::MenuItem("Setting")) {
-      openSettingsWindow = true;
+    if (ImGui::BeginMenu("Setting")) {
+      ImGui::SeparatorText("Page Turning");
+      ImGui::Checkbox("Page Flow RTL", &pageFlowRTL);
+      ImGui::SetItemTooltip(
+          "Most ebooks are published in RTL page flow, but most Japanese manga "
+          "and light novel are in LTR.\nThis option provides a more natural "
+          "way to read these contents.");
+      ImGui::Checkbox("Pad After First Page", &padAfterFirstPage);
+      ImGui::SetItemTooltip("Insert a blank page after the first page, can be "
+                            "utilized to align cross pages.");
+      ImGui::SliderFloat("Speed", &autoTurnPageSpeed, 0.1f, 10.0f);
+      ImGui::SetItemTooltip("The speed for turning virtual pages.");
+
+      ImGui::SeparatorText("Rendering");
+      gui::color_edit_3("Background", backgroundColor);
+      ImGui::Checkbox("Eye Protection", &eyeProtection);
+      if (!eyeProtection)
+        ImGui::BeginDisabled();
+      gui::color_edit_3("Color", eyeProtectionColor);
+      if (!eyeProtection)
+        ImGui::EndDisabled();
+
+      ImGui::SeparatorText("Book Caching");
+      ImGui::Text("%s", cacheDirPath.c_str());
+      if (ImGui::Button("Delete Book Cache", {-1, 30})) {
+        if (std::filesystem::exists(cacheDirPath)) {
+          std::filesystem::remove_all(cacheDirPath);
+          logger->info("Delete caching dir {0}", cacheDirPath);
+        } else {
+          logger->error("Cache dir {0} doesn't exists", cacheDirPath);
+        }
+      }
+
+      ImGui::SeparatorText("IO Options");
+      if (ImGui::Button("Dump Settings", {-1, 30}))
+        dump_preference();
+      if (ImGui::Button("Load Settings", {-1, 30}))
+        load_preference();
+
+      ImGui::EndMenu();
     }
 
     ImGui::SameLine(ImGui::GetWindowWidth() -
@@ -703,59 +740,6 @@ void manga_viewer::draw_gui() {
     }
   } else {
     pageNumber = 0;
-  }
-
-  if (openSettingsWindow) {
-    ImGui::SetNextWindowSize({400, 400}, ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("Settings", &openSettingsWindow)) {
-      // ImGui::SeparatorText("Import DPI");
-      // ImGui::SetItemTooltip(
-      //     "Setup the import dpi for ebooks of .pdf and .epub format.");
-      // ImGui::RadioButton("72", &dpi, 72);
-      // ImGui::SameLine();
-      // ImGui::RadioButton("150", &dpi, 150);
-      // ImGui::SameLine();
-      // ImGui::RadioButton("200", &dpi, 200);
-
-      ImGui::SeparatorText("Page Turning");
-      ImGui::Checkbox("Page Flow RTL", &pageFlowRTL);
-      ImGui::SetItemTooltip(
-          "Most ebooks are published in RTL page flow, but most Japanese manga "
-          "and light novel are in LTR.\nThis option provides a more natually "
-          "way to read these contents.");
-      ImGui::Checkbox("Pad After First Page", &padAfterFirstPage);
-      ImGui::SetItemTooltip("Insert a blank page after the first page, can be "
-                            "utilized to align cross pages.");
-      ImGui::SliderFloat("Speed", &autoTurnPageSpeed, 0.1f, 10.0f);
-
-      ImGui::SeparatorText("Rendering");
-      gui::color_edit_3("Background", backgroundColor);
-      ImGui::Checkbox("Eye Protection", &eyeProtection);
-      if (!eyeProtection)
-        ImGui::BeginDisabled();
-      gui::color_edit_3("Color", eyeProtectionColor);
-      if (!eyeProtection)
-        ImGui::EndDisabled();
-
-      ImGui::SeparatorText("Book Caching");
-      ImGui::Text("%s", cacheDirPath.c_str());
-      if (ImGui::Button("Delete Book Cache", {-1, 30})) {
-        if (std::filesystem::exists(cacheDirPath)) {
-          std::filesystem::remove_all(cacheDirPath);
-          logger->info("Delete caching dir {0}", cacheDirPath);
-        } else {
-          logger->error("Cache dir {0} doesn't exists", cacheDirPath);
-        }
-      }
-
-      ImGui::SeparatorText("IO Options");
-      if (ImGui::Button("Dump Settings", {-1, 30}))
-        dump_preference();
-      if (ImGui::Button("Load Settings", {-1, 30}))
-        load_preference();
-
-      ImGui::End();
-    }
   }
 
   if (!bookLoaded && isLoadingBook) {
