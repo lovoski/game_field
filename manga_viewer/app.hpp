@@ -10,6 +10,10 @@
 #include <mutex>
 #include <thread>
 
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
+
+
 #include <mupdf/fitz.h>
 
 template <typename T> class thread_safe_vector {
@@ -60,22 +64,23 @@ public:
   void run();
 
 private:
-  void mainLoop();
+  void main_loop();
 
-  void drawGUI();
-  void drawBook();
+  void draw_gui();
+  void draw_book();
 
-  void loadSingleFile(std::string filepath);
-  void loadFolderFile(std::string folderpath);
+  void on_load_file(std::string filepath);
 
-  void sceneLogic();
+  void scene_logic();
+
+  std::shared_ptr<spdlog::logger> logger = nullptr;
 
   int dpi = 300;
 
-  const std::string preferencePath = "./pref.json";
-  std::string cacheDirPath;
-  void dumpPreference();
-  void loadPreference();
+  const std::string preferencePath = "./preference.json";
+  std::string cacheDirPath, activeFilePath;
+  void dump_preference();
+  void load_preference();
 
   fz_context *ctx = nullptr;
   fz_document *doc = nullptr;
@@ -87,13 +92,13 @@ private:
   thread_safe_vector<int> texturePoolPageIdxData;
   thread_safe_vector<toolkit::opengl::texture> texturePoolData;
   thread_safe_vector<std::string> bookPageFilePathes;
-  std::atomic<int> firstPageWidth, firstPageHeight;
+  std::atomic<float> first_page_width_div_height;
   void resetTexturePool(int limit);
-  std::string loadPageCacheFromFile(int pageIdx, page_cache &result);
+  void loadPageCacheFromFile(int pageIdx, page_cache &result);
   const toolkit::opengl::texture &getTextureFromPool(int pageIdx);
   thread_safe_vector<std::pair<int, page_cache>> highResImageQueue;
-  std::mutex highResImageLoadingLock;
-  void loadHighResImage(std::string filepath, int pageIdx);
+  std::mutex highResPageLoadingLock;
+  void loadHighResPage(std::string filepath, int pageIdx);
   void applyHighResQueue();
 
   float gridCellSizeX, gridCellSizeY;
@@ -134,4 +139,8 @@ private:
 
   unsigned int gridPointHorizontal = 50, gridPointVertical = 50;
   void resizePageGrid();
+
+  REFLECT_PRIVATE(manga_viewer)
 };
+REFLECT(manga_viewer, autoTurnPageSpeed, eyeProtection, eyeProtectionColor,
+        backgroundColor, pageFlowRTL)

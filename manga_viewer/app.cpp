@@ -282,7 +282,7 @@ void manga_viewer::resizePageGrid() {
       std::vector<vert_data>(gridPointHorizontal * gridPointVertical * 2));
 }
 
-void manga_viewer::drawBook() {
+void manga_viewer::draw_book() {
   applyHighResQueue();
 
   static toolkit::opengl::vao vao;
@@ -301,9 +301,9 @@ void manga_viewer::drawBook() {
 
   // create page geometry
   float pageHeight = 1.0f;
-  float pageWidth = firstPageWidth / (float)firstPageHeight;
+  float pageWidth = first_page_width_div_height;
   gridCellSizeY = 1.0f / (gridPointVertical - 1);
-  gridCellSizeX = gridCellSizeY * firstPageWidth / firstPageHeight;
+  gridCellSizeX = gridCellSizeY * first_page_width_div_height;
   createPageGeometryProgram.use();
   createPageGeometryProgram.set_float("gGridCellSizeX", gridCellSizeX);
   createPageGeometryProgram.set_float("gGridCellSizeY", gridCellSizeY);
@@ -431,15 +431,14 @@ void manga_viewer::drawBook() {
     vao.bind();
     pageVertexBuffer.bind_as(GL_ARRAY_BUFFER);
     pageIndexBuffer.bind_as(GL_ELEMENT_ARRAY_BUFFER);
-    vao.link_attribute(pageVertexBuffer, 0, 4, GL_FLOAT, sizeof(vert_data),
-                   0);
+    vao.link_attribute(pageVertexBuffer, 0, 4, GL_FLOAT, sizeof(vert_data), 0);
     vao.link_attribute(pageVertexBuffer, 1, 4, GL_FLOAT, sizeof(vert_data),
-                   (void *)(offsetof(vert_data, texCoord)));
+                       (void *)(offsetof(vert_data, texCoord)));
     shader.use();
     shader.set_float("gOffsetX", pageFlowRTL ? 0 : -pageWidth);
     shader.set_mat4("gVP", vp);
     shader.set_vec3("gEyeProtectionColor",
-                   eyeProtection ? eyeProtectionColor : math::vector3::Ones());
+                    eyeProtection ? eyeProtectionColor : math::vector3::Ones());
     shader.set_bool(
         "gColored",
         (followingBackgroundPageIdx >=
@@ -477,56 +476,58 @@ void manga_viewer::drawBook() {
     deformPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0)
         .bind_buffer(deformedPageVertexBuffer.get_handle(), 1);
     deformPageGeometryProgram.dispath((gridPointHorizontal + 7) / 8,
-                                        (gridPointVertical + 7) / 8, 1);
+                                      (gridPointVertical + 7) / 8, 1);
     deformPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
-                                       GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+                                      GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
     vao.bind();
     deformedPageVertexBuffer.bind_as(GL_ARRAY_BUFFER);
     pageIndexBuffer.bind_as(GL_ELEMENT_ARRAY_BUFFER);
     vao.link_attribute(deformedPageVertexBuffer, 0, 4, GL_FLOAT,
-                   sizeof(vert_data), 0);
+                       sizeof(vert_data), 0);
     vao.link_attribute(deformedPageVertexBuffer, 1, 4, GL_FLOAT,
-                   sizeof(vert_data), (void *)(offsetof(vert_data, texCoord)));
+                       sizeof(vert_data),
+                       (void *)(offsetof(vert_data, texCoord)));
     shader.use();
     shader.set_float("gOffsetX", 0);
     shader.set_mat4("gVP", vp);
     shader.set_vec3("gEyeProtectionColor",
-                   eyeProtection ? eyeProtectionColor : math::vector3::Ones());
+                    eyeProtection ? eyeProtectionColor : math::vector3::Ones());
     if (turnToNextPage) {
       shader.set_bool("gColored",
-                     getTextureFromPool(leadingPageIdx + 1).get_format() !=
-                         GL_RED);
+                      getTextureFromPool(leadingPageIdx + 1).get_format() !=
+                          GL_RED);
       shader.set_bool(
           "gBackColored",
           leadingPageIdx + 2 >= pageCount + (padAfterFirstPage ? 1 : 0)
               ? whiteTexture.get_format() != GL_RED
               : getTextureFromPool(leadingPageIdx + 2).get_format() != GL_RED);
-      shader.set_texture2d("gPageTex",
-                          getTextureFromPool(leadingPageIdx + 1).get_handle(), 0);
-      shader.set_texture2d("gBackPageTex",
-                          leadingPageIdx + 2 >=
-                                  pageCount + (padAfterFirstPage ? 1 : 0)
-                              ? whiteTexture.get_handle()
-                              : getTextureFromPool(leadingPageIdx + 2).get_handle(),
-                          1);
+      shader.set_texture2d(
+          "gPageTex", getTextureFromPool(leadingPageIdx + 1).get_handle(), 0);
+      shader.set_texture2d(
+          "gBackPageTex",
+          leadingPageIdx + 2 >= pageCount + (padAfterFirstPage ? 1 : 0)
+              ? whiteTexture.get_handle()
+              : getTextureFromPool(leadingPageIdx + 2).get_handle(),
+          1);
     } else {
       shader.set_bool("gColored",
-                     leadingPageIdx >= pageCount + (padAfterFirstPage ? 1 : 0)
-                         ? whiteTexture.get_handle() != GL_RED
-                         : getTextureFromPool(leadingPageIdx).get_format() !=
-                               GL_RED);
+                      leadingPageIdx >= pageCount + (padAfterFirstPage ? 1 : 0)
+                          ? whiteTexture.get_handle() != GL_RED
+                          : getTextureFromPool(leadingPageIdx).get_format() !=
+                                GL_RED);
       shader.set_bool("gBackColored",
-                     getTextureFromPool(leadingPageIdx - 1).get_format() !=
-                         GL_RED);
-      shader.set_texture2d("gPageTex",
-                          leadingPageIdx >=
-                                  pageCount + (padAfterFirstPage ? 1 : 0)
-                              ? whiteTexture.get_handle()
-                              : getTextureFromPool(leadingPageIdx).get_handle(),
-                          0);
+                      getTextureFromPool(leadingPageIdx - 1).get_format() !=
+                          GL_RED);
+      shader.set_texture2d(
+          "gPageTex",
+          leadingPageIdx >= pageCount + (padAfterFirstPage ? 1 : 0)
+              ? whiteTexture.get_handle()
+              : getTextureFromPool(leadingPageIdx).get_handle(),
+          0);
       shader.set_texture2d("gBackPageTex",
-                          getTextureFromPool(leadingPageIdx - 1).get_handle(), 1);
+                           getTextureFromPool(leadingPageIdx - 1).get_handle(),
+                           1);
     }
     glDrawElements(GL_TRIANGLES,
                    (gridPointVertical - 1) * (gridPointHorizontal - 1) * 12,
@@ -535,19 +536,20 @@ void manga_viewer::drawBook() {
   }
 }
 
-void manga_viewer::sceneLogic() {
+void manga_viewer::scene_logic() {
   auto wndSize = toolkit::opengl::g_instance.get_window_size();
   float aspect = wndSize.x() / wndSize.y();
   auto scrollOffsets = toolkit::opengl::g_instance.get_scroll_offsets();
   mouseCurrentPos = toolkit::opengl::g_instance.get_mouse_position();
-  bool mouseMidBtnPressed =
-  toolkit::opengl::g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_MIDDLE);
+  bool mouseMidBtnPressed = toolkit::opengl::g_instance.is_mouse_button_pressed(
+      GLFW_MOUSE_BUTTON_MIDDLE);
   bool mouseLeftBtnPressed =
-  toolkit::opengl::g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_LEFT);
+      toolkit::opengl::g_instance.is_mouse_button_pressed(
+          GLFW_MOUSE_BUTTON_LEFT);
 
   // reset camera back to default
   if (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_R)) {
-    spdlog::info("Reset camera parameters");
+    logger->info("Reset camera parameters");
     cameraPos << 0.0f, 0.5f, 1.0f;
     cameraHalfRangeY = defaultCameraHalfRangeY;
   }
@@ -601,15 +603,16 @@ void manga_viewer::sceneLogic() {
        math::lookat(cameraPos, cameraPos - math::world_forward, math::world_up);
 }
 
-void manga_viewer::mainLoop() {
+void manga_viewer::main_loop() {
   glClearColor(backgroundColor.x(), backgroundColor.y(), backgroundColor.z(),
                1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glViewport(0, 0, toolkit::opengl::g_instance.wnd_width, toolkit::opengl::g_instance.wnd_height);
+  glViewport(0, 0, toolkit::opengl::g_instance.wnd_width,
+             toolkit::opengl::g_instance.wnd_height);
 
   if (bookLoaded && !isLoadingBook) {
-    sceneLogic();
-    drawBook();
+    scene_logic();
+    draw_book();
   } else {
     // these variables should always gets reseted when not in use
     leadingPageIdx = -1;
@@ -621,7 +624,7 @@ void manga_viewer::mainLoop() {
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
 
-  drawGUI();
+  draw_gui();
 
   ImGui::EndFrame();
   ImGui::Render();
@@ -632,34 +635,20 @@ void manga_viewer::mainLoop() {
   timer.reset();
 }
 
-void manga_viewer::drawGUI() {
+void manga_viewer::draw_gui() {
   static bool openSettingsWindow = false;
   static bool openSwitchPageWnd = false;
   if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::BeginMenu("File")) {
-      ImGui::MenuItem("Import Books", nullptr, nullptr, false);
-      ImGui::Separator();
-      if (ImGui::MenuItem("Load Single File")) {
-        std::string filepath;
-        if (toolkit::open_file_dialog("Select a .pdf or .epub file",
-                           {"*.PDF", "*.EPUB", "*.pdf", "*.epub"},
-                           "*.pdf, *.epub", filepath)) {
-          std::thread t(&manga_viewer::loadSingleFile, this, filepath);
-          t.detach();
-        }
+    if (ImGui::MenuItem("Import")) {
+      std::string filepath;
+      if (toolkit::open_file_dialog("Select a .pdf or .epub file",
+                                    {"*.PDF", "*.EPUB", "*.pdf", "*.epub"},
+                                    "*.pdf, *.epub", filepath)) {
+        std::thread t(&manga_viewer::on_load_file, this, filepath);
+        t.detach();
       }
-      ImGui::SetItemTooltip("Import an ebook from .pdf or .epub format file.");
-      if (ImGui::MenuItem("Load Folder File")) {
-        std::string dirPath;
-        if (toolkit::open_folder_dialog("Select a folder containing images", dirPath)) {
-          std::thread t(&manga_viewer::loadFolderFile, this, dirPath);
-          t.detach();
-        }
-      }
-      ImGui::SetItemTooltip("Import an ebook from a folder containging .png or "
-                            ".jpg image sequences.");
-      ImGui::EndMenu();
     }
+    ImGui::SetItemTooltip("Import an ebook from .pdf or .epub format file.");
     if (ImGui::MenuItem("Setting")) {
       openSettingsWindow = true;
     }
@@ -668,12 +657,12 @@ void manga_viewer::drawGUI() {
                     ImGui::CalcTextSize("000 / 000   ").x -
                     ImGui::GetStyle().ItemSpacing.x);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0, 1.0, 0.0, 1.0));
-    if (ImGui::Button(
-            toolkit::str_format(" %3d /%3d ", leadingPageIdx + 1, pageCount.load())
-                .c_str())) {
+    if (ImGui::Button(toolkit::str_format(" %3d /%3d ", leadingPageIdx + 1,
+                                          pageCount.load())
+                          .c_str())) {
       if (bookLoaded.load()) {
         openSwitchPageWnd = true;
-        spdlog::info("Open popup");
+        logger->info("Open popup");
       }
     }
     ImGui::PopStyleColor(1);
@@ -753,17 +742,17 @@ void manga_viewer::drawGUI() {
       if (ImGui::Button("Delete Book Cache", {-1, 30})) {
         if (std::filesystem::exists(cacheDirPath)) {
           std::filesystem::remove_all(cacheDirPath);
-          spdlog::info("Delete caching dir {0}", cacheDirPath);
+          logger->info("Delete caching dir {0}", cacheDirPath);
         } else {
-          spdlog::error("Cache dir {0} doesn't exists", cacheDirPath);
+          logger->error("Cache dir {0} doesn't exists", cacheDirPath);
         }
       }
 
       ImGui::SeparatorText("IO Options");
       if (ImGui::Button("Dump Settings", {-1, 30}))
-        dumpPreference();
+        dump_preference();
       if (ImGui::Button("Load Settings", {-1, 30}))
-        loadPreference();
+        load_preference();
 
       ImGui::End();
     }
@@ -785,8 +774,30 @@ void manga_viewer::drawGUI() {
   }
 }
 
+std::string get_current_time_str() {
+  auto now = std::chrono::system_clock::now();
+  std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+  std::tm local_time;
+#ifdef _WIN32
+  localtime_s(&local_time, &now_time);
+#else
+  localtime_r(&now_time, &local_time);
+#endif
+
+  std::stringstream ss;
+  ss << std::setfill('0') << local_time.tm_year + 1900 << "-" << std::setw(2)
+     << local_time.tm_mon + 1 << "-" << std::setw(2) << local_time.tm_mday
+     << "-" << std::setw(2) << local_time.tm_hour << "-" << std::setw(2)
+     << local_time.tm_min << "-" << std::setw(2) << local_time.tm_sec;
+  return ss.str();
+}
+
 manga_viewer::manga_viewer() {
   toolkit::opengl::g_instance.init();
+  ImGui::GetIO().IniFilename = nullptr;
+  logger = spdlog::basic_logger_mt(
+      "file_logger",
+      toolkit::str_format("logs/%s.log", get_current_time_str().c_str()));
 
   // enable vsync to save batery
   glfwSwapInterval(1);
@@ -796,19 +807,19 @@ manga_viewer::manga_viewer() {
 
   glEnable(GL_CULL_FACE);
 
-  loadPreference();
+  load_preference();
 
   resetTexturePool(8);
 
   ctx = fz_new_context(NULL, NULL, FZ_STORE_UNLIMITED);
   if (!ctx) {
-    spdlog::error("Failed to create MuPDF context");
+    logger->error("Failed to create MuPDF context");
     return;
   }
 
   fz_try(ctx) fz_register_document_handlers(ctx);
   fz_catch(ctx) {
-    spdlog::error("Cannot register document handlers");
+    logger->error("Cannot register document handlers");
     fz_drop_context(ctx);
     return;
   }
@@ -823,5 +834,5 @@ manga_viewer::~manga_viewer() {
 }
 
 void manga_viewer::run() {
-  toolkit::opengl::g_instance.run([&]() { mainLoop(); });
+  toolkit::opengl::g_instance.run([&]() { main_loop(); });
 }
