@@ -9,8 +9,8 @@ if (WIN32)
   set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /SUBSYSTEM:CONSOLE")
 endif()
 
-include_directories("D:\\Code\\mupdf\\include")
-link_directories("D:\\Code\\mupdf\\platform\\win32\\x64\\Debug")
+include_directories("D:\\repo\\mupdf\\include")
+link_directories("D:\\repo\\mupdf\\platform\\win32\\x64\\Debug")
 
 file(GLOB MANGA_VIEWER_SRC_FILES *.cpp)
 add_executable(${PROJECT_NAME} ${MANGA_VIEWER_SRC_FILES})

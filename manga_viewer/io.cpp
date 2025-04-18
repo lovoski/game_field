@@ -293,6 +293,11 @@ void manga_viewer::loadPageCacheFromFile(int pageIdx, page_cache &result) {
 
 void manga_viewer::loadHighResPage(std::string filepath, int pageIdx) {
   std::lock_guard<std::mutex> lock(highResPageLoadingLock);
+  fz_context *tmp_ctx = fz_new_context(NULL, NULL, FZ_STORE_UNLIMITED);
+  if (!tmp_ctx) {
+    logger->error("Failed to create MuPDF context");
+    return;
+  }
   unsigned char errorPixel[3] = {247, 0, 247};
   static unsigned char whitePixel[3] = {255, 255, 255};
   page_cache pageCache;
@@ -306,23 +311,24 @@ void manga_viewer::loadHighResPage(std::string filepath, int pageIdx) {
   }
   fz_pixmap *pixmap = nullptr;
   fz_matrix transform = fz_scale(dpi / 72.0f, dpi / 72.0f);
-  fz_try(ctx) {
-    pixmap = fz_new_pixmap_from_page_number(ctx, doc, pageIdx, transform,
-                                            fz_device_rgb(ctx), 0);
+  fz_try(tmp_ctx) {
+    pixmap = fz_new_pixmap_from_page_number(tmp_ctx, doc, pageIdx, transform,
+                                            fz_device_rgb(tmp_ctx), 0);
 
     pageCache.set_data(pixmap->w, pixmap->h, pixmap->n, pixmap->samples);
   }
-  fz_always(ctx) {
-    fz_drop_pixmap(ctx, pixmap);
+  fz_always(tmp_ctx) {
+    fz_drop_pixmap(tmp_ctx, pixmap);
   }
-  fz_catch(ctx) {
+  fz_catch(tmp_ctx) {
     logger->error("Error loading high resolution page {0}, {1}", pageIdx,
-                  fz_caught_message(ctx));
+                  fz_caught_message(tmp_ctx));
     pageCache.set_data(1, 1, 3, errorPixel);
   }
   highResImageQueue.on([&](std::vector<std::pair<int, page_cache>> &hriq) {
     hriq.push_back(std::make_pair(pageIdx, pageCache));
   });
+  fz_drop_context(tmp_ctx);
 }
 
 void manga_viewer::applyHighResQueue() {
