@@ -336,8 +336,8 @@ void manga_viewer::loadHighResPage(int pageIdx) {
   }
   // fz_drop_context(tmp_ctx);
 
-  logger->info("load high resolution page, width={0}, height={1}, size={2} MB",
-               pageCache.width, pageCache.height,
+  logger->info("load high-res page {0}, ({1},{2},{3}), {4} MB", pageIdx,
+               pageCache.width, pageCache.height, pageCache.channels,
                pageCache.width * pageCache.height * pageCache.channels /
                    (float)(1024 * 1024));
 
