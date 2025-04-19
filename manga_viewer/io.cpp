@@ -292,7 +292,7 @@ void manga_viewer::loadHighResPage(int pageIdx) {
   static unsigned char whitePixel[3] = {255, 255, 255};
   page_cache pageCache;
 
-  spdlog::warn("load page {0}", pageIdx);
+  // spdlog::warn("load page {0}", pageIdx);
 
   if (doc == nullptr) {
     logger->error("Can't load from nullptr document at loadHighResPage");
@@ -323,7 +323,7 @@ void manga_viewer::loadHighResPage(int pageIdx) {
     hriq.emplace_back(std::make_pair(pageIdx, pageCache));
   });
 
-  spdlog::warn("page {0} loaded", pageIdx);
+  // spdlog::warn("page {0} loaded", pageIdx);
 }
 
 void manga_viewer::applyHighResQueue() {
