@@ -7,14 +7,62 @@
 #include "toolkit/utils.hpp"
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
+#include <queue>
 #include <thread>
 
 #include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-
 #include <mupdf/fitz.h>
+
+class thread_pool {
+  std::vector<std::thread> workers;
+  std::queue<std::function<void()>> tasks;
+  std::mutex queue_mutex;
+  std::condition_variable condition;
+  bool stop = false;
+
+public:
+  thread_pool(size_t threads = 8) {
+    for (size_t i = 0; i < threads; ++i) {
+      workers.emplace_back([this] {
+        while (true) {
+          std::function<void()> task;
+          {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            condition.wait(lock, [this] { return stop || !tasks.empty(); });
+            if (stop && tasks.empty())
+              return;
+            task = std::move(tasks.front());
+            tasks.pop();
+          }
+          task();
+        }
+      });
+    }
+  }
+
+  template <class F> void enqueue(F &&f) {
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex);
+      tasks.emplace(std::forward<F>(f));
+    }
+    condition.notify_one();
+  }
+
+  ~thread_pool() {
+    {
+      std::lock_guard<std::mutex> lock(queue_mutex);
+      stop = true;
+    }
+    condition.notify_all();
+    for (auto &worker : workers)
+      worker.join();
+  }
+};
 
 template <typename T> class thread_safe_vector {
 public:
@@ -84,6 +132,7 @@ private:
 
   fz_context *ctx = nullptr;
   fz_document *doc = nullptr;
+
   std::atomic<bool> bookLoaded{false}, isLoadingBook{false};
   std::atomic<int> pageCount{0}, pageLoaded{0};
   std::atomic<float> loadingProgress{0.0f};
@@ -98,7 +147,8 @@ private:
   const toolkit::opengl::texture &getTextureFromPool(int pageIdx);
   thread_safe_vector<std::pair<int, page_cache>> highResImageQueue;
   std::mutex highResPageLoadingLock;
-  void loadHighResPage(std::string filepath, int pageIdx);
+  thread_pool tpool;
+  void loadHighResPage(int pageIdx);
   void applyHighResQueue();
 
   float gridCellSizeX, gridCellSizeY;
@@ -139,6 +189,14 @@ private:
 
   unsigned int gridPointHorizontal = 50, gridPointVertical = 50;
   void resizePageGrid();
+
+#ifdef _DEBUG
+  bool is_debug = true;
+#elif !defined(NDEBUG)
+  bool is_debug = true;
+#else
+  bool is_debug = false;
+#endif
 
   REFLECT_PRIVATE(manga_viewer)
 };

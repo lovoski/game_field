@@ -779,9 +779,17 @@ std::string get_current_time_str() {
 manga_viewer::manga_viewer() {
   toolkit::opengl::g_instance.init();
   ImGui::GetIO().IniFilename = nullptr;
-  logger = spdlog::basic_logger_mt(
-      "file_logger",
-      toolkit::str_format("logs/%s.log", get_current_time_str().c_str()));
+
+  if (is_debug) {
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    console_sink->set_pattern("[%H:%M:%S][%^%l%$] %v");
+    logger = std::make_shared<spdlog::logger>("debug_logger", console_sink);
+  } else {
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+        toolkit::str_format("log/%s.log", get_current_time_str().c_str()));
+    file_sink->set_pattern("[%Y-%m-%d %H:%M:%S][%l] %v");
+    logger = std::make_shared<spdlog::logger>("release_logger", file_sink);
+  }
 
   // enable vsync to save batery
   glfwSwapInterval(1);

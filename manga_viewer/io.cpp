@@ -82,46 +82,47 @@ void manga_viewer::on_load_file(std::string filepath) {
     isLoadingBook = false;
     return;
   }
+  pageCount.store(fz_count_pages(ctx, doc));
 
   cacheDirPath = toolkit::join_path(
       ".", "book_cache", std::to_string(toolkit::string_hash(filepath)));
-  if (!std::filesystem::exists(cacheDirPath)) {
-    // load book from source file, cache in caheDirPath
+  bool cache_exists = std::filesystem::exists(cacheDirPath);
+  if (!cache_exists) {
     toolkit::mkdir(cacheDirPath);
     toolkit::mkdir(toolkit::join_path(cacheDirPath, "low_res"));
-    pageCount.store(fz_count_pages(ctx, doc));
-    // render book into .png images in cache dir
-    fz_matrix transform = fz_scale(0.1, 0.1);
-    for (int pageIdx = 0; pageIdx < pageCount; pageIdx++) {
-      fz_page *page = nullptr;
-      fz_pixmap *pixmap = nullptr;
+  }
+  // render book into .png images in cache dir
+  fz_matrix transform = fz_scale(0.05, 0.05);
+  for (int pageIdx = 0; pageIdx < pageCount; pageIdx++) {
+    fz_page *page = nullptr;
+    fz_pixmap *pixmap = nullptr;
 
-      fz_try(ctx) {
-        page = fz_load_page(ctx, doc, pageIdx);
-        fz_bound_page(ctx, page);
+    fz_try(ctx) {
+      page = fz_load_page(ctx, doc, pageIdx);
+      fz_bound_page(ctx, page);
 
-        pixmap = fz_new_pixmap_from_page_number(ctx, doc, pageIdx, transform,
-                                                fz_device_rgb(ctx), 0);
+      pixmap = fz_new_pixmap_from_page_number(ctx, doc, pageIdx, transform,
+                                              fz_device_rgb(ctx), 0);
 
+      if (!cache_exists) {
         std::string imageFilename =
             toolkit::str_format("%s.png", uint32_to_str(pageIdx).c_str());
         std::string cacheImageFilepath =
             toolkit::join_path(cacheDirPath, "low_res", imageFilename);
         fz_save_pixmap_as_png(ctx, pixmap, cacheImageFilepath.c_str());
+      }
 
-        loadingProgress = (pageIdx + 1) / (float)pageCount;
-      }
-      fz_always(ctx) {
-        fz_drop_pixmap(ctx, pixmap);
-        fz_drop_page(ctx, page);
-      }
-      fz_catch(ctx) {
-        logger->error("Failed to load page {0} from file {1}", pageIdx,
-                      filepath);
-        bookLoaded = false;
-        isLoadingBook = false;
-        return;
-      }
+      loadingProgress = (pageIdx + 1) / (float)pageCount;
+    }
+    fz_always(ctx) {
+      fz_drop_pixmap(ctx, pixmap);
+      fz_drop_page(ctx, page);
+    }
+    fz_catch(ctx) {
+      logger->error("Failed to load page {0} from file {1}", pageIdx, filepath);
+      bookLoaded = false;
+      isLoadingBook = false;
+      return;
     }
   }
 
@@ -170,7 +171,8 @@ void manga_viewer::on_load_file(std::string filepath) {
     fz_catch(ctx) {}
   });
 
-  logger->info("Loading a book with {0} pages", pageCount.load());
+  logger->info("Loading a book with {0} pages from {1}", pageCount.load(),
+               filepath);
   bookLoaded = true;
   isLoadingBook = false;
 }
@@ -243,7 +245,7 @@ const toolkit::opengl::texture &manga_viewer::getTextureFromPool(int pageIdx) {
   texturePoolPageIdxData.on(
       [&](std::vector<int> &tppid) { tppid[texturePoolIdx] = pageIdx; });
   // start loading the high res image after everything's setup
-  std::thread t(&manga_viewer::loadHighResPage, this, activeFilePath, pageIdx);
+  std::thread t(&manga_viewer::loadHighResPage, this, pageIdx);
   t.detach();
 
   return texturePoolData.get(texturePoolIdx);
@@ -268,18 +270,11 @@ void manga_viewer::loadPageCacheFromFile(int pageIdx, page_cache &result) {
       // there's a low res version of the file, load it first
       fz_image *image = nullptr;
       fz_pixmap *pixmap = nullptr;
-      fz_try(ctx) {
-        image = fz_new_image_from_file(ctx, cache_filepath.string().c_str());
-        // Create a pixmap from the image
-        pixmap = fz_get_pixmap_from_image(ctx, image, nullptr, nullptr, nullptr,
-                                          nullptr);
-        result.set_data(pixmap->w, pixmap->h, pixmap->n, pixmap->samples);
-      }
-      fz_always(ctx) {
-        fz_drop_pixmap(ctx, pixmap);
-        fz_drop_image(ctx, image);
-      }
-      fz_catch(ctx) {
+      toolkit::assets::image img;
+      try {
+        img.load(cache_filepath.string());
+        result.set_data(img.width, img.height, img.nchannels, img.data.data());
+      } catch (std::exception e) {
         logger->error("Error loading page {0}, : {1}", pageIdx,
                       fz_caught_message(ctx));
         result.set_data(1, 1, 3, errorPixel);
@@ -291,16 +286,14 @@ void manga_viewer::loadPageCacheFromFile(int pageIdx, page_cache &result) {
   });
 }
 
-void manga_viewer::loadHighResPage(std::string filepath, int pageIdx) {
+void manga_viewer::loadHighResPage(int pageIdx) {
   std::lock_guard<std::mutex> lock(highResPageLoadingLock);
-  fz_context *tmp_ctx = fz_new_context(NULL, NULL, FZ_STORE_UNLIMITED);
-  if (!tmp_ctx) {
-    logger->error("Failed to create MuPDF context");
-    return;
-  }
   unsigned char errorPixel[3] = {247, 0, 247};
   static unsigned char whitePixel[3] = {255, 255, 255};
   page_cache pageCache;
+
+  spdlog::warn("load page {0}", pageIdx);
+
   if (doc == nullptr) {
     logger->error("Can't load from nullptr document at loadHighResPage");
     pageCache.set_data(1, 1, 3, errorPixel);
@@ -309,26 +302,28 @@ void manga_viewer::loadHighResPage(std::string filepath, int pageIdx) {
     });
     return;
   }
+  // fz_context *tmp_ctx = fz_clone_context(ctx);
   fz_pixmap *pixmap = nullptr;
   fz_matrix transform = fz_scale(dpi / 72.0f, dpi / 72.0f);
-  fz_try(tmp_ctx) {
-    pixmap = fz_new_pixmap_from_page_number(tmp_ctx, doc, pageIdx, transform,
-                                            fz_device_rgb(tmp_ctx), 0);
+  fz_try(ctx) {
+    pixmap = fz_new_pixmap_from_page_number(ctx, doc, pageIdx, transform,
+                                            fz_device_rgb(ctx), 0);
 
     pageCache.set_data(pixmap->w, pixmap->h, pixmap->n, pixmap->samples);
   }
-  fz_always(tmp_ctx) {
-    fz_drop_pixmap(tmp_ctx, pixmap);
-  }
-  fz_catch(tmp_ctx) {
+  fz_always(ctx) { fz_drop_pixmap(ctx, pixmap); }
+  fz_catch(ctx) {
     logger->error("Error loading high resolution page {0}, {1}", pageIdx,
-                  fz_caught_message(tmp_ctx));
+                  fz_caught_message(ctx));
     pageCache.set_data(1, 1, 3, errorPixel);
   }
+  // fz_drop_context(tmp_ctx);
+
   highResImageQueue.on([&](std::vector<std::pair<int, page_cache>> &hriq) {
-    hriq.push_back(std::make_pair(pageIdx, pageCache));
+    hriq.emplace_back(std::make_pair(pageIdx, pageCache));
   });
-  fz_drop_context(tmp_ctx);
+
+  spdlog::warn("page {0} loaded", pageIdx);
 }
 
 void manga_viewer::applyHighResQueue() {
