@@ -162,6 +162,18 @@ void manga_viewer::on_load_file(std::string filepath) {
       pixmap = fz_new_pixmap_from_page_number(ctx, doc, 0, first_page_transform,
                                               fz_device_rgb(ctx), 0);
 
+      page_width.store(pixmap->w);
+      page_height.store(pixmap->h);
+      page_channles.store(pixmap->n);
+
+      float size_mb = pixmap->w * pixmap->h * pixmap->n / (float)(1024 * 1024);
+      if (size_mb > max_page_size_mb) {
+        // adjust dpi to suit settings
+        float scale = std::sqrt(max_page_size_mb / size_mb);
+        dpi = dpi * scale;
+        dpi_index = -1;
+      }
+
       first_page_width_div_height.store(pixmap->w / (float)pixmap->h);
     }
     fz_always(ctx) {
@@ -305,9 +317,14 @@ void manga_viewer::loadHighResPage(int pageIdx) {
   // fz_context *tmp_ctx = fz_clone_context(ctx);
   fz_pixmap *pixmap = nullptr;
   fz_matrix transform = fz_scale(dpi / 72.0f, dpi / 72.0f);
+  // fz_matrix transform = fz_scale(1, 1);
   fz_try(ctx) {
     pixmap = fz_new_pixmap_from_page_number(ctx, doc, pageIdx, transform,
                                             fz_device_rgb(ctx), 0);
+
+    page_width.store(pixmap->w);
+    page_height.store(pixmap->h);
+    page_channles.store(pixmap->n);
 
     pageCache.set_data(pixmap->w, pixmap->h, pixmap->n, pixmap->samples);
   }
@@ -318,6 +335,11 @@ void manga_viewer::loadHighResPage(int pageIdx) {
     pageCache.set_data(1, 1, 3, errorPixel);
   }
   // fz_drop_context(tmp_ctx);
+
+  logger->info("load high resolution page, width={0}, height={1}, size={2} MB",
+               pageCache.width, pageCache.height,
+               pageCache.width * pageCache.height * pageCache.channels /
+                   (float)(1024 * 1024));
 
   highResImageQueue.on([&](std::vector<std::pair<int, page_cache>> &hriq) {
     hriq.emplace_back(std::make_pair(pageIdx, pageCache));

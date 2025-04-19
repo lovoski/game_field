@@ -123,7 +123,8 @@ private:
 
   std::shared_ptr<spdlog::logger> logger = nullptr;
 
-  int dpi = 300;
+  int dpi = 300, dpi_index = -1;
+  float max_page_size_mb = 8.0f;
 
   const std::string preferencePath = "./preference.json";
   std::string cacheDirPath, activeFilePath;
@@ -152,6 +153,8 @@ private:
   void applyHighResQueue();
 
   float gridCellSizeX, gridCellSizeY;
+
+  std::atomic<int> page_width{0}, page_height{0}, page_channles{0};
 
   float autoTurnPageSpeed = 1.0f;
   float foldK = 2, foldB = -1;

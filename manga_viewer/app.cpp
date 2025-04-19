@@ -649,6 +649,29 @@ void manga_viewer::draw_gui() {
     }
     ImGui::SetItemTooltip("Import an ebook from .pdf or .epub format file.");
     if (ImGui::BeginMenu("Setting")) {
+      ImGui::SeparatorText("Import");
+      ImGui::Text(toolkit::str_format(
+                      "dpi %d, (%d,%d,%d), %.3f MB", dpi, page_width.load(),
+                      page_height.load(), page_channles.load(),
+                      page_width.load() * page_height.load() *
+                          page_channles.load() / (float)(1024 * 1024))
+                      .c_str());
+      static std::vector<std::string> dpi_names{"300", "216", "144", "72",
+                                                "36"};
+      gui::combo_default(
+          "DPI", dpi_index, dpi_names,
+          [&](int current) {
+            if (current != -1) {
+              dpi = std::stoi(dpi_names[current]);
+              logger->info("set dpi to {0}", dpi);
+            }
+          },
+          "Default");
+      ImGui::SetItemTooltip(
+          "At the initial loading of a book, if the memory size of \nthe first "
+          "loaded page is greater than `max_page_size_mb`, \nan automatic "
+          "scale to dpi will be applied.");
+
       ImGui::SeparatorText("Page Turning");
       ImGui::Checkbox("Page Flow RTL", &pageFlowRTL);
       ImGui::SetItemTooltip(

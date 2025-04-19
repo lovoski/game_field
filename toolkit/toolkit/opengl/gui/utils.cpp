@@ -11,8 +11,9 @@ bool color_edit_4(std::string label, math::vector4 &color) {
 
 void combo_default(std::string label, int &index,
                    std::vector<std::string> names,
-                   std::function<void(int)> handleCurrent) {
-  std::vector<std::string> augNames{"None:-1"};
+                   std::function<void(int)> handleCurrent,
+                   std::string default_name) {
+  std::vector<std::string> augNames{default_name};
   augNames.insert(augNames.end(), names.begin(), names.end());
   if (index < 0 || index >= names.size())
     index = -1;

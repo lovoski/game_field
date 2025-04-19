@@ -14,7 +14,8 @@ bool color_edit_4(std::string label, math::vector4 &color);
  */
 void combo_default(
     std::string label, int &index, std::vector<std::string> names,
-    std::function<void(int)> handleCurrent = [](int) {});
+    std::function<void(int)> handleCurrent = [](int) {},
+    std::string default_name = "None:-1");
 /**
  * `label`: name for this component
  * `index`: range [0, names.size()-1]
