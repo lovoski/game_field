@@ -94,16 +94,6 @@ private:
   std::vector<T> data;
 };
 
-class page_cache {
-public:
-  page_cache() {}
-  ~page_cache() {}
-  void set_data(int w, int h, int n, unsigned char *d, unsigned int stepX = 10,
-                unsigned int stepY = 10);
-  int width, height, channels;
-  std::vector<unsigned char> data;
-};
-
 class manga_viewer {
 public:
   manga_viewer();
@@ -144,9 +134,9 @@ private:
   thread_safe_vector<std::string> bookPageFilePathes;
   std::atomic<float> first_page_width_div_height;
   void resetTexturePool(int limit);
-  void loadPageCacheFromFile(int pageIdx, page_cache &result);
+  void loadPageCacheFromFile(int pageIdx, toolkit::assets::image &result);
   const toolkit::opengl::texture &getTextureFromPool(int pageIdx);
-  thread_safe_vector<std::pair<int, page_cache>> highResImageQueue;
+  thread_safe_vector<std::pair<int, toolkit::assets::image>> highResImageQueue;
   std::mutex highResPageLoadingLock;
   thread_pool tpool;
   void loadHighResPage(int pageIdx);

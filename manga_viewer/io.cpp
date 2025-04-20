@@ -227,27 +227,11 @@ const toolkit::opengl::texture &manga_viewer::getTextureFromPool(int pageIdx) {
   }
   // no cached page texture found, reload from file
   texturePoolIdx = (texturePoolIdx + 1) % texturePoolData.size();
-  page_cache pageCache;
+  toolkit::assets::image pageCache;
   // load low res image or white texture
   loadPageCacheFromFile(pageIdx, pageCache);
-  int nChannels = pageCache.channels;
-  if (nChannels == 3 || nChannels == 1)
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  else
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-  GLint iformat = GL_R8;
-  GLenum format = GL_RED;
-  if (nChannels == 3) {
-    iformat = GL_RGB8;
-    format = GL_RGB;
-  } else if (nChannels == 4) {
-    iformat = GL_RGBA8;
-    format = GL_RGBA;
-  }
   texturePoolData.on([&](std::vector<toolkit::opengl::texture> &texData) {
-    texData[texturePoolIdx].set_data(pageCache.width, pageCache.height, iformat,
-                                     format, GL_UNSIGNED_BYTE,
-                                     pageCache.data.data());
+    texData[texturePoolIdx].set_data_from_image(pageCache);
     texData[texturePoolIdx].set_parameters(
         {{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
          {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
@@ -263,7 +247,8 @@ const toolkit::opengl::texture &manga_viewer::getTextureFromPool(int pageIdx) {
   return texturePoolData.get(texturePoolIdx);
 }
 
-void manga_viewer::loadPageCacheFromFile(int pageIdx, page_cache &result) {
+void manga_viewer::loadPageCacheFromFile(int pageIdx,
+                                         toolkit::assets::image &result) {
   // pageIdx is ensured to be in range
   static unsigned char errorPixel[3] = {247, 0, 247};
   static unsigned char whitePixel[3] = {255, 255, 255};
@@ -273,7 +258,7 @@ void manga_viewer::loadPageCacheFromFile(int pageIdx, page_cache &result) {
                     "pagePathes.size() {2}, returns error "
                     "page by default",
                     pageIdx, pageCount.load(), pagePathes.size());
-      result.set_data(1, 1, 3, errorPixel);
+      result.try_set_data_gray_scale(1, 1, 3, errorPixel);
       return;
     }
     // first try loading the image in low res if possible
@@ -285,15 +270,16 @@ void manga_viewer::loadPageCacheFromFile(int pageIdx, page_cache &result) {
       toolkit::assets::image img;
       try {
         img.load(cache_filepath.string());
-        result.set_data(img.width, img.height, img.nchannels, img.data.data());
+        result.try_set_data_gray_scale(img.width, img.height, img.nchannels,
+                                       img.data.data());
       } catch (std::exception e) {
         logger->error("Error loading page {0}, : {1}", pageIdx,
                       fz_caught_message(ctx));
-        result.set_data(1, 1, 3, errorPixel);
+        result.try_set_data_gray_scale(1, 1, 3, errorPixel);
       }
     } else {
       // no low res version found for this file, try return a blank image
-      result.set_data(1, 1, 3, whitePixel);
+      result.try_set_data_gray_scale(1, 1, 3, whitePixel);
     }
   });
 }
@@ -302,16 +288,17 @@ void manga_viewer::loadHighResPage(int pageIdx) {
   std::lock_guard<std::mutex> lock(highResPageLoadingLock);
   unsigned char errorPixel[3] = {247, 0, 247};
   static unsigned char whitePixel[3] = {255, 255, 255};
-  page_cache pageCache;
+  toolkit::assets::image pageCache;
 
   // spdlog::warn("load page {0}", pageIdx);
 
   if (doc == nullptr) {
     logger->error("Can't load from nullptr document at loadHighResPage");
-    pageCache.set_data(1, 1, 3, errorPixel);
-    highResImageQueue.on([&](std::vector<std::pair<int, page_cache>> &hriq) {
-      hriq.push_back(std::make_pair(pageIdx, pageCache));
-    });
+    pageCache.try_set_data_gray_scale(1, 1, 3, errorPixel);
+    highResImageQueue.on(
+        [&](std::vector<std::pair<int, toolkit::assets::image>> &hriq) {
+          hriq.push_back(std::make_pair(pageIdx, pageCache));
+        });
     return;
   }
   // fz_context *tmp_ctx = fz_clone_context(ctx);
@@ -326,106 +313,59 @@ void manga_viewer::loadHighResPage(int pageIdx) {
     page_height.store(pixmap->h);
     page_channles.store(pixmap->n);
 
-    pageCache.set_data(pixmap->w, pixmap->h, pixmap->n, pixmap->samples);
+    pageCache.try_set_data_gray_scale(pixmap->w, pixmap->h, pixmap->n,
+                                      pixmap->samples);
   }
   fz_always(ctx) { fz_drop_pixmap(ctx, pixmap); }
   fz_catch(ctx) {
     logger->error("Error loading high resolution page {0}, {1}", pageIdx,
                   fz_caught_message(ctx));
-    pageCache.set_data(1, 1, 3, errorPixel);
+    pageCache.try_set_data_gray_scale(1, 1, 3, errorPixel);
   }
   // fz_drop_context(tmp_ctx);
 
   logger->info("load high-res page {0}, ({1},{2},{3}), {4} MB", pageIdx,
-               pageCache.width, pageCache.height, pageCache.channels,
-               pageCache.width * pageCache.height * pageCache.channels /
+               pageCache.width, pageCache.height, pageCache.nchannels,
+               pageCache.width * pageCache.height * pageCache.nchannels /
                    (float)(1024 * 1024));
 
-  highResImageQueue.on([&](std::vector<std::pair<int, page_cache>> &hriq) {
-    hriq.emplace_back(std::make_pair(pageIdx, pageCache));
-  });
+  highResImageQueue.on(
+      [&](std::vector<std::pair<int, toolkit::assets::image>> &hriq) {
+        hriq.emplace_back(std::make_pair(pageIdx, pageCache));
+      });
 
   // spdlog::warn("page {0} loaded", pageIdx);
 }
 
 void manga_viewer::applyHighResQueue() {
-  highResImageQueue.on([&](std::vector<std::pair<int, page_cache>> &hriq) {
-    // apply queue data to the actual texture
-    std::vector<int> matchedIndices;
-    texturePoolPageIdxData.on([&](std::vector<int> &tppid) {
-      matchedIndices.resize(hriq.size(), -1);
-      for (int i = 0; i < hriq.size(); i++) {
-        for (int j = 0; j < tppid.size(); j++) {
-          if (hriq[i].first == tppid[j])
-            matchedIndices[i] = j;
-        }
-      }
-    });
-    texturePoolData.on([&](std::vector<toolkit::opengl::texture> &texData) {
-      for (int i = 0; i < matchedIndices.size(); i++) {
-        if (matchedIndices[i] == -1)
-          continue;
-        auto &pageData = hriq[i].second;
-        int nChannels = pageData.channels;
-        if (nChannels == 3 || nChannels == 1)
-          glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        else
-          glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-        GLint iformat = GL_R8;
-        GLenum format = GL_RED;
-        if (nChannels == 3) {
-          iformat = GL_RGB8;
-          format = GL_RGB;
-        } else if (nChannels == 4) {
-          iformat = GL_RGBA8;
-          format = GL_RGBA;
-        }
-        texData[matchedIndices[i]].set_data(pageData.width, pageData.height,
-                                            iformat, format, GL_UNSIGNED_BYTE,
-                                            pageData.data.data());
-        texData[matchedIndices[i]].set_parameters(
-            {{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
-             {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
-             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
-      }
-    });
-    hriq.clear();
-  });
-}
-
-void page_cache::set_data(int w, int h, int n, unsigned char *d,
-                          unsigned int stepX, unsigned int stepY) {
-  width = w;
-  height = h;
-  // optimize storage if possible
-  bool colored = false;
-  if (n > 1) {
-    for (int y = 0; y < h; y += stepY) {
-      for (int x = 0; x < w; x += stepX) {
-        unsigned char *pix = d + y * w * n + n * x;
-        unsigned char r = pix[0];
-        unsigned char g = pix[1];
-        if (std::abs(r - g) > 1 || (n > 2 && std::abs(pix[2] - g) > 1)) {
-          colored = true;
-          goto init_data;
-        }
-      }
-    }
-  }
-init_data:
-  if (colored) {
-    channels = n;
-    data = std::vector<unsigned char>(d, d + w * h * n);
-  } else {
-    // logger->info("Optimize page to gray scale image");
-    channels = 1;
-    data.resize(w * h);
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++)
-        data[y * w + x] = d[y * w * n + x * n];
-    }
-  }
+  highResImageQueue.on(
+      [&](std::vector<std::pair<int, toolkit::assets::image>> &hriq) {
+        // apply queue data to the actual texture
+        std::vector<int> matchedIndices;
+        texturePoolPageIdxData.on([&](std::vector<int> &tppid) {
+          matchedIndices.resize(hriq.size(), -1);
+          for (int i = 0; i < hriq.size(); i++) {
+            for (int j = 0; j < tppid.size(); j++) {
+              if (hriq[i].first == tppid[j])
+                matchedIndices[i] = j;
+            }
+          }
+        });
+        texturePoolData.on([&](std::vector<toolkit::opengl::texture> &texData) {
+          for (int i = 0; i < matchedIndices.size(); i++) {
+            if (matchedIndices[i] == -1)
+              continue;
+            auto &pageData = hriq[i].second;
+            texData[matchedIndices[i]].set_data_from_image(pageData);
+            texData[matchedIndices[i]].set_parameters(
+                {{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
+                 {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
+                 {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                 {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+          }
+        });
+        hriq.clear();
+      });
 }
 
 void manga_viewer::dump_preference() {
