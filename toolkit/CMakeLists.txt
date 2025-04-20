@@ -10,7 +10,7 @@ endif()
 
 add_subdirectory("toolkit/deps")
 
-set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl")
+set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim")
 set(LIB_LIST )
 file(GLOB SRC_FILES "toolkit/*.cpp")
 foreach(DIR ${SRC_DIR_LIST})

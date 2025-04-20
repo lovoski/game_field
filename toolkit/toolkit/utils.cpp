@@ -84,13 +84,16 @@ std::string str_format(const char *format, ...) {
   return std::string(buffer.data());
 }
 
-bool process_files_recursive(std::string basepath,
-                             std::function<void(std::string)> f) {
-  if (fs::exists(basepath) && fs::is_directory(basepath)) {
-    for (const auto &entry : fs::recursive_directory_iterator(basepath)) {
-      if (fs::is_regular_file(entry.path())) {
-        f(entry.path().string());
-      }
+bool listdir(std::string dirpath, std::function<void(std::string)> f) {
+#ifdef _WIN32
+  std::wstring wdirpath = std::filesystem::u8path(dirpath).wstring();
+  if (fs::exists(wdirpath) && fs::is_directory(wdirpath)) {
+    for (auto entry : std::filesystem::directory_iterator(wdirpath)) {
+#else
+  if (fs::exists(dirpath) && fs::is_directory(dirpath)) {
+    for (auto entry : std::filesystem::directory_iterator(dirpath)) {
+#endif
+      f(entry.path().string());
     }
     return true;
   } else
@@ -107,8 +110,9 @@ bool open_folder_dialog(std::string title, std::string &selectedFolder) {
   return true;
 }
 
-bool save_file_dialog(std::string title, std::vector<const char *> filterPatterns,
-                    std::string description, std::string &selectedFile) {
+bool save_file_dialog(std::string title,
+                      std::vector<const char *> filterPatterns,
+                      std::string description, std::string &selectedFile) {
   auto ret = tinyfd_saveFileDialog(title.c_str(), "./", filterPatterns.size(),
                                    filterPatterns.data(), description.c_str());
   if (ret == NULL)
@@ -117,8 +121,9 @@ bool save_file_dialog(std::string title, std::vector<const char *> filterPattern
   return true;
 }
 
-bool open_file_dialog(std::string title, std::vector<const char *> filterPatterns,
-                    std::string description, std::string &selectedFile) {
+bool open_file_dialog(std::string title,
+                      std::vector<const char *> filterPatterns,
+                      std::string description, std::string &selectedFile) {
   auto ret =
       tinyfd_openFileDialog(title.c_str(), "./", filterPatterns.size(),
                             filterPatterns.data(), description.c_str(), 0);

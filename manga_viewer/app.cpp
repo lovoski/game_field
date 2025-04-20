@@ -311,7 +311,7 @@ void manga_viewer::draw_book() {
                                     gridPointHorizontal);
   createPageGeometryProgram.set_int("gGridPointVertical", gridPointVertical);
   createPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0);
-  createPageGeometryProgram.dispath((gridPointHorizontal + 7) / 8,
+  createPageGeometryProgram.dispatch((gridPointHorizontal + 7) / 8,
                                     (gridPointVertical + 7) / 8, 1);
   createPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
                                     GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
@@ -475,7 +475,7 @@ void manga_viewer::draw_book() {
     deformPageGeometryProgram.set_int("gGridPointVertical", gridPointVertical);
     deformPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0)
         .bind_buffer(deformedPageVertexBuffer.get_handle(), 1);
-    deformPageGeometryProgram.dispath((gridPointHorizontal + 7) / 8,
+    deformPageGeometryProgram.dispatch((gridPointHorizontal + 7) / 8,
                                       (gridPointVertical + 7) / 8, 1);
     deformPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
                                       GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);

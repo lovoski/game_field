@@ -629,8 +629,8 @@ public:
     return *this;
   }
 
-  // dispath the compute shader
-  void dispath(GLuint numGroupsX, GLuint numGroupsY, GLuint numGroupsZ) {
+  // dispatch the compute shader
+  void dispatch(GLuint numGroupsX, GLuint numGroupsY, GLuint numGroupsZ) {
     glUseProgram(gl_handle);
     glDispatchCompute(numGroupsX, numGroupsY, numGroupsZ);
   }

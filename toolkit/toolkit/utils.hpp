@@ -1,8 +1,8 @@
 #pragma once
 
+#include "toolkit/math.hpp"
 #include <chrono>
 #include <filesystem>
-#include "toolkit/math.hpp"
 
 namespace toolkit {
 
@@ -17,14 +17,15 @@ std::string str_format(const char *format, ...);
 
 bool open_folder_dialog(std::string title, std::string &selectedFolder);
 
-bool save_file_dialog(std::string title, std::vector<const char *> filterPatterns,
-                    std::string description, std::string &selectedFile);
+bool save_file_dialog(std::string title,
+                      std::vector<const char *> filterPatterns,
+                      std::string description, std::string &selectedFile);
 
-bool open_file_dialog(std::string title, std::vector<const char *> filterPatterns,
-                    std::string description, std::string &selectedFile);
+bool open_file_dialog(std::string title,
+                      std::vector<const char *> filterPatterns,
+                      std::string description, std::string &selectedFile);
 
-bool process_files_recursive(std::string basepath,
-                             std::function<void(std::string)> f);
+bool listdir(std::string dirpath, std::function<void(std::string)> f);
 
 bool mkdir(std::string path);
 

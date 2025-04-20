@@ -86,7 +86,12 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   gbuffer.create();
   cbuffer.create();
   resize(instance.scene_width, instance.scene_height);
+
+  scene_vertex_buffer.create();
+  scene_index_buffer.create();
 }
+
+void defered_forward_mixed::init1(entt::registry &registry) {}
 
 void defered_forward_mixed::resize(int width, int height) {
   gbuffer.bind();
@@ -139,6 +144,8 @@ void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
   // perform cpu frustom culling
 }
 
+void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {}
+
 void defered_forward_mixed::render(entt::registry &registry) {
   if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
     auto &cam_trans = registry.get<transform>(g_instance.active_camera);
@@ -173,7 +180,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
       draw_grid(grid_size, grid_spacing, cam_comp.vp);
 
     // debug rendering
-    if (auto app_ptr = registry.ctx().get<iapp*>()) {
+    if (auto app_ptr = registry.ctx().get<iapp *>()) {
       auto script_sys = app_ptr->get_sys<script_system>();
       script_sys->draw_to_scene(app_ptr);
     }
