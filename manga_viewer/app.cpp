@@ -312,30 +312,9 @@ void manga_viewer::draw_book() {
   createPageGeometryProgram.set_int("gGridPointVertical", gridPointVertical);
   createPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0);
   createPageGeometryProgram.dispatch((gridPointHorizontal + 7) / 8,
-                                    (gridPointVertical + 7) / 8, 1);
+                                     (gridPointVertical + 7) / 8, 1);
   createPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
                                     GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
-
-  // bool altPressed = gcontext.IsKeyPressed(GLFW_KEY_LEFT_ALT);
-  // bool lmbPressed = gcontext.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
-  // bool rmbPressed = gcontext.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
-  if (!autoTurnPage && !(leadingPageIdx == -1 && pageFlowRTL) &&
-      !(leadingPageIdx >= pageCount.load() - 1 && !pageFlowRTL) &&
-      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT))) {
-    pageFromRightToLeft = false;
-    autoTurnPage = true;
-    foldB = -1;
-    foldK = foldB / pageWidth;
-  }
-  if (!autoTurnPage &&
-      !(leadingPageIdx >= pageCount.load() - 1 && pageFlowRTL) &&
-      !(leadingPageIdx == -1 && !pageFlowRTL) &&
-      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT))) {
-    pageFromRightToLeft = true;
-    autoTurnPage = true;
-    foldB = -1;
-    foldK = -foldB / pageWidth;
-  }
 
   bool turnToNextPage = (pageFromRightToLeft && pageFlowRTL) ||
                         (!pageFromRightToLeft && !pageFlowRTL);
@@ -476,7 +455,7 @@ void manga_viewer::draw_book() {
     deformPageGeometryProgram.bind_buffer(pageVertexBuffer.get_handle(), 0)
         .bind_buffer(deformedPageVertexBuffer.get_handle(), 1);
     deformPageGeometryProgram.dispatch((gridPointHorizontal + 7) / 8,
-                                      (gridPointVertical + 7) / 8, 1);
+                                       (gridPointVertical + 7) / 8, 1);
     deformPageGeometryProgram.barrier(GL_SHADER_STORAGE_BARRIER_BIT |
                                       GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 
@@ -601,6 +580,26 @@ void manga_viewer::scene_logic() {
   vp = math::ortho(-cameraHalfRangeY * aspect, cameraHalfRangeY * aspect,
                    cameraHalfRangeY, -cameraHalfRangeY, 1e-3f, 1e2f) *
        math::lookat(cameraPos, cameraPos - math::world_forward, math::world_up);
+
+  float pageHeight = 1.0f;
+  float pageWidth = first_page_width_div_height;
+  if (!autoTurnPage && !(leadingPageIdx == -1 && pageFlowRTL) &&
+      !(leadingPageIdx >= pageCount.load() - 1 && !pageFlowRTL) &&
+      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT))) {
+    pageFromRightToLeft = false;
+    autoTurnPage = true;
+    foldB = -1;
+    foldK = foldB / pageWidth;
+  }
+  if (!autoTurnPage &&
+      !(leadingPageIdx >= pageCount.load() - 1 && pageFlowRTL) &&
+      !(leadingPageIdx == -1 && !pageFlowRTL) &&
+      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT))) {
+    pageFromRightToLeft = true;
+    autoTurnPage = true;
+    foldB = -1;
+    foldK = -foldB / pageWidth;
+  }
 }
 
 void manga_viewer::main_loop() {
@@ -611,7 +610,8 @@ void manga_viewer::main_loop() {
              toolkit::opengl::g_instance.wnd_height);
 
   if (bookLoaded && !isLoadingBook) {
-    scene_logic();
+    if (!openSwitchPageWnd)
+      scene_logic();
     draw_book();
   } else {
     // these variables should always gets reseted when not in use
@@ -636,7 +636,6 @@ void manga_viewer::main_loop() {
 }
 
 void manga_viewer::draw_gui() {
-  static bool openSwitchPageWnd = false;
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::MenuItem("Import")) {
       std::string filepath;

@@ -128,6 +128,8 @@ private:
   std::atomic<int> pageCount{0}, pageLoaded{0};
   std::atomic<float> loadingProgress{0.0f};
 
+  bool openSwitchPageWnd = false;
+
   int texturePoolIdx = 0;
   thread_safe_vector<int> texturePoolPageIdxData;
   thread_safe_vector<toolkit::opengl::texture> texturePoolData;
