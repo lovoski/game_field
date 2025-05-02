@@ -37,7 +37,7 @@ public:
 
   entt::entity selected_entity = entt::null;
 
-  defered_forward_mixed *dm_sys = nullptr;
+  defered_forward_mixed *render_sys = nullptr;
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
 

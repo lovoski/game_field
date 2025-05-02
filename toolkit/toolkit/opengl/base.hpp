@@ -557,6 +557,10 @@ public:
   // Directly active a slot, set a texture by its integer handle
   bool set_texture2d(std::string name, unsigned int texture, int slot);
 
+  void set_buffer_ssbo(buffer &buf, int binding) {
+    buf.bind_to_point_as(GL_SHADER_STORAGE_BUFFER, binding);
+  }
+
   bool set_cubemap(std::string name, unsigned int cubemapID, int slot);
 };
 

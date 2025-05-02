@@ -6,11 +6,11 @@
 
 namespace toolkit::anim {
 
-class vis_anim : public scriptable {
+class vis_skeleton : public scriptable {
 public:
   void draw_to_scene(iapp *app) override;
   void draw_gui(iapp *app) override;
 };
-DECLARE_SCRIPT(vis_anim, animation)
+DECLARE_SCRIPT(vis_skeleton, animation)
 
 }; // namespace toolkit::anim

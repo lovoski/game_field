@@ -42,7 +42,7 @@ void editor::late_deserialize(nlohmann::json &j) {
   }
 
   transform_sys = get_sys<transform_system>();
-  dm_sys = get_sys<defered_forward_mixed>();
+  render_sys = get_sys<defered_forward_mixed>();
   script_sys = get_sys<script_system>();
 }
 
@@ -57,6 +57,10 @@ void editor::run() {
     timer.reset();
 
     transform_sys->update_transform(registry);
+
+    render_sys->update_obj_bbox(registry);
+    render_sys->update_scene_buffers(registry);
+
     for (auto sys : systems)
       if (sys->active)
         sys->preupdate(registry, dt);
@@ -73,7 +77,7 @@ void editor::run() {
     if (script_sys->active)
       script_sys->lateupdate(this, dt);
 
-    dm_sys->render(registry);
+    render_sys->render(registry);
 
     glClearColor(0, 0, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -89,14 +93,14 @@ void editor::run() {
     instance.scene_pos_x = pos.x;
     instance.scene_pos_y = pos.y;
     ImGui::Image((void *)static_cast<std::uintptr_t>(
-                     dm_sys->get_target_texture().get_handle()),
+                     render_sys->get_target_texture().get_handle()),
                  {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
     if (instance.scene_width != size.x || instance.scene_height != size.y) {
       // resize sceneFBO
       instance.scene_width = size.x;
       instance.scene_height = size.y;
-      dm_sys->resize(size.x, size.y);
-      dm_sys->render(registry);
+      render_sys->resize(size.x, size.y);
+      render_sys->render(registry);
     }
     draw_gizmos();
     ImGui::EndChild();
@@ -117,7 +121,7 @@ void editor::reset() {
   systems.clear();
 
   transform_sys = add_sys<transform_system>();
-  dm_sys = add_sys<defered_forward_mixed>();
+  render_sys = add_sys<defered_forward_mixed>();
   script_sys = add_sys<script_system>();
 }
 
@@ -413,16 +417,23 @@ void editor::draw_entity_hierarchy() {
         create_cylinder(registry);
       if (ImGui::MenuItem("New Plane"))
         create_plane(registry);
-      ImGui::EndMenu();
-    }
-    if (ImGui::BeginMenu("Modify")) {
-      if (ImGui::MenuItem("Rename Entity")) {
+
+      ImGui::Separator();
+      if (ImGui::MenuItem("New Dir Light")) {
+        auto ent = registry.create();
+        auto &trans = registry.emplace<transform>(ent);
+        auto number = registry.view<dir_light>().size();
+        trans.name = str_format("Dir Light (%d)", number);
+        auto &light = registry.emplace<dir_light>(ent);
       }
-      if (ImGui::MenuItem("Delete Entity")) {
-        if (selected_entity == g_instance.active_camera)
-          g_instance.active_camera = entt::null;
-        registry.destroy(selected_entity);
+      if (ImGui::MenuItem("New Point Light")) {
+        auto ent = registry.create();
+        auto &trans = registry.emplace<transform>(ent);
+        auto number = registry.view<point_light>().size();
+        trans.name = str_format("Point Light (%d)", number);
+        auto &light = registry.emplace<point_light>(ent);
       }
+
       ImGui::EndMenu();
     }
   };
@@ -435,6 +446,8 @@ void editor::draw_entity_hierarchy() {
     if (ImGui::MenuItem("Delete Entity")) {
       registry.destroy(entity);
     }
+    // if (ImGui::MenuItem("Rename Entity")) {
+    // }
   };
 
   if (!ImGui::IsAnyItemHovered() &&
