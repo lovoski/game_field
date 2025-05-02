@@ -68,6 +68,11 @@ public:
     return static_cast<SystemType *>(systems[systems.size() - 1].get());
   }
 
+  template <typename T> void view_as(std::function<void(T *)> &&f) {
+    if (auto ptr = dynamic_cast<T *>(this))
+      f(ptr);
+  }
+
   void update(float dt);
 
   virtual nlohmann::json serialize();

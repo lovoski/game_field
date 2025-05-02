@@ -50,4 +50,17 @@ public:
   void draw_gizmos(bool enable = true);
 };
 
+inline void script_draw_to_scene_proxy(
+    iapp *app, std::function<void(editor *, transform &, camera &)> &&f) {
+  if (auto eptr = dynamic_cast<editor *>(app)) {
+    auto cam_trans =
+        eptr->registry.try_get<transform>(g_instance.active_camera);
+    auto cam_comp =
+        eptr->registry.try_get<opengl::camera>(g_instance.active_camera);
+    if (cam_trans != nullptr && cam_comp != nullptr) {
+      f(eptr, *cam_trans, *cam_comp);
+    }
+  }
+}
+
 }; // namespace toolkit::opengl

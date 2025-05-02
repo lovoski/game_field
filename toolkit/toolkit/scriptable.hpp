@@ -4,6 +4,18 @@
 
 namespace toolkit {
 
+/**
+ * This should be the base class of all custom scripts.
+ *
+ * The construction and deconstruction of class scriptable derived won't do
+ * initialization and cleanup properly, please do initialization inside `start`
+ * and cleanup inside `destroy`.
+ *
+ * To write scripts for opengl::editor, you can access the editor's member
+ * variable by `dynamic_cast<opengl::editor*>(app)`, some global variables like
+ * dimension of the window, the scene, input signals, active camera etc. are
+ * stored in `opengl::g_instance`.
+ */
 class scriptable {
 public:
   scriptable() { __registered_scripts__.insert(this); }

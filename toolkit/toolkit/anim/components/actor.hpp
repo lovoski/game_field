@@ -7,5 +7,6 @@ namespace toolkit::anim {
 struct actor {};
 
 entt::entity create_bvh_actor(entt::registry &registry, std::string filepath);
+entt::entity create_fbx_actor(entt::registry &registry, std::string filepath);
 
 }; // namespace toolkit::anim

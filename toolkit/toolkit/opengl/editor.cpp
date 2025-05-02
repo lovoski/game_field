@@ -1,4 +1,5 @@
 #include "toolkit/opengl/editor.hpp"
+#include "toolkit/anim/components/actor.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/scripts/camera.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
@@ -232,14 +233,25 @@ void editor::draw_main_menubar() {
 
       // ---------------------- Assets save/load menu ----------------------
       ImGui::MenuItem("Assets", nullptr, false, false);
-      if (ImGui::MenuItem("Import")) {
-        std::string selectedAssetFile;
-        if (open_file_dialog(
-                "Import One Asset",
-                {"*.fbx", "*.obj", "*.bvh", "*.png", "*.jpg", "*.tga"},
-                "Asset File", selectedAssetFile)) {
-          spdlog::info("Load selected asset file {0}", selectedAssetFile);
-          // handleImportAsset(selectedAssetFile);
+      if (ImGui::MenuItem("Import Model")) {
+        std::string filepath;
+        if (open_file_dialog("Import One Asset",
+                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
+                             "*.fbx, *.obj", filepath)) {
+          spdlog::info("Load model file {0}", filepath);
+          create_model(registry, filepath);
+        }
+      }
+      if (ImGui::MenuItem("Import Motion")) {
+        std::string filepath;
+        if (open_file_dialog("Import One Asset",
+                             {"*.fbx", "*.FBX", "*.bvh", "*.BVH"},
+                             "*.bvh, *.fbx", filepath)) {
+          spdlog::info("Load model file {0}", filepath);
+          if (endswith(filepath, "*.fbx") || endswith(filepath, "*.FBX"))
+            anim::create_fbx_actor(registry, filepath);
+          else
+            anim::create_bvh_actor(registry, filepath);
         }
       }
       ImGui::EndMenu();
