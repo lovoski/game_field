@@ -133,13 +133,12 @@ private:
   int texturePoolIdx = 0;
   thread_safe_vector<int> texturePoolPageIdxData;
   thread_safe_vector<toolkit::opengl::texture> texturePoolData;
-  thread_safe_vector<std::string> bookPageFilePathes;
   std::atomic<float> first_page_width_div_height;
   void resetTexturePool(int limit);
   void loadPageCacheFromFile(int pageIdx, toolkit::assets::image &result);
   const toolkit::opengl::texture &getTextureFromPool(int pageIdx);
   thread_safe_vector<std::pair<int, toolkit::assets::image>> highResImageQueue;
-  std::mutex highResPageLoadingLock;
+  std::mutex docLoadingLock;
   thread_pool tpool;
   void loadHighResPage(int pageIdx);
   void applyHighResQueue();
