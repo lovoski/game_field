@@ -106,7 +106,8 @@ void main() {
 }
 )";
 void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
-                   math::matrix4 vp, math::vector3 color, float column_radius, float cap_height) {
+                   math::matrix4 vp, math::vector3 color, float column_radius,
+                   float cap_height) {
   static bool initialized = false;
   static shader shader;
   static vao vao;
@@ -698,17 +699,139 @@ void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
   if (thick == 0.0f)
     draw_lines(start_ends, vp, color);
   else {
-    thick = std::clamp(thick,0.0f,1.0f);
-    thick = 0.032*thick*scale;
+    thick = std::clamp(thick, 0.0f, 1.0f);
+    thick = 0.032 * thick * scale;
     float cap_height = thick;
     float column_radius = thick;
     for (auto &line : start_ends) {
-      math::vector3 dir = (line.second-line.first).normalized();
-      line.second -= 0.7*cap_height*dir;
-      line.first += 0.7*cap_height*dir;
+      math::vector3 dir = (line.second - line.first).normalized();
+      line.second -= 0.7 * cap_height * dir;
+      line.first += 0.7 * cap_height * dir;
     }
     draw_capsules(start_ends, vp, color, column_radius, cap_height);
   }
+}
+
+/**
+ * NDC coordinate for opengl ranges [-1, 1]
+ */
+const std::string infinite_grid_vs = R"(
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aTexCoord;
+
+out vec2 texCoord;
+
+out vec3 near_point;
+out vec3 far_point;
+
+uniform mat4 gView;
+uniform mat4 gProj;
+
+vec3 ndc_to_world(float x, float y, float z, mat4 view, mat4 proj) {
+  vec4 unprojectedPoint = inverse(view) * inverse(proj) * vec4(vec3(x, y, z), 1.0);
+  return unprojectedPoint.xyz / unprojectedPoint.w;
+}
+
+void main() {
+  texCoord = aTexCoord;
+  near_point = ndc_to_world(aPos.x, aPos.y, -1.0, gView, gProj);
+  far_point = ndc_to_world(aPos.x, aPos.y, 1.0, gView, gProj);
+  gl_Position = vec4(aPos, 1.0);
+}
+)";
+const std::string infinite_grid_fs = R"(
+#version 330 core
+
+in vec2 texCoord;
+in vec3 near_point;
+in vec3 far_point;
+
+uniform float gGridSpacing;
+
+out vec4 FragColor;
+
+uniform mat4 gView;
+uniform mat4 gProj;
+
+vec4 grid_color(vec3 worldPos) {
+  vec2 coord = worldPos.xz;
+  vec2 derivative = fwidth(coord);
+  vec2 grid = abs(fract(coord - 0.5) - 0.5) / derivative;
+  float line = min(grid.x, grid.y);
+  float minimumz = min(derivative.y, 1);
+  float minimumx = min(derivative.x, 1);
+  vec4 color = vec4(vec3(0.2), 1.0 - min(line, 1.0));
+  bool setup = false;
+  // z axis
+  if(worldPos.x > -0.1 * minimumx && worldPos.x < 0.1 * minimumx) {
+    color.z = 1.0;
+    setup = true;
+  }
+  // x axis
+  if(worldPos.z > -0.1 * minimumz && worldPos.z < 0.1 * minimumz) {
+    color.x = 1.0;
+    setup = true;
+  }
+  // if (!setup)
+  //   discard;
+  return color;
+}
+
+float compute_depth(vec3 pos) {
+  vec4 clip_space_pos = gProj * gView * vec4(pos, 1.0);
+  // from ndc coordinate [-1, 1] to normalized depth [0, 1]
+  return 0.5*(clip_space_pos.z/clip_space_pos.w)+0.5;
+}
+
+void main() {
+  float t = -near_point.y/(far_point.y-near_point.y);
+  if (t < 0) {
+    discard;
+  }
+
+  vec3 worldPos = near_point+t*(far_point-near_point);
+  gl_FragDepth = compute_depth(worldPos);
+  FragColor = grid_color(worldPos);
+}
+)";
+void draw_infinite_grid(math::matrix4 view, math::matrix4 proj,
+                        unsigned int grid_spacing) {
+  static vao vertex_array;
+  static buffer vertex_buffer;
+  static shader program;
+  static bool initialized = false;
+  if (!initialized) {
+    vertex_array.create();
+    vertex_buffer.create();
+    float vertices[] = {
+        // positions        // texture coordinates
+        1.0f,  -1.0f, 0.0f, 1.0f, 0.0f, // Bottom-right
+        1.0f,  1.0f,  0.0f, 1.0f, 1.0f, // Top-right
+        -1.0f, 1.0f,  0.0f, 0.0f, 1.0f, // Top-left
+
+        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, // Bottom-left
+        1.0f,  -1.0f, 0.0f, 1.0f, 0.0f, // Bottom-right
+        -1.0f, 1.0f,  0.0f, 0.0f, 1.0f, // Top-left
+    };
+    vertex_array.bind();
+    vertex_buffer.bind_as(GL_ARRAY_BUFFER);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    vertex_array.link_attribute(vertex_buffer, 0, 3, GL_FLOAT,
+                                5 * sizeof(float), (void *)0);
+    vertex_array.link_attribute(vertex_buffer, 1, 2, GL_FLOAT,
+                                5 * sizeof(float), (void *)(3 * sizeof(float)));
+    vertex_array.unbind();
+    program.compile_shader_from_source(infinite_grid_vs, infinite_grid_fs);
+    initialized = true;
+  }
+  program.use();
+  program.set_mat4("gView", view);
+  program.set_mat4("gProj", proj);
+  program.set_int("gGridSpacing", grid_spacing);
+  vertex_array.bind();
+  glDrawArrays(GL_TRIANGLES, 0, 6);
+  vertex_array.unbind();
 }
 
 }; // namespace toolkit::opengl

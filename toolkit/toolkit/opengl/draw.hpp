@@ -18,6 +18,9 @@ void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
                math::matrix4 mvp = math::matrix4::Identity(),
                math::vector3 color = White);
 
+void draw_infinite_grid(math::matrix4 view, math::matrix4 proj,
+                        unsigned int grid_spacing = 1);
+
 void draw_wire_sphere(math::vector3 position, math::matrix4 vp,
                       float radius = 1.0f, math::vector3 color = Green,
                       unsigned int segs = 10);

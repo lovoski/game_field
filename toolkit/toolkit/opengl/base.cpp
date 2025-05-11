@@ -1,4 +1,5 @@
 #include "toolkit/opengl/base.hpp"
+#include "toolkit/assets/fonts.hpp"
 
 namespace toolkit::opengl {
 
@@ -47,6 +48,10 @@ void context::init(unsigned int width, unsigned int height, const char *title,
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init();
   ImPlot::CreateContext();
+
+  ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(
+      cascadia_code_yahei_data, cascadia_code_yahei_size, 16.0f, nullptr,
+      ImGui::GetIO().Fonts->GetGlyphRangesChineseFull());
 }
 
 void context::shutdown() {

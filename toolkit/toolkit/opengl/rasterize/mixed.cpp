@@ -92,6 +92,7 @@ void main() {
   if (g_depth > c_depth) {
     discard;
   }
+  gl_FragDepth = g_depth;
   vec3 result = vec3(0.0);
   vec3 worldPos = texture(gPosTex, texCoord).xyz;
   vec3 worldNormal = normalize(texture(gNormalTex, texCoord).xyz);
@@ -263,6 +264,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
     gbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
 
     glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
 
@@ -281,16 +283,21 @@ void defered_forward_mixed::render(entt::registry &registry) {
     cbuffer.bind();
     cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
 
+    glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
 
-    if (should_draw_grid)
-      draw_grid(grid_size, grid_spacing, cam_comp.vp);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+
     // debug rendering
     if (auto app_ptr = registry.ctx().get<iapp *>()) {
       auto script_sys = app_ptr->get_sys<script_system>();
       script_sys->draw_to_scene(app_ptr);
     }
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
 
     defered_phong_pass.use();
     defered_phong_pass.set_vec3("gViewDir", -cam_trans.local_forward());
@@ -303,6 +310,15 @@ void defered_forward_mixed::render(entt::registry &registry) {
     defered_phong_pass.set_texture2d("gMaskTex", mask_tex.get_handle(), 4);
     defered_phong_pass.set_buffer_ssbo(light_data_buffer, 0);
     quad_draw_call();
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendEquation(GL_FUNC_ADD);
+
+    if (should_draw_grid)
+      draw_infinite_grid(cam_comp.view, cam_comp.proj, grid_spacing);
+
+    glDisable(GL_BLEND);
 
     cbuffer.unbind();
   }

@@ -1,5 +1,5 @@
 #include "toolkit/opengl/components/mesh.hpp"
-#include "toolkit/opengl/assets/primitives.hpp"
+#include "toolkit/assets/primitives.hpp"
 #include "toolkit/transform.hpp"
 
 namespace toolkit::opengl {
