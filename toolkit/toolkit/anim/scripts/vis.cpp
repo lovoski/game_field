@@ -13,8 +13,7 @@ void vis_skeleton::draw_to_scene(iapp *app) {
     if (auto actor_ptr = eptr->registry.try_get<actor>(entity)) {
       collect_skeleton_draw_queue(eptr->registry, *actor_ptr, draw_queue,
                                   active_joint_entities);
-      opengl::draw_bones(draw_queue, opengl::g_instance.get_scene_size(),
-                         cam_comp.vp, bone_color);
+      opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
       // get the average length of bone
       float avg_bone_length = 0.0f;
       for (int i = 0; i < draw_queue.size(); i++)
@@ -22,29 +21,43 @@ void vis_skeleton::draw_to_scene(iapp *app) {
       avg_bone_length /= draw_queue.size();
 
       if (draw_axes) {
+        x_dir.clear();
+        y_dir.clear();
+        z_dir.clear();
+        x_dir.reserve(active_joint_entities.size());
+        y_dir.reserve(active_joint_entities.size());
+        z_dir.reserve(active_joint_entities.size());
         for (auto joint_entity : active_joint_entities) {
           auto &joint_trans = eptr->registry.get<transform>(joint_entity);
-          opengl::draw_arrow(
+          x_dir.emplace_back(std::make_pair(joint_trans.position(),
+                                            joint_trans.position() +
+                                                axes_length * avg_bone_length *
+                                                    joint_trans.local_left()));
+          y_dir.emplace_back(std::make_pair(joint_trans.position(),
+                                            joint_trans.position() +
+                                                axes_length * avg_bone_length *
+                                                    joint_trans.local_up()));
+          z_dir.emplace_back(std::make_pair(
               joint_trans.position(),
               joint_trans.position() +
-                  axes_length * avg_bone_length * joint_trans.local_left(),
-              cam_comp.vp, opengl::Red, 0.1f * axes_length * avg_bone_length);
-          opengl::draw_arrow(
-              joint_trans.position(),
-              joint_trans.position() +
-                  axes_length * avg_bone_length * joint_trans.local_up(),
-              cam_comp.vp, opengl::Green, 0.1f * axes_length * avg_bone_length);
-          opengl::draw_arrow(
-              joint_trans.position(),
-              joint_trans.position() +
-                  axes_length * avg_bone_length * joint_trans.local_forward(),
-              cam_comp.vp, opengl::Blue, 0.1f * axes_length * avg_bone_length);
+                  axes_length * avg_bone_length * joint_trans.local_forward()));
         }
+        opengl::draw_arrows(x_dir, cam_comp.vp, opengl::Red,
+                            0.1f * axes_length * avg_bone_length);
+        opengl::draw_arrows(y_dir, cam_comp.vp, opengl::Green,
+                            0.1f * axes_length * avg_bone_length);
+        opengl::draw_arrows(z_dir, cam_comp.vp, opengl::Blue,
+                            0.1f * axes_length * avg_bone_length);
       }
-      for (auto joint_entity : active_joint_entities) {
-        auto &joint_trans = eptr->registry.get<transform>(joint_entity);
-        opengl::draw_wire_sphere(joint_trans.position(), cam_comp.vp,
-                                 0.08f * avg_bone_length, bone_color);
+      if (draw_spheres) {
+        joint_positions.clear();
+        joint_positions.reserve(active_joint_entities.size());
+        for (auto joint_entity : active_joint_entities) {
+          joint_positions.push_back(
+              eptr->registry.get<transform>(joint_entity).position());
+        }
+        opengl::draw_wire_spheres(joint_positions, cam_comp.vp,
+                                  0.08f * avg_bone_length, bone_color);
       }
     }
   });
@@ -53,6 +66,7 @@ void vis_skeleton::draw_to_scene(iapp *app) {
 void vis_skeleton::draw_gui(iapp *app) {
   ImGui::Checkbox("Draw Axes", &draw_axes);
   ImGui::DragFloat("Axes Size", &axes_length, 0.05f, 0.0f, 1.0f);
+  ImGui::Checkbox("Draw Spheres", &draw_spheres);
   gui::color_edit_3("Bone Color", bone_color);
 }
 

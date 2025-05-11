@@ -39,21 +39,26 @@ instantiate_skeleton_data(entt::registry &registry, assets::skeleton &skel,
   return ordered_entities[0];
 }
 
+void create_actor_with_skeleton(entt::registry &registry,
+                                entt::entity container,
+                                assets::skeleton &skel) {
+  auto &actor_comp = registry.emplace<actor>(container);
+  auto &actor_trans = registry.get<transform>(container);
+  actor_comp.skel = skel;
+  auto skel_root = instantiate_skeleton_data(
+      registry, skel, actor_comp.ordered_entities, actor_comp.name_to_entity);
+  actor_comp.joint_active.resize(actor_comp.ordered_entities.size(), true);
+  actor_trans.add_children(skel_root);
+}
+
 entt::entity create_bvh_actor(entt::registry &registry, std::string filepath) {
   auto container = registry.create();
   auto &container_trans = registry.emplace<transform>(container);
-  auto &container_actor = registry.emplace<actor>(container);
   auto &vis_script = registry.emplace<vis_skeleton>(container);
   container_trans.name = std::filesystem::path(filepath).filename().string();
   assets::motion motion_data;
   motion_data.load_from_bvh(filepath);
-  auto skeleton_root = instantiate_skeleton_data(
-      registry, motion_data.skeleton, container_actor.ordered_entities,
-      container_actor.name_to_entity);
-  container_actor.joint_active.resize(container_actor.ordered_entities.size(),
-                                      true);
-  container_actor.skel = motion_data.skeleton;
-  container_trans.add_children(skeleton_root);
+  create_actor_with_skeleton(registry, container, motion_data.skeleton);
   return container;
 }
 

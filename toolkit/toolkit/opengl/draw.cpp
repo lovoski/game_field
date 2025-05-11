@@ -4,7 +4,7 @@ using namespace toolkit::math;
 
 namespace toolkit::opengl {
 
-const std::string lineVS = R"(
+const std::string line_vs = R"(
 #version 330 core
 layout (location = 0) in vec3 pos;
 uniform mat4 vp;
@@ -12,7 +12,7 @@ void main() {
   gl_Position = vp * vec4(pos, 1.0);
 }
 )";
-const std::string lineFS = R"(
+const std::string line_fs = R"(
 #version 330 core
 uniform vec3 color;
 out vec4 FragColor;
@@ -30,7 +30,7 @@ void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
   if (!initialized) {
     vao.create();
     vbo.create();
-    shader.compile_shader_from_source(lineVS, lineFS);
+    shader.compile_shader_from_source(line_vs, line_fs);
     initialized = true;
   }
   vao.bind();
@@ -115,7 +115,7 @@ void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
   if (!initialized) {
     vao.create();
     vbo.create();
-    shader.compile_shader_from_source(capsule_vs, lineFS, capsule_gs);
+    shader.compile_shader_from_source(capsule_vs, line_fs, capsule_gs);
     initialized = true;
   }
   vao.bind();
@@ -145,7 +145,7 @@ void draw_linestrip(std::vector<vector3> &lineStrip, matrix4 vp,
   if (!initialized) {
     vao.create();
     vbo.create();
-    shader.compile_shader_from_source(lineVS, lineFS);
+    shader.compile_shader_from_source(line_vs, line_fs);
     initialized = true;
   }
   vao.bind();
@@ -175,7 +175,7 @@ void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
   if (!lineShaderLoaded) {
     vao.create();
     vbo.create();
-    lineShader.compile_shader_from_source(lineVS, lineFS);
+    lineShader.compile_shader_from_source(line_vs, line_fs);
     lineShaderLoaded = true;
   }
   if (savedGridSize != gridSize || savedGridSpacing != gridSpacing) {
@@ -296,7 +296,7 @@ void draw_cube(math::vector3 position, math::vector3 forward,
   draw_linestrip(strip2, vp, color);
 }
 
-std::string boneVS = R"(
+std::string bone_vs = R"(
 #version 330 core
 layout(location = 0) in vec3 aPos;
 
@@ -304,7 +304,7 @@ void main() {
     gl_Position = vec4(aPos, 1.0);
 }
 )";
-std::string boneGS = R"(
+std::string bone_gs = R"(
 #version 330 core
 layout(lines) in;
 layout(line_strip, max_vertices = 24) out;
@@ -357,7 +357,7 @@ void main() {
     }
 }
 )";
-std::string boneFS = R"(
+std::string bone_fs = R"(
 #version 330 core
 out vec4 FragColor;
 
@@ -368,7 +368,7 @@ void main() {
 }
 )";
 void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
-                math::vector2 viewport, math::matrix4 vp, math::vector3 color) {
+                math::matrix4 vp, math::vector3 color) {
   static vao vao;
   static buffer vbo;
   static shader boneShader;
@@ -376,7 +376,7 @@ void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
   if (!shaderInitialized) {
     vao.create();
     vbo.create();
-    boneShader.compile_shader_from_source(boneVS, boneFS, boneGS);
+    boneShader.compile_shader_from_source(bone_vs, bone_fs, bone_gs);
     shaderInitialized = true;
   }
   // initialize vbo with `bones`
@@ -392,7 +392,6 @@ void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
 
   boneShader.set_float("radius", 0.1f);
   boneShader.set_vec3("color", color);
-  boneShader.set_vec2("viewportSize", viewport);
   boneShader.set_mat4("mvp", vp);
 
   glDrawArrays(GL_LINES, 0, buffer.size());
@@ -832,6 +831,166 @@ void draw_infinite_grid(math::matrix4 view, math::matrix4 proj,
   vertex_array.bind();
   glDrawArrays(GL_TRIANGLES, 0, 6);
   vertex_array.unbind();
+}
+
+std::string wire_sphere_gs = R"(
+#version 330 core
+layout(points) in;
+layout(line_strip, max_vertices = 30) out;
+
+uniform mat4 mvp;
+
+uniform float radius;
+
+const vec3 x_dir = vec3(1.0, 0.0, 0.0);
+const vec3 y_dir = vec3(0.0, 1.0, 0.0);
+const vec3 z_dir = vec3(0.0, 0.0, 1.0);
+const vec2 offsets[10] = vec2[](
+  vec2( 1.        , 0.00000000e+00),
+  vec2( 0.76604444, 6.42787610e-01),
+  vec2( 0.17364818, 9.84807753e-01),
+  vec2(-0.5       , 8.66025404e-01),
+  vec2(-0.93969262, 3.42020143e-01),
+  vec2(-0.93969262,-3.42020143e-01),
+  vec2(-0.5       ,-8.66025404e-01),
+  vec2( 0.17364818,-9.84807753e-01),
+  vec2( 0.76604444,-6.42787610e-01),
+  vec2( 1.        ,-2.44929360e-16)
+);
+void main() {
+  vec3 origin = gl_in[0].gl_Position.xyz;
+
+  for (int i = 0; i < 10; i++) {
+    gl_Position = mvp * vec4(origin+radius*x_dir*offsets[i].x+radius*y_dir*offsets[i].y, 1.0);
+    EmitVertex();
+  }
+  EndPrimitive();
+
+  for (int i = 0; i < 10; i++) {
+    gl_Position = mvp * vec4(origin+radius*x_dir*offsets[i].x+radius*z_dir*offsets[i].y, 1.0);
+    EmitVertex();
+  }
+  EndPrimitive();
+
+  for (int i = 0; i < 10; i++) {
+    gl_Position = mvp * vec4(origin+radius*z_dir*offsets[i].x+radius*y_dir*offsets[i].y, 1.0);
+    EmitVertex();
+  }
+  EndPrimitive();
+}
+)";
+void draw_wire_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
+                       float radius, math::vector3 color) {
+  static vao vao;
+  static buffer vbo;
+  static shader program;
+  static bool shaderInitialized = false;
+  if (!shaderInitialized) {
+    vao.create();
+    vbo.create();
+    program.compile_shader_from_source(quad_vs, line_fs, wire_sphere_gs);
+    shaderInitialized = true;
+  }
+  // initialize vbo with `bones`
+  vao.bind();
+  vbo.set_data_as(GL_ARRAY_BUFFER, positions);
+  vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
+  program.use();
+
+  program.set_float("radius", radius);
+  program.set_vec3("color", color);
+  program.set_mat4("mvp", vp);
+
+  glDrawArrays(GL_POINTS, 0, positions.size());
+
+  vao.unbind();
+  vbo.unbind_as(GL_ARRAY_BUFFER);
+}
+
+std::string arrows_gs = R"(
+#version 330 core
+layout(lines) in;
+layout(line_strip, max_vertices = 28) out;
+
+uniform mat4 mvp;
+uniform float size;
+
+const vec2 offsets[11] = vec2[](
+  vec2( 1.        , 0.00000000e+00),
+  vec2( 0.80901699, 5.87785252e-01),
+  vec2( 0.30901699, 9.51056516e-01),
+  vec2(-0.30901699, 9.51056516e-01),
+  vec2(-0.80901699, 5.87785252e-01),
+  vec2(-1.        , 1.22464680e-16),
+  vec2(-0.80901699,-5.87785252e-01),
+  vec2(-0.30901699,-9.51056516e-01),
+  vec2( 0.30901699,-9.51056516e-01),
+  vec2( 0.80901699,-5.87785252e-01),
+  vec2( 1.        ,-2.44929360e-16)
+);
+
+void main() {
+  vec3 start = gl_in[0].gl_Position.xyz;
+  vec3 end = gl_in[1].gl_Position.xyz;
+  float dist = length(end-start);
+
+  gl_Position = mvp*vec4(start, 1.0);
+  EmitVertex();
+  gl_Position = mvp*vec4(end,1.0);
+  EmitVertex();
+
+  vec3 up_dir = normalize(vec3(0.0,1.0,0.053));
+  vec3 n_dir = normalize(end-start);
+  vec3 x_dir = normalize(cross(up_dir, n_dir));
+  vec3 y_dir = normalize(cross(n_dir, x_dir));
+
+  for (int i = 0; i < 5; i++) {
+    gl_Position = mvp*vec4(end-1.8*size*n_dir+size*x_dir*offsets[i].x+size*y_dir*offsets[i].y,1.0);
+    EmitVertex();
+    gl_Position = mvp*vec4(end-1.8*size*n_dir+size*x_dir*offsets[(i+5)%10].x+size*y_dir*offsets[(i+5)%10].y,1.0);
+    EmitVertex();
+    gl_Position = mvp*vec4(end,1.0);
+    EmitVertex();
+  }
+  for (int i = 0; i < 11; i++) {
+    gl_Position = mvp*vec4(end-1.8*size*n_dir+size*x_dir*offsets[i].x+size*y_dir*offsets[i].y,1.0);
+    EmitVertex();
+  }
+  EndPrimitive();
+}
+)";
+void draw_arrows(
+    std::vector<std::pair<math::vector3, math::vector3>> start_end_pairs,
+    math::matrix4 vp, math::vector3 color, float size) {
+  static vao vao;
+  static buffer vbo;
+  static shader program;
+  static bool shaderInitialized = false;
+  if (!shaderInitialized) {
+    vao.create();
+    vbo.create();
+    program.compile_shader_from_source(bone_vs, bone_fs, arrows_gs);
+    shaderInitialized = true;
+  }
+  // initialize vbo with `bones`
+  vao.bind();
+  std::vector<math::vector3> buffer;
+  for (auto &pair : start_end_pairs) {
+    buffer.push_back(pair.first);  // bone start
+    buffer.push_back(pair.second); // bond end
+  }
+  vbo.set_data_as(GL_ARRAY_BUFFER, buffer);
+  vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
+  program.use();
+
+  program.set_float("size", size);
+  program.set_vec3("color", color);
+  program.set_mat4("mvp", vp);
+
+  glDrawArrays(GL_LINES, 0, buffer.size());
+
+  vao.unbind();
+  vbo.unbind_as(GL_ARRAY_BUFFER);
 }
 
 }; // namespace toolkit::opengl

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolkit/math.hpp"
+#include "toolkit/reflect.hpp"
 
 namespace toolkit::assets {
 
@@ -40,5 +41,6 @@ struct image {
    */
   bool save_png(std::string path, bool flipy = false);
 };
+REFLECT(image, data, width, height, nchannels, filepath)
 
 }; // namespace toolkit::assets

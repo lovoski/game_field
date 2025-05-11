@@ -38,26 +38,18 @@ struct mesh_vertex {
   float bone_weights[MAX_BONES_PER_MESH];
 };
 struct mesh {
-  std::string mesh_name, model_path;
+  std::string name;
+  std::vector<unsigned int> indices;
   std::vector<mesh_vertex> vertices;
-  std::vector<uint32_t> indices;
-  std::vector<blend_shape> blend_shapes;
-  std::shared_ptr<skeleton> skeleton = nullptr;
+  std::vector<blend_shape> blendshapes;
 };
-
-struct fbx_package {
-  std::string model_path;
+struct model {
+  std::string name;
+  skeleton skeleton;
   std::vector<mesh> meshes;
-  std::shared_ptr<skeleton> skeleton = nullptr;
-  std::shared_ptr<motion> motion = nullptr;
+  bool has_skeleton = false;
 };
 
-struct obj_package {
-  std::string model_path;
-  std::vector<mesh> meshes;
-};
-
-fbx_package load_fbx(std::string path);
-obj_package load_obj(std::string path);
+std::vector<model> open_model(std::string filepath);
 
 }; // namespace Common::Assets

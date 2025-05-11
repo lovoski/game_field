@@ -15,6 +15,18 @@ std::string replace(std::string str, std::string pattern, std::string replace);
 bool endswith(std::string target, std::string pattern);
 std::string str_format(const char *format, ...);
 
+inline std::filesystem::path relpath(std::filesystem::path filepath) {
+  return std::filesystem::relative(filepath);
+}
+inline std::filesystem::path abspath(std::filesystem::path filepath) {
+  return std::filesystem::absolute(filepath);
+}
+
+void copy_file(std::filesystem::path src_filepath,
+               std::filesystem::path dst_filepath);
+void copy_dir(std::filesystem::path src_dirpath,
+              std::filesystem::path dst_dirpath);
+
 bool open_folder_dialog(std::string title, std::string &selectedFolder);
 
 bool save_file_dialog(std::string title,

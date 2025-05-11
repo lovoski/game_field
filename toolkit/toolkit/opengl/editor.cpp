@@ -239,34 +239,31 @@ void editor::draw_main_menubar() {
 
       // ---------------------- Assets save/load menu ----------------------
       ImGui::MenuItem("Assets", nullptr, false, false);
-      if (ImGui::MenuItem("Open    Model")) {
+      if (ImGui::MenuItem("Import Model")) {
         std::string filepath;
-        if (open_file_dialog("Import One Asset",
-                             {"*.fbx", "*.FBX", "*.pmx", "*.PMX"},
-                             "*.fbx, *.pmx", filepath)) {
+        if (open_file_dialog(
+                "Open model asset file",
+                {"*.fbx", "*.FBX", "*.pmx", "*.PMX", "*.obj", "*.OBJ"},
+                "*.fbx, *.pmx, *.obj", filepath)) {
           spdlog::info("Load model file {0}", filepath);
-          create_geometry_model(registry, filepath);
+          open_model(registry, filepath);
         }
       }
-      if (ImGui::MenuItem("Import  Model")) {
+      // if (ImGui::MenuItem("Import  Model")) {
+      //   std::string filepath;
+      //   if (open_file_dialog("Import One Asset",
+      //                        {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
+      //                        "*.fbx, *.obj", filepath)) {
+      //     spdlog::info("Load model file {0}", filepath);
+      //     create_geometry_model(registry, filepath);
+      //   }
+      // }
+      if (ImGui::MenuItem("Import   BVH")) {
         std::string filepath;
-        if (open_file_dialog("Import One Asset",
-                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
-                             "*.fbx, *.obj", filepath)) {
-          spdlog::info("Load model file {0}", filepath);
-          create_geometry_model(registry, filepath);
-        }
-      }
-      if (ImGui::MenuItem("Import Motion")) {
-        std::string filepath;
-        if (open_file_dialog("Import One Asset",
-                             {"*.fbx", "*.FBX", "*.bvh", "*.BVH"},
-                             "*.bvh, *.fbx", filepath)) {
-          spdlog::info("Load model file {0}", filepath);
-          if (endswith(filepath, ".fbx") || endswith(filepath, ".FBX"))
-            anim::create_fbx_actor(registry, filepath);
-          else if (endswith(filepath, ".bvh") || endswith(filepath, ".BVH"))
-            anim::create_bvh_actor(registry, filepath);
+        if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
+                             "*.bvh", filepath)) {
+          spdlog::info("Load motion file {0}", filepath);
+          anim::create_bvh_actor(registry, filepath);
         }
       }
       ImGui::EndMenu();

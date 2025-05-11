@@ -1,489 +1,405 @@
 #include "toolkit/loaders/mesh.hpp"
-#include "toolkit/loaders/imp.hpp"
-#include <fstream>
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <spdlog/spdlog.h>
 #include <iostream>
-#include <stack>
-
-#include <ufbx.h>
 
 namespace toolkit::assets {
 
-using toolkit::math::matrix4;
-using toolkit::math::quat;
-using toolkit::math::vector3;
-using toolkit::math::vector4;
-
-// ----------------------------- FBX file loading -----------------------------
-
-namespace FBX {
-
-using MathScalarType = float;
-vector3 Convert(ufbx_vec3 v) {
-  return {(MathScalarType)v.x, (MathScalarType)v.y, (MathScalarType)v.z};
-}
-vector4 Convert(ufbx_vec4 v) {
-  return {(MathScalarType)v.x, (MathScalarType)v.y, (MathScalarType)v.z,
-          (MathScalarType)v.w};
-}
-quat Convert(ufbx_quat q) {
-  return {(MathScalarType)q.w, (MathScalarType)q.x, (MathScalarType)q.y,
-          (MathScalarType)q.z};
-}
-struct TmpVertexFBXLoading {
-  vector4 Position;
-  vector4 normal;
-  vector4 tex_coords;
-  vector4 color;
-  int BoneId[MAX_BONES_PER_MESH];
-  float BoneWeight[MAX_BONES_PER_MESH];
-  vector3 BlendShapeOffset[MAX_BLEND_SHAPES_PER_MESH];
-  vector3 BlendShapeNormal[MAX_BLEND_SHAPES_PER_MESH];
-};
-mesh processMesh(ufbx_mesh *mesh_instance, ufbx_mesh_part &part,
-                 std::map<std::string, std::size_t> &boneMapping,
-                 std::string model_path) {
-  std::vector<TmpVertexFBXLoading> vertices;
-  std::vector<unsigned int> indices(mesh_instance->max_face_triangles * 3);
-  std::map<std::string, std::size_t> blendShapeMapping;
-  std::vector<blend_shape> blend_shapes;
-  for (auto faceInd : part.face_indices) {
-    ufbx_face face = mesh_instance->faces[faceInd];
-    auto numTriangles =
-        ufbx_triangulate_face(indices.data(), indices.size(), mesh_instance, face);
-    for (auto i = 0; i < numTriangles * 3; ++i) {
-      auto index = indices[i];
-      TmpVertexFBXLoading v;
-      v.Position.x() = mesh_instance->vertex_position[index].x;
-      v.Position.y() = mesh_instance->vertex_position[index].y;
-      v.Position.z() = mesh_instance->vertex_position[index].z;
-      v.Position.w() = 1.0f;
-
-      v.normal.x() = mesh_instance->vertex_normal[index].x;
-      v.normal.y() = mesh_instance->vertex_normal[index].y;
-      v.normal.z() = mesh_instance->vertex_normal[index].z;
-      v.normal.w() = 0.0f;
-
-      // for multiple sets of uv, refer to mesh->uv_sets
-      // this is by default the first uv set
-      if (mesh_instance->uv_sets.count > 0) {
-        v.tex_coords.x() = mesh_instance->vertex_uv[index].x;
-        v.tex_coords.y() = mesh_instance->vertex_uv[index].y;
-        if (mesh_instance->uv_sets.count > 1) {
-          v.tex_coords.z() = mesh_instance->uv_sets[1].vertex_uv[index].x;
-          v.tex_coords.w() = mesh_instance->uv_sets[1].vertex_uv[index].y;
-        } else {
-          v.tex_coords.z() = 0.0f;
-          v.tex_coords.w() = 0.0f;
-        }
-      } else
-        v.tex_coords = vector4::Zero();
-
-      if (mesh_instance->vertex_color.exists) {
-        v.color.x() = mesh_instance->vertex_color[index].x;
-        v.color.y() = mesh_instance->vertex_color[index].y;
-        v.color.z() = mesh_instance->vertex_color[index].z;
-        v.color.w() = mesh_instance->vertex_color[index].w;
-      } else
-        v.color = vector4::Ones();
-
-      for (int boneCounter = 0; boneCounter < MAX_BONES_PER_MESH;
-           ++boneCounter) {
-        v.BoneId[boneCounter] = 0;
-        v.BoneWeight[boneCounter] = 0.0f;
-      }
-      // setup skin deformers
-      // if there's skin_deformers, the boneMapping won't be empty
-      for (auto skin : mesh_instance->skin_deformers) {
-        auto vertex = mesh_instance->vertex_indices[index];
-        auto skinVertex = skin->vertices[vertex];
-        auto numWeights = skinVertex.num_weights;
-        if (numWeights > MAX_BONES_PER_MESH)
-          numWeights = MAX_BONES_PER_MESH;
-        float totalWeight = 0.0f;
-        for (auto k = 0; k < numWeights; ++k) {
-          auto skinWeight = skin->weights[skinVertex.weight_begin + k];
-          std::string clusterName =
-              skin->clusters[skinWeight.cluster_index]->bone_node->name.data;
-          auto boneMapIt = boneMapping.find(clusterName);
-          int mappedBoneInd = 0;
-          if (boneMapIt == boneMapping.end()) {
-            printf("cluster named %s not in boneMapping", clusterName.c_str());
-          } else
-            mappedBoneInd = boneMapIt->second;
-          v.BoneId[k] = mappedBoneInd;
-          totalWeight += (float)skinWeight.weight;
-          v.BoneWeight[k] = (float)skinWeight.weight;
-        }
-        // normalize the skin weights
-        if (totalWeight != 0.0f) {
-          for (auto k = 0; k < numWeights; ++k)
-            v.BoneWeight[k] /= totalWeight;
-        } else {
-          // parent the vertex to root if its not bind
-          v.BoneId[0] = 0;
-          v.BoneWeight[0] = 1.0f;
-        }
-      }
-      // blend shapes
-      for (auto deformer : mesh_instance->blend_deformers) {
-        uint32_t vertex = mesh_instance->vertex_indices[index];
-
-        size_t num_blends = deformer->channels.count;
-        if (num_blends > MAX_BLEND_SHAPES_PER_MESH) {
-          num_blends = MAX_BLEND_SHAPES_PER_MESH;
-        }
-
-        for (size_t i = 0; i < num_blends; i++) {
-          ufbx_blend_channel *channel = deformer->channels[i];
-          ufbx_blend_shape *shape = channel->target_shape;
-          auto it = blendShapeMapping.find(shape->name.data);
-          int blendShapeIndex = blendShapeMapping.size();
-          if (it == blendShapeMapping.end()) {
-            blendShapeMapping[shape->name.data] = blendShapeIndex;
-            blend_shapes.push_back(blend_shape());
-          } else {
-            blendShapeIndex = it->second;
-          }
-          assert(shape); // In theory this could be missing in broken files
-          auto &bs = blend_shapes[blendShapeIndex];
-          bs.name = shape->name.data;
-          v.BlendShapeOffset[blendShapeIndex] =
-              Convert(ufbx_get_blend_shape_vertex_offset(shape, vertex));
-        }
-      }
-      vertices.push_back(v);
-    }
-  }
-
-  if (vertices.size() != part.num_triangles * 3)
-    printf("vertices number inconsistent with part's triangle number");
-
-  ufbx_vertex_stream stream[] = {
-      {vertices.data(), vertices.size(), sizeof(TmpVertexFBXLoading)}};
-  indices.resize(part.num_triangles * 3);
-  auto numVertices = ufbx_generate_indices(stream, 1, indices.data(),
-                                           indices.size(), nullptr, nullptr);
-  vertices.resize(numVertices);
-
-  // create the final mesh
-  std::vector<mesh_vertex> actualVertices(vertices.size());
-  for (int i = 0; i < numVertices; i++) {
-    actualVertices[i].position = vertices[i].Position;
-    actualVertices[i].normal = vertices[i].normal;
-    actualVertices[i].tex_coords = vertices[i].tex_coords;
-    actualVertices[i].color = vertices[i].color;
-    for (int j = 0; j < MAX_BONES_PER_MESH; j++) {
-      actualVertices[i].bond_indices[j] = vertices[i].BoneId[j];
-      actualVertices[i].bone_weights[j] = vertices[i].BoneWeight[j];
-    }
-  }
-  mesh result;
-  result.vertices = actualVertices;
-  result.indices = indices;
-  result.mesh_name = mesh_instance->name.data;
-  result.model_path = model_path;
-
-  if (blendShapeMapping.size() > 0) {
-    // update blend shapes
-    for (const auto &bsm : blendShapeMapping) {
-      blend_shapes[bsm.second].data.resize(vertices.size());
-      for (int vertId = 0; vertId < vertices.size(); ++vertId) {
-        blend_shapes[bsm.second].data[vertId].offset_pos
-            << vertices[vertId].BlendShapeOffset[bsm.second],
-            0.0;
-      }
-    }
-    result.blend_shapes = blend_shapes;
-  }
-
+math::matrix4 to_matrix4(const aiMatrix4x4 &mat) {
+  math::matrix4 result;
+  result(0, 0) = mat.a1;
+  result(0, 1) = mat.a2;
+  result(0, 2) = mat.a3;
+  result(0, 3) = mat.a4;
+  result(1, 0) = mat.b1;
+  result(1, 1) = mat.b2;
+  result(1, 2) = mat.b3;
+  result(1, 3) = mat.b4;
+  result(2, 0) = mat.c1;
+  result(2, 1) = mat.c2;
+  result(2, 2) = mat.c3;
+  result(2, 3) = mat.c4;
+  result(3, 0) = mat.d1;
+  result(3, 1) = mat.d2;
+  result(3, 2) = mat.d3;
+  result(3, 3) = mat.d4;
   return result;
 }
 
-struct BoneInfo {
-  std::string boneName;
-  ufbx_node *node;
-  vector3 localPosition = vector3::Zero();
-  quat localRotation = quat::Identity();
-  vector3 localScale = vector3::Ones();
-  matrix4 offsetMatrix = matrix4::Identity();
-  int parentIndex =
-      -1; // Index of the parent bone in the hierarchy (-1 if root)
-  std::vector<int> children = std::vector<int>(); // Indices of child bones
-};
-
-struct KeyFrame {
-  vector3 localPosition;
-  quat localRotation;
-  vector3 localScale;
-};
-
-}; // namespace FBX
-
-fbx_package load_fbx(std::string path) {
-  fbx_package package;
-  package.motion = nullptr;
-
-  ufbx_load_opts opts = {};
-  opts.target_axes = ufbx_axes_right_handed_y_up;
-  opts.target_unit_meters = 1.0f;
-  ufbx_error error;
-  ufbx_scene *scene = ufbx_load_file(path.c_str(), &opts, &error);
-  if (!scene) {
-    printf("failed to load fbx scene from %s", error.description.data);
-    return package;
+std::vector<model> open_model(std::string filepath) {
+  std::vector<model> loaded_data;
+  Assimp::Importer importer;
+  importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
+  const aiScene *scene = importer.ReadFile(
+      filepath, aiProcess_Triangulate | aiProcess_CalcTangentSpace |
+                    aiProcess_OptimizeMeshes | aiProcess_LimitBoneWeights |
+                    aiProcess_JoinIdenticalVertices |
+                    aiProcess_PopulateArmatureData);
+  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) {
+    spdlog::error("failed to open fbx model from {0}", filepath);
+    return loaded_data;
   }
 
-  package.model_path = path;
-  std::vector<FBX::BoneInfo> globalBones;
-  std::map<std::string, std::size_t> boneMapping;
-  std::map<int, int> oldBoneInd2NewInd;
-  std::stack<ufbx_node *> s;
-  s.push(scene->root_node);
-  while (!s.empty()) {
-    auto cur = s.top();
-    s.pop();
-    if (cur->bone) {
-      // if this is a bone node
-      std::string boneName = cur->name.data;
-      if (boneMapping.find(boneName) == boneMapping.end()) {
-        int currentBoneInd = globalBones.size();
-        boneMapping.insert(std::make_pair(boneName, currentBoneInd));
-        FBX::BoneInfo bi;
-        bi.boneName = boneName;
-        bi.node = cur;
-        auto localTransform = cur->local_transform;
-        bi.localScale = FBX::Convert(localTransform.scale);
-        bi.localPosition = FBX::Convert(localTransform.translation);
-        bi.localRotation = FBX::Convert(localTransform.rotation);
-        // find a parent bone
-        auto curParent = cur->parent;
-        while (curParent) {
-          if (curParent->bone) {
-            auto parentIt = boneMapping.find(curParent->name.data);
-            if (parentIt == boneMapping.end()) {
-              printf("parent bone don't exist in boneMapping");
-            } else {
-              bi.parentIndex = parentIt->second;
-              globalBones[parentIt->second].children.push_back(currentBoneInd);
-              break;
+  // --- Step 1: Identify all bone nodes in the scene ---
+  std::vector<const aiNode *> all_bone_nodes;
+  std::map<const aiNode *, bool>
+      is_bone_node_map; // Helper map for quick lookup
+
+  for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
+    const aiMesh *assimp_mesh = scene->mMeshes[i];
+    for (unsigned int j = 0; j < assimp_mesh->mNumBones; ++j) {
+      const aiBone *assimp_bone = assimp_mesh->mBones[j];
+      aiNode *bone_node = scene->mRootNode->FindNode(assimp_bone->mName);
+      if (bone_node) {
+        if (is_bone_node_map.find(bone_node) == is_bone_node_map.end()) {
+          all_bone_nodes.push_back(bone_node);
+          is_bone_node_map[bone_node] = true;
+        }
+      }
+    }
+  }
+
+  // --- Step 2: Identify skeleton root nodes ---
+  // A skeleton root is a bone node whose parent is NOT a bone node.
+  std::vector<const aiNode *> skeleton_root_nodes;
+  for (const aiNode *bone_node : all_bone_nodes) {
+    const aiNode *parent = bone_node->mParent;
+    bool parent_is_bone = false;
+    if (parent) {
+      if (is_bone_node_map.count(parent)) {
+        parent_is_bone = true;
+      }
+    }
+    if (!parent_is_bone) {
+      skeleton_root_nodes.push_back(bone_node);
+    }
+  }
+
+  // --- Step 3: Build skeleton data for each identified skeleton ---
+  std::map<const aiNode *, skeleton> skeleton_root_to_skeleton_map;
+
+  for (const aiNode *skeleton_root_node : skeleton_root_nodes) {
+    skeleton current_skeleton;
+    current_skeleton.name = skeleton_root_node->mName.C_Str();
+
+    std::vector<const aiNode *> skeleton_joint_nodes_temp;
+    std::vector<int> joint_parent_indices;
+    std::map<const aiNode *, int>
+        node_to_joint_index_temp; // Map for current skeleton
+
+    // Recursive lambda to collect joint data for this skeleton
+    std::function<void(const aiNode *, int)> collect_joint_data =
+        [&](const aiNode *node, int parent_index) {
+          if (is_bone_node_map.count(
+                  node)) { // Check if this node is a bone node
+            int current_joint_index = skeleton_joint_nodes_temp.size();
+            skeleton_joint_nodes_temp.push_back(node);
+            current_skeleton.joint_names.push_back(node->mName.C_Str());
+            joint_parent_indices.push_back(parent_index);
+            node_to_joint_index_temp[node] = current_joint_index;
+
+            // Extract local transformation
+            aiVector3D scale, position;
+            aiQuaternion rotation;
+            node->mTransformation.Decompose(scale, rotation, position);
+            current_skeleton.joint_offset.push_back(math::vector3(position.x, position.y, position.z));
+            current_skeleton.joint_rotation.push_back(math::quat(rotation.w, rotation.x, rotation.y, rotation.z));
+            current_skeleton.joint_scale.push_back(math::vector3(scale.x, scale.y, scale.z));
+
+            // Find the corresponding bone in *any* mesh to get the offset
+            // matrix
+            toolkit::math::matrix4 offset_matrix;
+            bool found_offset_matrix = false;
+            for (unsigned int i = 0; i < scene->mNumMeshes; ++i) {
+              const aiMesh *assimp_mesh = scene->mMeshes[i];
+              for (unsigned int j = 0; j < assimp_mesh->mNumBones; ++j) {
+                const aiBone *assimp_bone = assimp_mesh->mBones[j];
+                if (std::string(assimp_bone->mName.C_Str()) ==
+                    node->mName.C_Str()) {
+                  offset_matrix = to_matrix4(assimp_bone->mOffsetMatrix);
+                  found_offset_matrix = true;
+                  break;
+                }
+              }
+              if (found_offset_matrix)
+                break;
+            }
+            if (!found_offset_matrix) {
+              std::cerr
+                  << "Warning: Could not find offset matrix for bone node: "
+                  << node->mName.C_Str() << std::endl;
+              offset_matrix =
+                  toolkit::math::matrix4::Identity(); // Use identity as fallback
+            }
+            current_skeleton.offset_matrices.push_back(offset_matrix);
+
+            // Recursively process bone children
+            for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+              collect_joint_data(node->mChildren[i], current_joint_index);
+            }
+          } else {
+            // If the node is not a bone node, stop traversing down this branch
+            // for skeleton data We only want nodes that are part of the bone
+            // hierarchy defined by bones.
+          }
+        };
+
+    collect_joint_data(skeleton_root_node, -1);
+
+    current_skeleton.joint_parent = joint_parent_indices;
+
+    // Build joint_children structure
+    current_skeleton.joint_children.resize(current_skeleton.get_num_joints());
+    for (int i = 0; i < current_skeleton.get_num_joints(); ++i) {
+      int parent_index = current_skeleton.joint_parent[i];
+      if (parent_index != -1) {
+        current_skeleton.joint_children[parent_index].push_back(i);
+      }
+    }
+
+    if (current_skeleton.get_num_joints() > 0) {
+      skeleton_root_to_skeleton_map[skeleton_root_node] = current_skeleton;
+    }
+  }
+
+  // --- Step 4: Assign nodes to models and create initial models ---
+  std::map<const aiNode *, int> node_to_model_index;
+  int current_model_idx = 0;
+  std::map<int, const aiNode *>
+      model_index_to_skeleton_root; // Map model index to its skeleton root node
+
+  // Assign model indices to skeleton hierarchies
+  for (const auto &pair : skeleton_root_to_skeleton_map) {
+    const aiNode *skeleton_root_node = pair.first;
+    node_to_model_index[skeleton_root_node] = current_model_idx;
+    model_index_to_skeleton_root[current_model_idx] = skeleton_root_node;
+
+    // Propagate the model index down the skeleton hierarchy (bone nodes)
+    std::function<void(const aiNode *)> assign_model_to_bone_children =
+        [&](const aiNode *node) {
+          if (is_bone_node_map.count(node)) {
+            node_to_model_index[node] = current_model_idx;
+            for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+              assign_model_to_bone_children(node->mChildren[i]);
             }
           }
-          curParent = curParent->parent;
-        }
-        globalBones.push_back(bi);
-      }
-    }
-    for (auto child : cur->children) {
-      s.push(child);
-    }
+        };
+    assign_model_to_bone_children(skeleton_root_node);
+
+    model new_model;
+    new_model.name = skeleton_root_node->mName.C_Str();
+    new_model.skeleton = pair.second; // Move the skeleton data
+    new_model.has_skeleton = true;
+    loaded_data.push_back(new_model);
+
+    current_model_idx++;
   }
 
-  if (globalBones.size() > 1 && boneMapping.size() > 1) {
-    int animStackCount = scene->anim_stacks.count;
-    // find the longest animation to import
-    double longestDuration = -1.0;
-    int longestAnimInd = -1;
-    for (int animInd = 0; animInd < animStackCount; ++animInd) {
-      auto tmpAnim = scene->anim_stacks[animInd]->anim;
-      auto duration = tmpAnim->time_end - tmpAnim->time_begin;
-      if (duration > longestDuration) {
-        duration = longestDuration;
-        longestAnimInd = animInd;
-      }
-    }
-    std::vector<std::vector<FBX::KeyFrame>> animationPerJoint(
-        globalBones.size(), std::vector<FBX::KeyFrame>());
-    if (longestAnimInd != -1) {
-      auto anim = scene->anim_stacks[longestAnimInd]
-                      ->anim; // import the active animation only
-      auto startTime = anim->time_begin, endTime = anim->time_end;
-      // evaluate the motion to 60fps
-      double sampleDelta = 1.0 / 60;
-      for (auto jointInd = 0; jointInd < globalBones.size(); ++jointInd) {
-        auto jointNode = globalBones[jointInd].node;
-        for (double currentTime = startTime; currentTime < endTime;
-             currentTime += sampleDelta) {
-          auto localTransform =
-              ufbx_evaluate_transform(anim, jointNode, currentTime);
-          FBX::KeyFrame kf;
-          kf.localPosition = FBX::Convert(localTransform.translation);
-          kf.localRotation = FBX::Convert(localTransform.rotation);
-          kf.localScale = FBX::Convert(localTransform.scale);
-          animationPerJoint[jointInd].push_back(kf);
+  // --- Step 5: Traverse the entire node hierarchy to assign remaining
+  // nodes/meshes to models --- Nodes not part of a skeleton hierarchy but
+  // having meshes or children with meshes will either be assigned to an
+  // existing model if they are children of a skeleton node, or potentially
+  // create new models for static assets. For simplicity here, we'll assign
+  // non-bone nodes to the model of their closest ancestor that is part of a
+  // skeleton hierarchy. Nodes with no bone ancestors and having meshes could be
+  // treated as separate static models, but we'll skip them for now or require
+  // further logic based on file structure.
+
+  std::function<void(const aiNode *, int)> assign_model_to_node_and_children =
+      [&](const aiNode *node, int inherited_model_index) {
+        int current_node_model_index = inherited_model_index;
+
+        // If this node is a skeleton root, it already has a model index
+        // assigned
+        if (node_to_model_index.count(node)) {
+          current_node_model_index = node_to_model_index.at(node);
+        } else if (inherited_model_index != -1) {
+          // Inherit model index from parent if not a skeleton root
+          node_to_model_index[node] = inherited_model_index;
+        } else {
+          // If no inherited index and not a skeleton root, this node
+          // and its children might be a separate static asset.
+          // For this example, we'll only process nodes linked to skeletons.
+          // You would add logic here to create new models for static nodes if
+          // needed.
+          node_to_model_index[node] = -1; // Mark as unassigned or static
         }
-      }
-    }
 
-    // create skeleton, register it in allSkeletons
-    skeleton skel;
-    // map indices from scene->skin_clusters to globalBones
-    for (int clusterInd = 0; clusterInd < scene->skin_clusters.count;
-         ++clusterInd) {
-      auto cluster = scene->skin_clusters[clusterInd];
-      std::string name = cluster->bone_node->name.data;
-      auto it = boneMapping.find(name);
-      if (it == boneMapping.end()) {
-        printf("cluster %s doesn't appear in globalBones", name.c_str());
-      } else {
-        // update offset matrix of this bone
-        auto offsetMatrix = cluster->geometry_to_bone;
-        vector4 col0, col1, col2, col3;
-        col0 << FBX::Convert(offsetMatrix.cols[0]), 0.0f;
-        col1 << FBX::Convert(offsetMatrix.cols[1]), 0.0f;
-        col2 << FBX::Convert(offsetMatrix.cols[2]), 0.0f;
-        col3 << FBX::Convert(offsetMatrix.cols[3]), 1.0f;
-        globalBones[it->second].offsetMatrix << col0, col1, col2, col3;
-        oldBoneInd2NewInd.insert(std::make_pair(static_cast<int>(clusterInd),
-                                                static_cast<int>(it->second)));
-      }
-    }
+        // Process meshes attached to this node
+        if (current_node_model_index != -1) {
+          for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+            unsigned int mesh_index = node->mMeshes[i];
+            if (mesh_index < scene->mNumMeshes) {
+              const aiMesh *assimp_mesh = scene->mMeshes[mesh_index];
+              mesh current_mesh;
+              current_mesh.name = assimp_mesh->mName.C_Str();
 
-    // setup variables in the skeleton
-    skel.name = "armature";
-    skel.path = path;
-    for (int jointInd = 0; jointInd < globalBones.size(); ++jointInd) {
-      skel.joint_names.push_back(
-          replace(globalBones[jointInd].boneName, " ", "_"));
-      skel.joint_parent.push_back(globalBones[jointInd].parentIndex);
-      skel.joint_children.push_back(globalBones[jointInd].children);
-      skel.joint_offset.push_back(globalBones[jointInd].localPosition);
-      skel.joint_rotation.push_back(globalBones[jointInd].localRotation);
-      skel.joint_scale.push_back(globalBones[jointInd].localScale);
-      skel.offset_matrices.push_back(globalBones[jointInd].offsetMatrix);
-    }
+              // Load Vertices
+              current_mesh.vertices.resize(assimp_mesh->mNumVertices);
+              for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
+                current_mesh.vertices[j].position = toolkit::math::vector4(
+                    assimp_mesh->mVertices[j].x, assimp_mesh->mVertices[j].y,
+                    assimp_mesh->mVertices[j].z, 1.0f);
+                if (assimp_mesh->HasNormals())
+                  current_mesh.vertices[j].normal = toolkit::math::vector4(
+                      assimp_mesh->mNormals[j].x, assimp_mesh->mNormals[j].y,
+                      assimp_mesh->mNormals[j].z, 0.0f);
+                if (assimp_mesh->HasTextureCoords(0))
+                  current_mesh.vertices[j].tex_coords = toolkit::math::vector4(
+                      assimp_mesh->mTextureCoords[0][j].x,
+                      assimp_mesh->mTextureCoords[0][j].y,
+                      assimp_mesh->mTextureCoords[0][j].z, 0.0f);
+                if (assimp_mesh->HasVertexColors(0))
+                  current_mesh.vertices[j].color =
+                      toolkit::math::vector4(assimp_mesh->mColors[0][j].r,
+                                             assimp_mesh->mColors[0][j].g,
+                                             assimp_mesh->mColors[0][j].b,
+                                             assimp_mesh->mColors[0][j].a);
+                else
+                  current_mesh.vertices[j].color =
+                      toolkit::math::vector4(1.0f, 1.0f, 1.0f, 1.0f);
+              }
 
-    package.skeleton = std::make_shared<skeleton>(skel);
+              // Load Indices
+              for (unsigned int j = 0; j < assimp_mesh->mNumFaces; ++j) {
+                const aiFace &face = assimp_mesh->mFaces[j];
+                for (unsigned int k = 0; k < face.mNumIndices; ++k) {
+                  current_mesh.indices.push_back(face.mIndices[k]);
+                }
+              }
 
-    // create motion for the skeleton
-    int numFrames = animationPerJoint[0].size();
-    int numJoints = animationPerJoint.size();
-    if (numFrames > 0) {
-      package.motion = std::make_shared<motion>();
-      package.motion->fps = 60; // use 60fps by default
-      package.motion->skeleton = skel;
-      package.motion->path = path;
-      for (int frameInd = 0; frameInd < numFrames; ++frameInd) {
-        pose pose;
-        pose.skeleton = package.skeleton.get();
-        pose.joint_local_rot.resize(numJoints, quat::Identity());
-        for (int jointInd = 0; jointInd < numJoints; ++jointInd) {
-          if (jointInd == 0) {
-            // process localPosition only for root joint
-            pose.root_local_pos =
-                animationPerJoint[jointInd][frameInd].localPosition;
+              // Load Bone Data (if skinned and model has a skeleton)
+              if (assimp_mesh->HasBones() &&
+                  loaded_data[current_node_model_index].has_skeleton) {
+                const skeleton &associated_skeleton =
+                    loaded_data[current_node_model_index].skeleton;
+                std::map<std::string, int> joint_name_to_index;
+                for (size_t joint_idx = 0;
+                     joint_idx < associated_skeleton.joint_names.size();
+                     ++joint_idx) {
+                  joint_name_to_index[associated_skeleton
+                                          .joint_names[joint_idx]] = joint_idx;
+                }
+
+                std::vector<int> bone_counts(assimp_mesh->mNumVertices, 0);
+
+                for (unsigned int j = 0; j < assimp_mesh->mNumBones; ++j) {
+                  const aiBone *assimp_bone = assimp_mesh->mBones[j];
+                  std::string bone_name = assimp_bone->mName.C_Str();
+
+                  int bone_index_in_skeleton = -1;
+                  if (joint_name_to_index.count(bone_name)) {
+                    bone_index_in_skeleton = joint_name_to_index.at(bone_name);
+                  } else {
+                    std::cerr << "Warning: Bone '" << bone_name
+                              << "' not found in associated skeleton '"
+                              << associated_skeleton.name << "'." << std::endl;
+                    continue;
+                  }
+
+                  for (unsigned int k = 0; k < assimp_bone->mNumWeights; ++k) {
+                    const aiVertexWeight &weight = assimp_bone->mWeights[k];
+                    unsigned int vertex_id = weight.mVertexId;
+                    float bone_weight = weight.mWeight;
+
+                    if (vertex_id < current_mesh.vertices.size()) {
+                      int &count = bone_counts[vertex_id];
+                      if (count < MAX_BONES_PER_MESH) {
+                        current_mesh.vertices[vertex_id].bond_indices[count] =
+                            bone_index_in_skeleton;
+                        current_mesh.vertices[vertex_id].bone_weights[count] =
+                            bone_weight;
+                        count++;
+                      } else {
+                        std::cerr
+                            << "Warning: Vertex " << vertex_id
+                            << " has more than " << MAX_BONES_PER_MESH
+                            << " bone weights in mesh " << current_mesh.name
+                            << ". Some weights will be ignored." << std::endl;
+                      }
+                    }
+                  }
+                }
+
+                // Normalize bone weights
+                for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
+                  float total_weight = 0.0f;
+                  for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
+                    total_weight += current_mesh.vertices[j].bone_weights[k];
+                  }
+                  if (total_weight > 0.0f) {
+                    for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
+                      current_mesh.vertices[j].bone_weights[k] /= total_weight;
+                    }
+                  }
+                }
+              }
+
+              // Load Blend Shapes
+              if (assimp_mesh->mNumAnimMeshes > 0) {
+                current_mesh.blendshapes.resize(assimp_mesh->mNumAnimMeshes);
+                for (unsigned int j = 0; j < assimp_mesh->mNumAnimMeshes; ++j) {
+                  const aiAnimMesh *assimp_blend_shape =
+                      assimp_mesh->mAnimMeshes[j];
+                  current_mesh.blendshapes[j].name =
+                      assimp_blend_shape->mName.C_Str();
+                  current_mesh.blendshapes[j].weight =
+                      0.0f; // Initialize weight
+
+                  current_mesh.blendshapes[j].data.resize(
+                      assimp_blend_shape->mNumVertices);
+                  for (unsigned int k = 0; k < assimp_blend_shape->mNumVertices;
+                       ++k) {
+                    if (assimp_blend_shape->HasPositions())
+                      current_mesh.blendshapes[j].data[k].offset_pos =
+                          toolkit::math::vector4(
+                              assimp_blend_shape->mVertices[k].x,
+                              assimp_blend_shape->mVertices[k].y,
+                              assimp_blend_shape->mVertices[k].z, 0.0f);
+                    else
+                      current_mesh.blendshapes[j].data[k].offset_pos =
+                          toolkit::math::vector4(0.0f, 0.0f, 0.0f, 0.0f);
+
+                    if (assimp_blend_shape->HasNormals())
+                      current_mesh.blendshapes[j].data[k].offset_normal =
+                          toolkit::math::vector4(
+                              assimp_blend_shape->mNormals[k].x,
+                              assimp_blend_shape->mNormals[k].y,
+                              assimp_blend_shape->mNormals[k].z, 0.0f);
+                    else
+                      current_mesh.blendshapes[j].data[k].offset_normal =
+                          toolkit::math::vector4(0.0f, 0.0f, 0.0f, 0.0f);
+                  }
+                }
+              }
+
+              // Add the mesh to the current model
+              loaded_data[current_node_model_index].meshes.push_back(
+                  current_mesh);
+            }
           }
-          pose.joint_local_rot[jointInd] =
-              animationPerJoint[jointInd][frameInd].localRotation;
         }
-        package.motion->poses.push_back(pose);
-      }
-    }
-  }
 
-  // process the meshes after the bone has setup
-  for (auto fbxMesh : scene->meshes) {
-    for (auto fbxMeshPart : fbxMesh->material_parts) {
-      package.meshes.emplace_back(
-          FBX::processMesh(fbxMesh, fbxMeshPart, boneMapping, path));
-    }
-  }
-  if (package.skeleton) {
-    for (auto &mesh : package.meshes)
-      mesh.skeleton = package.skeleton;
-  }
+        // Recursively process children nodes
+        for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+          assign_model_to_node_and_children(node->mChildren[i],
+                                            current_node_model_index);
+        }
+      };
 
-  // free the scene object
-  ufbx_free_scene(scene);
+  // Start the node traversal from the root
+  // Root node itself doesn't have a specific model unless it's a skeleton root
+  assign_model_to_node_and_children(scene->mRootNode, -1);
 
-  return package;
+  // // --- Step 6: Clean up models with no meshes (optional) ---
+  // loaded_data.erase(
+  //     std::remove_if(loaded_data.begin(), loaded_data.end(),
+  //                    [](const model &m) { return m.meshes.empty(); }),
+  //     loaded_data.end());
+
+  return loaded_data;
 }
 
-// ----------------------------- OBJ file loading -----------------------------
-
-vector3 FaceNormal(vector3 v0, vector3 v1, vector3 v2) {
-  auto e01 = v1 - v0;
-  auto e02 = v2 - v0;
-  return (e01.cross(e02)).normalized();
-}
-
-obj_package load_obj(std::string path) {
-  obj_package package;
-  auto &meshes = package.meshes;
-
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-  std::string err, warn;
-  if (tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                       path.c_str())) {
-    package.model_path = path;
-    for (auto &shape : shapes) {
-      std::size_t indexOffset = 0;
-
-      std::vector<mesh_vertex> vertices;
-      std::vector<uint32_t> indices;
-
-      for (auto f = 0; f < shape.mesh.num_face_vertices.size(); ++f) {
-        auto fv = shape.mesh.num_face_vertices[f];
-        if (fv != 3) {
-          printf("Only triangle faces are handled, face id=%d has %d vertices",
-                 f, fv);
-          indexOffset += fv;
-          continue;
-        }
-        mesh_vertex vert[3];
-
-        bool withoutNormal = false;
-        for (auto v = 0; v < 3; ++v) {
-          auto idx = shape.mesh.indices[indexOffset + v];
-          vert[v].position << attrib.vertices[3 * idx.vertex_index + 0],
-              attrib.vertices[3 * idx.vertex_index + 1],
-              attrib.vertices[3 * idx.vertex_index + 2], 1.0f;
-          if (idx.normal_index >= 0) {
-            vert[v].normal << attrib.normals[3 * idx.normal_index + 0],
-                attrib.normals[3 * idx.normal_index + 1],
-                attrib.normals[3 * idx.normal_index + 2], 0.0f;
-          } else {
-            withoutNormal = true;
-            vert[v].normal = vector4::Zero();
-          }
-          if (idx.texcoord_index >= 0) {
-            vert[v].tex_coords << attrib.texcoords[2 * idx.texcoord_index + 0],
-                attrib.texcoords[2 * idx.texcoord_index + 1], 0.0, 0.0;
-          } else
-            vert[v].tex_coords = vector4::Zero();
-        }
-        if (withoutNormal) {
-          // manually compute the normal
-          auto faceNormal =
-              FaceNormal(vert[0].position.head<3>(), vert[1].position.head<3>(),
-                         vert[2].position.head<3>());
-          vert[0].normal << faceNormal, 0.0f;
-          vert[1].normal << faceNormal, 0.0f;
-          vert[2].normal << faceNormal, 0.0f;
-        }
-
-        vertices.push_back(vert[0]);
-        vertices.push_back(vert[1]);
-        vertices.push_back(vert[2]);
-        indices.push_back(indexOffset + 0);
-        indices.push_back(indexOffset + 1);
-        indices.push_back(indexOffset + 2);
-
-        indexOffset += fv;
-      }
-      mesh mesh;
-      mesh.mesh_name = shape.name;
-      mesh.model_path = path;
-      mesh.vertices = vertices;
-      mesh.indices = indices;
-      meshes.emplace_back(mesh);
-    }
-  } else {
-    printf("Failed to load .obj model from %s", path.c_str());
-  }
-
-  return package;
-}
-
-}; // namespace toolkit::Assets
+}; // namespace toolkit::assets

@@ -1,4 +1,6 @@
 #include "toolkit/opengl/components/mesh.hpp"
+#include "toolkit/anim/components/actor.hpp"
+#include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/assets/primitives.hpp"
 #include "toolkit/transform.hpp"
 
@@ -173,52 +175,29 @@ entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
   return ent;
 }
 
-entt::entity create_geometry_model(entt::registry &registry,
-                                   std::string filepath, math::matrix4 t) {
-  auto root = registry.create();
-  auto &trans = registry.emplace<transform>(root);
-  trans.name =
-      std::filesystem::path(filepath).filename().replace_extension("").string();
-  trans.set_transform_matrix(t);
-  if (endswith(filepath, ".fbx") || endswith(filepath, "FBX")) {
-    auto package = assets::load_fbx(filepath);
-    for (auto &mesh : package.meshes) {
-      auto mesh_ent = registry.create();
-      auto &mesh_trans_comp = registry.emplace<transform>(mesh_ent);
-      auto &mesh_data_comp = registry.emplace<mesh_data>(mesh_ent);
-      mesh_trans_comp.name = mesh.mesh_name;
-      mesh_trans_comp.set_transform_matrix(t);
-
-      mesh_data_comp.model_path = filepath;
-      mesh_data_comp.mesh_name = mesh.mesh_name;
-      mesh_data_comp.indices = mesh.indices;
-      mesh_data_comp.vertices = mesh.vertices;
-      mesh_data_comp.blend_shapes = mesh.blend_shapes;
-
-      init_opengl_buffers(mesh_data_comp);
-
-      trans.add_children(mesh_ent);
+void open_model(entt::registry &registry, std::string filepath) {
+  auto models = assets::open_model(filepath);
+  for (auto &model : models) {
+    auto model_container = registry.create();
+    auto &container_trans = registry.emplace<transform>(model_container);
+    container_trans.name = model.name;
+    for (auto &mesh : model.meshes) {
+      auto mesh_container = registry.create();
+      auto &mesh_trans = registry.emplace<transform>(mesh_container);
+      auto &mesh_comp = registry.emplace<mesh_data>(mesh_container);
+      mesh_trans.name = mesh.name;
+      mesh_comp.indices = mesh.indices;
+      mesh_comp.vertices = mesh.vertices;
+      mesh_comp.blend_shapes = mesh.blendshapes;
+      mesh_comp.mesh_name = mesh.name;
+      mesh_comp.model_path = filepath;
+      init_opengl_buffers(mesh_comp);
     }
-  } else if (endswith(filepath, ".OBJ") || endswith(filepath, ".obj")) {
-    auto package = assets::load_obj(filepath);
-    for (auto &mesh : package.meshes) {
-      auto mesh_ent = registry.create();
-      auto &mesh_trans_comp = registry.emplace<transform>(mesh_ent);
-      auto &mesh_data_comp = registry.emplace<mesh_data>(mesh_ent);
-      mesh_trans_comp.name = mesh.mesh_name;
-      mesh_trans_comp.set_transform_matrix(t);
-
-      mesh_data_comp.model_path = filepath;
-      mesh_data_comp.mesh_name = mesh.mesh_name;
-      mesh_data_comp.indices = mesh.indices;
-      mesh_data_comp.vertices = mesh.vertices;
-
-      init_opengl_buffers(mesh_data_comp);
-
-      trans.add_children(mesh_ent);
+    if (model.has_skeleton) {
+      anim::create_actor_with_skeleton(registry, model_container, model.skeleton);
+      auto &vis_script = registry.emplace<anim::vis_skeleton>(model_container);
     }
   }
-  return root;
 }
 
 }; // namespace toolkit::opengl

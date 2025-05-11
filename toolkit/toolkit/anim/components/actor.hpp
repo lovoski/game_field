@@ -15,6 +15,9 @@ struct actor {
 DECLARE_COMPONENT(actor, animation, skel, joint_active, ordered_entities,
                   name_to_entity)
 
+void create_actor_with_skeleton(entt::registry &registry,
+                                entt::entity container, assets::skeleton &skel);
+
 entt::entity
 instantiate_skeleton_data(entt::registry &registry, assets::skeleton &skel,
                           std::vector<entt::entity> &ordered_entities,

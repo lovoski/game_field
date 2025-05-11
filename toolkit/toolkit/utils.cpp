@@ -1,7 +1,9 @@
 #include "toolkit/utils.hpp"
 #include <cctype>
 #include <cstdarg>
+#include <spdlog/spdlog.h>
 #include <tinyfiledialogs.h>
+
 
 namespace fs = std::filesystem;
 
@@ -131,6 +133,32 @@ bool open_file_dialog(std::string title,
     return false;
   selectedFile = ret;
   return true;
+}
+
+void copy_file(std::filesystem::path src_filepath,
+               std::filesystem::path dst_filepath) {
+  try {
+    fs::copy_file(src_filepath, dst_filepath,
+                  fs::copy_options::overwrite_existing);
+    spdlog::info("copy file from {0} to {1}", src_filepath.string(),
+                 dst_filepath.string());
+  } catch (const fs::filesystem_error &e) {
+    spdlog::error("{0}, failed to copy file from {1} to {2}", e.what(),
+                  src_filepath.string(), dst_filepath.string());
+  }
+}
+void copy_dir(std::filesystem::path src_dirpath,
+              std::filesystem::path dst_dirpath) {
+  try {
+    fs::copy(src_dirpath, dst_dirpath,
+             fs::copy_options::recursive |
+                 fs::copy_options::overwrite_existing);
+    spdlog::info("copy file from {0} to {1}", src_dirpath.string(),
+                 dst_dirpath.string());
+  } catch (const fs::filesystem_error &e) {
+    spdlog::error("{0}, failed to copy file from {1} to {2}", e.what(),
+                  src_dirpath.string(), dst_dirpath.string());
+  }
 }
 
 }; // namespace toolkit
