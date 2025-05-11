@@ -38,7 +38,17 @@ entt::entity create_sphere(entt::registry &registry,
 entt::entity create_cylinder(entt::registry &registry,
                              math::matrix4 t = math::matrix4::Identity());
 
-entt::entity create_model(entt::registry &registry, std::string filepath,
-                          math::matrix4 t = math::matrix4::Identity());
+/**
+ * Load mesh geometry from *.fbx and *.obj file (including blend shape), without
+ * skinned mesh weights and skeleton data.
+ */
+entt::entity create_geometry_model(entt::registry &registry,
+                                   std::string filepath,
+                                   math::matrix4 t = math::matrix4::Identity());
+/**
+ * Load most of the properties (geometry, skinned mesh weights, skeleton) from
+ * *.fbx and *.pmx file.
+ */
+void open_model(entt::registry &registry, std::string filepath);
 
 }; // namespace toolkit::opengl

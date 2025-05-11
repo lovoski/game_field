@@ -60,13 +60,4 @@ struct obj_package {
 fbx_package load_fbx(std::string path);
 obj_package load_obj(std::string path);
 
-struct uniform_package {
-  std::string model_path;
-  std::vector<mesh> meshes;
-  std::shared_ptr<skeleton> skeleton = nullptr;
-  std::shared_ptr<motion> motion = nullptr;
-};
-
-uniform_package load_model(std::string path);
-
 }; // namespace Common::Assets

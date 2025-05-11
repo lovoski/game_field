@@ -253,7 +253,7 @@ void draw_arrow(math::vector3 start, math::vector3 end, math::matrix4 vp,
   static int segs = 12;
   math::vector3 dir = (end - start).normalized();
   math::vector3 normal =
-      dir.cross(math::vector3(0.0f, 1.0f, 0.0f)).normalized();
+      dir.cross(math::vector3(0.0f, 1.0f, 0.053f).normalized()).normalized();
   std::vector<math::vector3> strip1{start};
   std::vector<math::vector3> strip2{end + normal * size};
   float rotDegree = math::deg_to_rad(360.0f / segs);

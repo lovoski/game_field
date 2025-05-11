@@ -18,6 +18,7 @@
 #pragma once
 
 #include "toolkit/math.hpp"
+#include "toolkit/reflect.hpp"
 #include "toolkit/utils.hpp"
 
 namespace toolkit::assets {
@@ -60,6 +61,8 @@ struct skeleton {
 
   const int get_num_joints() { return joint_names.size(); }
 };
+REFLECT(skeleton, name, joint_names, joint_offset, joint_rotation, joint_scale,
+        offset_matrices, joint_parent, joint_children, path)
 
 // By default, the up direction is y-axis (0, 1, 0)
 struct pose {

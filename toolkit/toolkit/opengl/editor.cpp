@@ -44,6 +44,7 @@ void editor::late_deserialize(nlohmann::json &j) {
   transform_sys = get_sys<transform_system>();
   render_sys = get_sys<defered_forward_mixed>();
   script_sys = get_sys<script_system>();
+  anim_sys = get_sys<anim::anim_system>();
 }
 
 void editor::run() {
@@ -123,6 +124,7 @@ void editor::reset() {
   transform_sys = add_sys<transform_system>();
   render_sys = add_sys<defered_forward_mixed>();
   script_sys = add_sys<script_system>();
+  anim_sys = add_sys<anim::anim_system>();
 }
 
 void editor::add_default_objects() {
@@ -237,13 +239,22 @@ void editor::draw_main_menubar() {
 
       // ---------------------- Assets save/load menu ----------------------
       ImGui::MenuItem("Assets", nullptr, false, false);
-      if (ImGui::MenuItem("Import Model")) {
+      if (ImGui::MenuItem("Open    Model")) {
+        std::string filepath;
+        if (open_file_dialog("Import One Asset",
+                             {"*.fbx", "*.FBX", "*.pmx", "*.PMX"},
+                             "*.fbx, *.pmx", filepath)) {
+          spdlog::info("Load model file {0}", filepath);
+          create_geometry_model(registry, filepath);
+        }
+      }
+      if (ImGui::MenuItem("Import  Model")) {
         std::string filepath;
         if (open_file_dialog("Import One Asset",
                              {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
                              "*.fbx, *.obj", filepath)) {
           spdlog::info("Load model file {0}", filepath);
-          create_model(registry, filepath);
+          create_geometry_model(registry, filepath);
         }
       }
       if (ImGui::MenuItem("Import Motion")) {
@@ -252,9 +263,9 @@ void editor::draw_main_menubar() {
                              {"*.fbx", "*.FBX", "*.bvh", "*.BVH"},
                              "*.bvh, *.fbx", filepath)) {
           spdlog::info("Load model file {0}", filepath);
-          if (endswith(filepath, "*.fbx") || endswith(filepath, "*.FBX"))
+          if (endswith(filepath, ".fbx") || endswith(filepath, ".FBX"))
             anim::create_fbx_actor(registry, filepath);
-          else
+          else if (endswith(filepath, ".bvh") || endswith(filepath, ".BVH"))
             anim::create_bvh_actor(registry, filepath);
         }
       }

@@ -173,8 +173,8 @@ entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
   return ent;
 }
 
-entt::entity create_model(entt::registry &registry, std::string filepath,
-                          math::matrix4 t) {
+entt::entity create_geometry_model(entt::registry &registry,
+                                   std::string filepath, math::matrix4 t) {
   auto root = registry.create();
   auto &trans = registry.emplace<transform>(root);
   trans.name =

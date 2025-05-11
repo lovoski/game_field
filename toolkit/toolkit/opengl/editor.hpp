@@ -9,6 +9,7 @@
 
 #include "toolkit/opengl/components/camera.hpp"
 #include "toolkit/opengl/rasterize/mixed.hpp"
+#include "toolkit/anim/anim_system.hpp"
 
 namespace toolkit::opengl {
 
@@ -40,6 +41,7 @@ public:
   defered_forward_mixed *render_sys = nullptr;
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
+  anim::anim_system *anim_sys = nullptr;
 
   void late_deserialize(nlohmann::json &j) override;
   void late_serialize(nlohmann::json &j) override;
