@@ -8,8 +8,10 @@ add_subdirectory("toolkit")
 add_subdirectory("network")
 add_subdirectory("manga_viewer")
 
+file(GLOB_RECURSE "scripts/*.cpp" SCRIPTS_SRC)
+
 add_executable(test_tk test_tk.cpp)
 target_link_libraries(test_tk PRIVATE toolkit)
 
-add_executable(test_gl test_gl.cpp)
+add_executable(test_gl test_gl.cpp ${SCRIPTS_SRC})
 target_link_libraries(test_gl PRIVATE toolkit)

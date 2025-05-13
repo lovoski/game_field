@@ -128,6 +128,12 @@ void defered_forward_mixed::draw_gui(entt::registry &registry,
                                      entt::entity entity) {
   if (auto ptr = registry.try_get<camera>(entity)) {
     if (ImGui::CollapsingHeader("Camera")) {
+      ImGui::Checkbox("Perspective", &ptr->perspective);
+      if (ptr->perspective) {
+        ImGui::Text("Perspective Camera");
+      } else {
+        ImGui::Text("Orthogonal Camera");
+      }
     }
   }
   if (auto ptr = registry.try_get<dir_light>(entity)) {

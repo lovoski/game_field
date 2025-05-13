@@ -452,10 +452,8 @@ void editor::draw_entity_hierarchy() {
       trans.remove_parent();
     }
     if (ImGui::MenuItem("Delete Entity")) {
-      registry.destroy(entity);
+      destroy_hierarchy(registry, entity);
     }
-    // if (ImGui::MenuItem("Rename Entity")) {
-    // }
   };
 
   if (!ImGui::IsAnyItemHovered() &&

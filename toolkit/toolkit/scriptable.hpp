@@ -110,7 +110,7 @@ DECLARE_SYSTEM(script_system)
   inline void __on_destroy_##class_name(entt::registry &registry,              \
                                         entt::entity entity) {                 \
     auto &script = registry.get<class_name>(entity);                           \
-    scriptable::__registered_scripts__.erase(&script);                         \
+    toolkit::scriptable::__registered_scripts__.erase(&script);                \
     script.destroy();                                                          \
   }                                                                            \
   struct __register_construct_destroy_##class_name {                           \

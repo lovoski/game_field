@@ -12,8 +12,12 @@ void compute_vp_matrix(entt::registry &registry, entt::entity entity,
   cam.view =
       math::lookat(camPos, camPos - trans.local_forward(), trans.local_up());
 
-  cam.proj = math::perspective(math::deg_to_rad(cam.fovy_degree),
-                               width / height, cam.z_near, cam.z_far);
+  if (cam.perspective)
+    cam.proj = math::perspective(math::deg_to_rad(cam.fovy_degree),
+                                 width / height, cam.z_near, cam.z_far);
+  else
+    cam.proj = math::ortho(-cam.h_size / 2, cam.h_size / 2, cam.v_size / 2,
+                           -cam.v_size / 2, cam.z_near, cam.z_far);
 
   cam.vp = cam.proj * cam.view;
 

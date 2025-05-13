@@ -16,6 +16,8 @@ namespace toolkit {
 void on_transform_created(entt::registry &registry, entt::entity entity);
 void on_transform_destroyed(entt::registry &registry, entt::entity entity);
 
+void destroy_hierarchy(entt::registry &registry, entt::entity root);
+
 class transform {
 public:
   friend class transform_system;

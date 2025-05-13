@@ -1,4 +1,5 @@
 #include "toolkit/opengl/editor.hpp"
+#include "scripts/persona_compare.hpp"
 
 using namespace toolkit;
 

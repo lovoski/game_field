@@ -9,13 +9,27 @@ void on_transform_created(entt::registry &registry, entt::entity entity) {
 }
 
 void on_transform_destroyed(entt::registry &registry, entt::entity entity) {
-  if (auto parent = registry.get<transform>(entity).m_parent;
-      parent != entt::null) {
+  auto parent = registry.get<transform>(entity).m_parent;
+  if (parent != entt::null && registry.valid(parent)) {
     auto &parentTf = registry.get<transform>(parent);
     auto it = std::remove(parentTf.m_children.begin(),
                           parentTf.m_children.end(), entity);
     parentTf.m_children.erase(it, parentTf.m_children.end());
   }
+}
+
+void destroy_hierarchy(entt::registry &registry, entt::entity root) {
+  std::vector<entt::entity> hierarchy;
+  std::function<void(entt::entity)> collect_hierarchy_entities =
+      [&](entt::entity e) {
+        auto &trans = registry.get<transform>(e);
+        hierarchy.push_back(e);
+        for (auto c : trans.m_children)
+          collect_hierarchy_entities(c);
+      };
+  collect_hierarchy_entities(root);
+  for (int i = hierarchy.size() - 1; i >= 0; i--)
+    registry.destroy(hierarchy[i]);
 }
 
 void transform::reset() {
