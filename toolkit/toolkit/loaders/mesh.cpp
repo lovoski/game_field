@@ -2,8 +2,8 @@
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
-#include <spdlog/spdlog.h>
 #include <iostream>
+#include <spdlog/spdlog.h>
 
 namespace toolkit::assets {
 
@@ -104,9 +104,12 @@ std::vector<model> open_model(std::string filepath) {
             aiVector3D scale, position;
             aiQuaternion rotation;
             node->mTransformation.Decompose(scale, rotation, position);
-            current_skeleton.joint_offset.push_back(math::vector3(position.x, position.y, position.z));
-            current_skeleton.joint_rotation.push_back(math::quat(rotation.w, rotation.x, rotation.y, rotation.z));
-            current_skeleton.joint_scale.push_back(math::vector3(scale.x, scale.y, scale.z));
+            current_skeleton.joint_offset.push_back(
+                math::vector3(position.x, position.y, position.z));
+            current_skeleton.joint_rotation.push_back(
+                math::quat(rotation.w, rotation.x, rotation.y, rotation.z));
+            current_skeleton.joint_scale.push_back(
+                math::vector3(scale.x, scale.y, scale.z));
 
             // Find the corresponding bone in *any* mesh to get the offset
             // matrix
@@ -131,7 +134,8 @@ std::vector<model> open_model(std::string filepath) {
                   << "Warning: Could not find offset matrix for bone node: "
                   << node->mName.C_Str() << std::endl;
               offset_matrix =
-                  toolkit::math::matrix4::Identity(); // Use identity as fallback
+                  toolkit::math::matrix4::Identity(); // Use identity as
+                                                      // fallback
             }
             current_skeleton.offset_matrices.push_back(offset_matrix);
 
@@ -207,6 +211,10 @@ std::vector<model> open_model(std::string filepath) {
   // treated as separate static models, but we'll skip them for now or require
   // further logic based on file structure.
 
+  model static_mesh_model;
+  static_mesh_model.name = "static mesh";
+  static_mesh_model.has_skeleton = false;
+
   std::function<void(const aiNode *, int)> assign_model_to_node_and_children =
       [&](const aiNode *node, int inherited_model_index) {
         int current_node_model_index = inherited_model_index;
@@ -228,157 +236,181 @@ std::vector<model> open_model(std::string filepath) {
         }
 
         // Process meshes attached to this node
-        if (current_node_model_index != -1) {
-          for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
-            unsigned int mesh_index = node->mMeshes[i];
-            if (mesh_index < scene->mNumMeshes) {
-              const aiMesh *assimp_mesh = scene->mMeshes[mesh_index];
-              mesh current_mesh;
-              current_mesh.name = assimp_mesh->mName.C_Str();
+        for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+          unsigned int mesh_index = node->mMeshes[i];
+          if (mesh_index < scene->mNumMeshes) {
+            const aiMesh *assimp_mesh = scene->mMeshes[mesh_index];
 
-              // Load Vertices
-              current_mesh.vertices.resize(assimp_mesh->mNumVertices);
-              for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
-                current_mesh.vertices[j].position = toolkit::math::vector4(
-                    assimp_mesh->mVertices[j].x, assimp_mesh->mVertices[j].y,
-                    assimp_mesh->mVertices[j].z, 1.0f);
-                if (assimp_mesh->HasNormals())
-                  current_mesh.vertices[j].normal = toolkit::math::vector4(
-                      assimp_mesh->mNormals[j].x, assimp_mesh->mNormals[j].y,
-                      assimp_mesh->mNormals[j].z, 0.0f);
-                if (assimp_mesh->HasTextureCoords(0))
-                  current_mesh.vertices[j].tex_coords = toolkit::math::vector4(
-                      assimp_mesh->mTextureCoords[0][j].x,
-                      assimp_mesh->mTextureCoords[0][j].y,
-                      assimp_mesh->mTextureCoords[0][j].z, 0.0f);
-                if (assimp_mesh->HasVertexColors(0))
-                  current_mesh.vertices[j].color =
-                      toolkit::math::vector4(assimp_mesh->mColors[0][j].r,
-                                             assimp_mesh->mColors[0][j].g,
-                                             assimp_mesh->mColors[0][j].b,
-                                             assimp_mesh->mColors[0][j].a);
-                else
-                  current_mesh.vertices[j].color =
-                      toolkit::math::vector4(1.0f, 1.0f, 1.0f, 1.0f);
-              }
-
-              // Load Indices
-              for (unsigned int j = 0; j < assimp_mesh->mNumFaces; ++j) {
-                const aiFace &face = assimp_mesh->mFaces[j];
-                for (unsigned int k = 0; k < face.mNumIndices; ++k) {
-                  current_mesh.indices.push_back(face.mIndices[k]);
-                }
-              }
-
-              // Load Bone Data (if skinned and model has a skeleton)
-              if (assimp_mesh->HasBones() &&
-                  loaded_data[current_node_model_index].has_skeleton) {
-                const skeleton &associated_skeleton =
-                    loaded_data[current_node_model_index].skeleton;
-                std::map<std::string, int> joint_name_to_index;
-                for (size_t joint_idx = 0;
-                     joint_idx < associated_skeleton.joint_names.size();
-                     ++joint_idx) {
-                  joint_name_to_index[associated_skeleton
-                                          .joint_names[joint_idx]] = joint_idx;
-                }
-
-                std::vector<int> bone_counts(assimp_mesh->mNumVertices, 0);
-
-                for (unsigned int j = 0; j < assimp_mesh->mNumBones; ++j) {
-                  const aiBone *assimp_bone = assimp_mesh->mBones[j];
-                  std::string bone_name = assimp_bone->mName.C_Str();
-
-                  int bone_index_in_skeleton = -1;
-                  if (joint_name_to_index.count(bone_name)) {
-                    bone_index_in_skeleton = joint_name_to_index.at(bone_name);
-                  } else {
-                    std::cerr << "Warning: Bone '" << bone_name
-                              << "' not found in associated skeleton '"
-                              << associated_skeleton.name << "'." << std::endl;
-                    continue;
-                  }
-
-                  for (unsigned int k = 0; k < assimp_bone->mNumWeights; ++k) {
-                    const aiVertexWeight &weight = assimp_bone->mWeights[k];
-                    unsigned int vertex_id = weight.mVertexId;
-                    float bone_weight = weight.mWeight;
-
-                    if (vertex_id < current_mesh.vertices.size()) {
-                      int &count = bone_counts[vertex_id];
-                      if (count < MAX_BONES_PER_MESH) {
-                        current_mesh.vertices[vertex_id].bond_indices[count] =
-                            bone_index_in_skeleton;
-                        current_mesh.vertices[vertex_id].bone_weights[count] =
-                            bone_weight;
-                        count++;
-                      } else {
-                        std::cerr
-                            << "Warning: Vertex " << vertex_id
-                            << " has more than " << MAX_BONES_PER_MESH
-                            << " bone weights in mesh " << current_mesh.name
-                            << ". Some weights will be ignored." << std::endl;
+            if (assimp_mesh->HasBones() && (current_node_model_index == -1)) {
+              std::vector<int> mathced_bone_counts(loaded_data.size(), 0);
+              for (int cmi = 0; cmi < loaded_data.size(); cmi++) {
+                auto &loaded_model = loaded_data[cmi];
+                if (loaded_model.has_skeleton) {
+                  for (int ambid = 0; ambid < assimp_mesh->mNumBones; ambid++) {
+                    for (auto joint_name : loaded_model.skeleton.joint_names) {
+                      if (joint_name ==
+                          assimp_mesh->mBones[ambid]->mName.C_Str()) {
+                        mathced_bone_counts[cmi]++;
                       }
                     }
                   }
                 }
+              }
+              int max_matched_bone_counts = 0;
+              for (int cmi = 0; cmi < loaded_data.size(); cmi++) {
+                if (mathced_bone_counts[cmi] > max_matched_bone_counts) {
+                  current_node_model_index = cmi;
+                  max_matched_bone_counts = mathced_bone_counts[cmi];
+                }
+              }
+              if (current_node_model_index != -1) {
+                node_to_model_index[node] = current_node_model_index;
+              }
+            }
 
-                // Normalize bone weights
-                for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
-                  float total_weight = 0.0f;
-                  for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
-                    total_weight += current_mesh.vertices[j].bone_weights[k];
-                  }
-                  if (total_weight > 0.0f) {
-                    for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
-                      current_mesh.vertices[j].bone_weights[k] /= total_weight;
+            mesh current_mesh;
+            current_mesh.name = assimp_mesh->mName.C_Str();
+
+            // Load Vertices
+            current_mesh.vertices.resize(assimp_mesh->mNumVertices);
+            for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
+              current_mesh.vertices[j].position = toolkit::math::vector4(
+                  assimp_mesh->mVertices[j].x, assimp_mesh->mVertices[j].y,
+                  assimp_mesh->mVertices[j].z, 1.0f);
+              if (assimp_mesh->HasNormals())
+                current_mesh.vertices[j].normal = toolkit::math::vector4(
+                    assimp_mesh->mNormals[j].x, assimp_mesh->mNormals[j].y,
+                    assimp_mesh->mNormals[j].z, 0.0f);
+              if (assimp_mesh->HasTextureCoords(0))
+                current_mesh.vertices[j].tex_coords = toolkit::math::vector4(
+                    assimp_mesh->mTextureCoords[0][j].x,
+                    assimp_mesh->mTextureCoords[0][j].y,
+                    assimp_mesh->mTextureCoords[0][j].z, 0.0f);
+              if (assimp_mesh->HasVertexColors(0))
+                current_mesh.vertices[j].color = toolkit::math::vector4(
+                    assimp_mesh->mColors[0][j].r, assimp_mesh->mColors[0][j].g,
+                    assimp_mesh->mColors[0][j].b, assimp_mesh->mColors[0][j].a);
+              else
+                current_mesh.vertices[j].color =
+                    toolkit::math::vector4(1.0f, 1.0f, 1.0f, 1.0f);
+            }
+
+            // Load Indices
+            for (unsigned int j = 0; j < assimp_mesh->mNumFaces; ++j) {
+              const aiFace &face = assimp_mesh->mFaces[j];
+              for (unsigned int k = 0; k < face.mNumIndices; ++k) {
+                current_mesh.indices.push_back(face.mIndices[k]);
+              }
+            }
+
+            // Load Bone Data (if skinned and model has a skeleton)
+            if (assimp_mesh->HasBones() &&
+                loaded_data[current_node_model_index].has_skeleton) {
+              const skeleton &associated_skeleton =
+                  loaded_data[current_node_model_index].skeleton;
+              std::map<std::string, int> joint_name_to_index;
+              for (size_t joint_idx = 0;
+                   joint_idx < associated_skeleton.joint_names.size();
+                   ++joint_idx) {
+                joint_name_to_index[associated_skeleton
+                                        .joint_names[joint_idx]] = joint_idx;
+              }
+
+              std::vector<int> bone_counts(assimp_mesh->mNumVertices, 0);
+
+              for (unsigned int j = 0; j < assimp_mesh->mNumBones; ++j) {
+                const aiBone *assimp_bone = assimp_mesh->mBones[j];
+                std::string bone_name = assimp_bone->mName.C_Str();
+
+                int bone_index_in_skeleton = -1;
+                if (joint_name_to_index.count(bone_name)) {
+                  bone_index_in_skeleton = joint_name_to_index.at(bone_name);
+                } else {
+                  spdlog::warn("Bone {0} not found in associated skeleton {1}.",
+                               bone_name, associated_skeleton.name);
+                  continue;
+                }
+
+                for (unsigned int k = 0; k < assimp_bone->mNumWeights; ++k) {
+                  const aiVertexWeight &weight = assimp_bone->mWeights[k];
+                  unsigned int vertex_id = weight.mVertexId;
+                  float bone_weight = weight.mWeight;
+
+                  if (vertex_id < current_mesh.vertices.size()) {
+                    int &count = bone_counts[vertex_id];
+                    if (count < MAX_BONES_PER_MESH) {
+                      current_mesh.vertices[vertex_id].bond_indices[count] =
+                          bone_index_in_skeleton;
+                      current_mesh.vertices[vertex_id].bone_weights[count] =
+                          bone_weight;
+                      count++;
+                    } else {
+                      spdlog::warn("Vertex {0} has more than {1} bone weights "
+                                   "in mesh {2}. Some weights will be ignored.",
+                                   vertex_id, MAX_BONES_PER_MESH,
+                                   current_mesh.name);
                     }
                   }
                 }
               }
 
-              // Load Blend Shapes
-              if (assimp_mesh->mNumAnimMeshes > 0) {
-                current_mesh.blendshapes.resize(assimp_mesh->mNumAnimMeshes);
-                for (unsigned int j = 0; j < assimp_mesh->mNumAnimMeshes; ++j) {
-                  const aiAnimMesh *assimp_blend_shape =
-                      assimp_mesh->mAnimMeshes[j];
-                  current_mesh.blendshapes[j].name =
-                      assimp_blend_shape->mName.C_Str();
-                  current_mesh.blendshapes[j].weight =
-                      0.0f; // Initialize weight
-
-                  current_mesh.blendshapes[j].data.resize(
-                      assimp_blend_shape->mNumVertices);
-                  for (unsigned int k = 0; k < assimp_blend_shape->mNumVertices;
-                       ++k) {
-                    if (assimp_blend_shape->HasPositions())
-                      current_mesh.blendshapes[j].data[k].offset_pos =
-                          toolkit::math::vector4(
-                              assimp_blend_shape->mVertices[k].x,
-                              assimp_blend_shape->mVertices[k].y,
-                              assimp_blend_shape->mVertices[k].z, 0.0f);
-                    else
-                      current_mesh.blendshapes[j].data[k].offset_pos =
-                          toolkit::math::vector4(0.0f, 0.0f, 0.0f, 0.0f);
-
-                    if (assimp_blend_shape->HasNormals())
-                      current_mesh.blendshapes[j].data[k].offset_normal =
-                          toolkit::math::vector4(
-                              assimp_blend_shape->mNormals[k].x,
-                              assimp_blend_shape->mNormals[k].y,
-                              assimp_blend_shape->mNormals[k].z, 0.0f);
-                    else
-                      current_mesh.blendshapes[j].data[k].offset_normal =
-                          toolkit::math::vector4(0.0f, 0.0f, 0.0f, 0.0f);
+              // Normalize bone weights
+              for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
+                float total_weight = 0.0f;
+                for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
+                  total_weight += current_mesh.vertices[j].bone_weights[k];
+                }
+                if (total_weight > 0.0f) {
+                  for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
+                    current_mesh.vertices[j].bone_weights[k] /= total_weight;
                   }
                 }
               }
+            }
 
-              // Add the mesh to the current model
+            // Load Blend Shapes
+            if (assimp_mesh->mNumAnimMeshes > 0) {
+              current_mesh.blendshapes.resize(assimp_mesh->mNumAnimMeshes);
+              for (unsigned int j = 0; j < assimp_mesh->mNumAnimMeshes; ++j) {
+                const aiAnimMesh *assimp_blend_shape =
+                    assimp_mesh->mAnimMeshes[j];
+                current_mesh.blendshapes[j].name =
+                    assimp_blend_shape->mName.C_Str();
+                current_mesh.blendshapes[j].weight = 0.0f; // Initialize weight
+
+                current_mesh.blendshapes[j].data.resize(
+                    assimp_blend_shape->mNumVertices);
+                for (unsigned int k = 0; k < assimp_blend_shape->mNumVertices;
+                     ++k) {
+                  if (assimp_blend_shape->HasPositions())
+                    current_mesh.blendshapes[j].data[k].offset_pos =
+                        toolkit::math::vector4(
+                            assimp_blend_shape->mVertices[k].x,
+                            assimp_blend_shape->mVertices[k].y,
+                            assimp_blend_shape->mVertices[k].z, 0.0f);
+                  else
+                    current_mesh.blendshapes[j].data[k].offset_pos =
+                        toolkit::math::vector4(0.0f, 0.0f, 0.0f, 0.0f);
+
+                  if (assimp_blend_shape->HasNormals())
+                    current_mesh.blendshapes[j].data[k].offset_normal =
+                        toolkit::math::vector4(
+                            assimp_blend_shape->mNormals[k].x,
+                            assimp_blend_shape->mNormals[k].y,
+                            assimp_blend_shape->mNormals[k].z, 0.0f);
+                  else
+                    current_mesh.blendshapes[j].data[k].offset_normal =
+                        toolkit::math::vector4(0.0f, 0.0f, 0.0f, 0.0f);
+                }
+              }
+            }
+
+            // Add the mesh to the current model
+            if (current_node_model_index == -1)
+              static_mesh_model.meshes.push_back(current_mesh);
+            else
               loaded_data[current_node_model_index].meshes.push_back(
                   current_mesh);
-            }
           }
         }
 
@@ -392,12 +424,14 @@ std::vector<model> open_model(std::string filepath) {
   // Start the node traversal from the root
   // Root node itself doesn't have a specific model unless it's a skeleton root
   assign_model_to_node_and_children(scene->mRootNode, -1);
+  // emplace back the static mesh model
+  loaded_data.emplace_back(static_mesh_model);
 
-  // // --- Step 6: Clean up models with no meshes (optional) ---
-  // loaded_data.erase(
-  //     std::remove_if(loaded_data.begin(), loaded_data.end(),
-  //                    [](const model &m) { return m.meshes.empty(); }),
-  //     loaded_data.end());
+  // --- Step 6: Clean up models with no meshes (optional) ---
+  loaded_data.erase(
+      std::remove_if(loaded_data.begin(), loaded_data.end(),
+                     [](const model &m) { return m.meshes.empty(); }),
+      loaded_data.end());
 
   return loaded_data;
 }

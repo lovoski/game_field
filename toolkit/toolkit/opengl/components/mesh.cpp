@@ -216,13 +216,16 @@ void open_model(entt::registry &registry, std::string filepath) {
       auto mesh_container = registry.create();
       auto &mesh_trans = registry.emplace<transform>(mesh_container);
       auto &mesh_comp = registry.emplace<mesh_data>(mesh_container);
-      mesh_trans.name = mesh.name;
+      mesh_trans.name = model.has_skeleton
+                            ? model.skeleton.name + ":" + mesh.name
+                            : mesh.name;
       mesh_comp.indices = mesh.indices;
       mesh_comp.vertices = mesh.vertices;
       mesh_comp.blend_shapes = mesh.blendshapes;
       mesh_comp.mesh_name = mesh.name;
       mesh_comp.model_path = filepath;
       init_opengl_buffers(mesh_comp);
+      model_base_trans.add_children(mesh_container);
     }
     if (model.has_skeleton) {
       anim::create_actor_with_skeleton(registry, model_container,
