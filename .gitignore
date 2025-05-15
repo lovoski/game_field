@@ -6,3 +6,5 @@
 /Debug
 /release
 /Release
+
+__pycache__
