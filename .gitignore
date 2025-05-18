@@ -7,4 +7,12 @@
 /release
 /Release
 
+/*.py
+
 __pycache__
+
+*.npz
+*.npy
+*.pkl
+
+/*.bvh
