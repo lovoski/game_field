@@ -18,7 +18,7 @@ void on_transform_destroyed(entt::registry &registry, entt::entity entity);
 
 void destroy_hierarchy(entt::registry &registry, entt::entity root);
 
-class transform {
+class transform : public icomponent {
 public:
   friend class transform_system;
   entt::registry *registry = nullptr;

@@ -6,7 +6,7 @@
 
 namespace toolkit::anim {
 
-struct actor {
+struct actor : public icomponent {
   assets::skeleton skel;
   std::vector<bool> joint_active;
   std::vector<entt::entity> ordered_entities;

@@ -127,22 +127,21 @@ void defered_forward_mixed::draw_menu_gui() {
 void defered_forward_mixed::draw_gui(entt::registry &registry,
                                      entt::entity entity) {
   if (auto ptr = registry.try_get<camera>(entity)) {
-    if (ImGui::CollapsingHeader("Camera")) {
-      ImGui::Checkbox("Perspective", &ptr->perspective);
-      if (ptr->perspective) {
-        ImGui::Text("Perspective Camera");
-      } else {
-        ImGui::Text("Orthogonal Camera");
-      }
-    }
+    if (ImGui::CollapsingHeader("Camera"))
+      ptr->draw_gui(nullptr);
   }
   if (auto ptr = registry.try_get<dir_light>(entity)) {
-    if (ImGui::CollapsingHeader("Dir Light")) {
-    }
+    if (ImGui::CollapsingHeader("Dir Light"))
+      ptr->draw_gui(nullptr);
   }
   if (auto ptr = registry.try_get<point_light>(entity)) {
-    if (ImGui::CollapsingHeader("Point Light")) {
-    }
+    if (ImGui::CollapsingHeader("Point Light"))
+      ptr->draw_gui(nullptr);
+  }
+  if (auto ptr = registry.try_get<mesh_data>(entity)) {
+    if (ImGui::CollapsingHeader("Mesh Data"))
+      ptr->draw_gui(nullptr); // TODO: no need for mesh data component to access
+                              // app settings
   }
 }
 

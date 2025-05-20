@@ -240,6 +240,9 @@ std::vector<model> open_model(std::string filepath) {
           unsigned int mesh_index = node->mMeshes[i];
           if (mesh_index < scene->mNumMeshes) {
             const aiMesh *assimp_mesh = scene->mMeshes[mesh_index];
+            if (assimp_mesh->mMaterialIndex >= scene->mNumMaterials) {
+              continue;
+            }
 
             if (assimp_mesh->HasBones() && (current_node_model_index == -1)) {
               std::vector<int> mathced_bone_counts(loaded_data.size(), 0);
@@ -268,8 +271,17 @@ std::vector<model> open_model(std::string filepath) {
               }
             }
 
+            if (assimp_mesh->HasBones() && current_node_model_index == -1) {
+              spdlog::error("mesh {0} has bones but no matching armature found");
+              continue;
+            }
+
             mesh current_mesh;
-            current_mesh.name = assimp_mesh->mName.C_Str();
+            current_mesh.name =
+                str_format("%s:%s", assimp_mesh->mName.C_Str(),
+                           scene->mMaterials[assimp_mesh->mMaterialIndex]
+                               ->GetName()
+                               .C_Str());
 
             // Load Vertices
             current_mesh.vertices.resize(assimp_mesh->mNumVertices);
@@ -339,7 +351,7 @@ std::vector<model> open_model(std::string filepath) {
                   if (vertex_id < current_mesh.vertices.size()) {
                     int &count = bone_counts[vertex_id];
                     if (count < MAX_BONES_PER_MESH) {
-                      current_mesh.vertices[vertex_id].bond_indices[count] =
+                      current_mesh.vertices[vertex_id].bone_indices[count] =
                           bone_index_in_skeleton;
                       current_mesh.vertices[vertex_id].bone_weights[count] =
                           bone_weight;

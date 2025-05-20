@@ -34,8 +34,8 @@ struct mesh_vertex {
   toolkit::math::vector4 normal;
   toolkit::math::vector4 tex_coords;
   toolkit::math::vector4 color;
-  int bond_indices[MAX_BONES_PER_MESH];
-  float bone_weights[MAX_BONES_PER_MESH];
+  std::array<int, MAX_BONES_PER_MESH> bone_indices;
+  std::array<float, MAX_BONES_PER_MESH> bone_weights;
 };
 struct mesh {
   std::string name;

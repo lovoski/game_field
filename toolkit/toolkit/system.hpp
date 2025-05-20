@@ -80,6 +80,9 @@ public:
   virtual void deserialize(nlohmann::json &j);
   virtual void late_deserialize(nlohmann::json &j) {}
 
+  nlohmann::json make_prefab(entt::entity root);
+  void load_prefab(nlohmann::json &j);
+
   entt::registry registry;
 
   static inline std::map<
@@ -88,6 +91,9 @@ public:
                              std::function<void(entt::registry &, entt::entity,
                                                 nlohmann::json &)>>>
       __comp_serializer_callbacks__;
+  static inline std::map<std::string,
+                         std::function<void(entt::registry &, entt::entity)>>
+      __comp_init1_funcs__;
   static inline std::map<
       std::string, std::pair<std::function<void(iapp *app, nlohmann::json &)>,
                              std::function<void(iapp *app, nlohmann::json &)>>>
@@ -98,8 +104,21 @@ public:
                                                             entt::entity)>>>
       __add_comp_map__;
 
+  static inline std::map<entt::entity, entt::entity> __entity_mapping__;
+
+  static inline std::vector<
+      std::function<void(iapp *, entt::registry &, entt::entity)>>
+      __try_draw_gui_funcs__;
+
 protected:
   std::vector<std::shared_ptr<isystem>> systems;
+};
+
+class icomponent {
+public:
+  virtual void init1() {}
+  virtual void draw_gui(iapp *app) {}
+  virtual std::string get_name() { return typeid(*this).name(); }
 };
 
 #define DECLARE_COMPONENT(class_name, category, ...)                           \
@@ -123,8 +142,21 @@ protected:
       return;                                                                  \
     registry.emplace<class_name>(entity);                                      \
   }                                                                            \
-  struct __register_serializer_##class_name {                                  \
-    __register_serializer_##class_name() {                                     \
+  inline void __try_draw_gui_##class_name(                                     \
+      toolkit::iapp *app, entt::registry &registry, entt::entity entity) {     \
+    if (auto ptr = registry.try_get<class_name>(entity)) {                     \
+      if (ImGui::CollapsingHeader(ptr->get_name().c_str()))                    \
+        ptr->draw_gui(app);                                                    \
+    }                                                                          \
+  }                                                                            \
+  inline void __comp_init1_##class_name(entt::registry &registry,              \
+                                        entt::entity entity) {                 \
+    if (auto ptr = registry.try_get<class_name>(entity)) {                     \
+      ptr->init1();                                                            \
+    }                                                                          \
+  }                                                                            \
+  struct __register_funcs_##class_name {                                       \
+    __register_funcs_##class_name() {                                          \
       toolkit::iapp::__comp_serializer_callbacks__.insert(std::make_pair(      \
           #class_name, std::make_pair(__comp_serializer__##class_name,         \
                                       __comp_deserializer__##class_name)));    \
@@ -136,11 +168,15 @@ protected:
       }                                                                        \
       toolkit::iapp::__add_comp_map__[std::string(#category)].insert(          \
           std::make_pair(std::string(#class_name), __add_comp_##class_name));  \
+      toolkit::iapp::__comp_init1_funcs__.insert(                              \
+          std::make_pair(#class_name, __comp_init1_##class_name));             \
+      toolkit::iapp::__try_draw_gui_funcs__.push_back(                         \
+          __try_draw_gui_##class_name);                                        \
     }                                                                          \
   };                                                                           \
-  static __register_serializer_##class_name                                    \
-      __register_serializer_instance_##class_name =                            \
-          __register_serializer_##class_name();
+  static __register_funcs_##class_name                                         \
+      __register_funcs_instance_##class_name =                                 \
+          __register_funcs_##class_name();
 
 #define DECLARE_SYSTEM(class_name, ...)                                        \
   REFLECT(class_name, __VA_ARGS__)                                             \
@@ -167,3 +203,22 @@ protected:
           __register_serializer_##class_name();
 
 }; // namespace toolkit
+
+namespace nlohmann {
+template <> struct adl_serializer<entt::entity> {
+  static void to_json(json &j, const entt::entity &e) {
+    j = static_cast<uint32_t>(entt::to_integral(e));
+  }
+
+  static void from_json(const json &j, entt::entity &e) {
+    uint32_t raw_id = j.get<uint32_t>();
+    entt::entity original = entt::entity{entt::to_entity(raw_id)};
+
+    e = original;
+    if (toolkit::iapp::__entity_mapping__.find(original) !=
+        toolkit::iapp::__entity_mapping__.end()) {
+      e = toolkit::iapp::__entity_mapping__[original];
+    }
+  }
+};
+} // namespace nlohmann

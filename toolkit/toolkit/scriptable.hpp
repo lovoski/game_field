@@ -16,23 +16,18 @@ namespace toolkit {
  * dimension of the window, the scene, input signals, active camera etc. are
  * stored in `opengl::g_instance`.
  */
-class scriptable {
+class scriptable : public icomponent {
 public:
   scriptable() { __registered_scripts__.insert(this); }
 
   virtual void start() {}
   virtual void destroy() {}
 
-  virtual void init1() {}
-
   virtual void draw_to_scene(iapp *app) {}
-  virtual void draw_gui(iapp *app) {}
 
   virtual void preupdate(iapp *app, float dt) {}
   virtual void update(iapp *app, float dt) {}
   virtual void lateupdate(iapp *app, float dt) {}
-
-  virtual std::string get_name() { return typeid(*this).name(); }
 
   bool enabled = true;
 
@@ -53,10 +48,7 @@ public:
       f(registry);
   }
 
-  void init1(entt::registry &registry) override {
-    for (auto script : scriptable::__registered_scripts__)
-      script->init1();
-  }
+  void init1(entt::registry &registry) override {}
 
   void draw_gui(entt::registry &registry, entt::entity entity) override {
     auto ptr = registry.ctx().get<iapp *>();

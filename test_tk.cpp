@@ -17,6 +17,14 @@ struct test0 {
 };
 REFLECT(test0, a, b, v, m)
 
+struct test1 {
+  toolkit::math::vector4 m0;
+  std::array<int, 4> m1;
+  std::array<float, 4> m2;
+  std::array<double, 4> m3;
+};
+REFLECT(test1, m0, m1, m2)
+
 int main() {
   std::string filepath;
   // if (toolkit::open_file_dialog("Select image file", {"*.png"}, "*.png", filepath)) {
@@ -30,8 +38,16 @@ int main() {
   //   img1.save_png("test_image.png");
   // }
 
-  std::cout << toolkit::abspath("test_image.png") << std::endl;
-  std::cout << toolkit::relpath("C:\\repo\\toolkit\\build\\Debug\\test_image.png") << std::endl;
+  // std::cout << toolkit::abspath("test_image.png") << std::endl;
+  // std::cout << toolkit::relpath(
+  //                  "C:\\repo\\toolkit\\build\\Debug\\test_image.png")
+  //           << std::endl;
+
+  test1 t1;
+
+  nlohmann::json data = t1;
+
+  std::cout << data.dump(2) << std::endl;
 
   return 0;
 }

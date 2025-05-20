@@ -6,6 +6,36 @@
 
 namespace toolkit::opengl {
 
+void mesh_data::draw_gui(iapp *app) {
+  if (ImGui::BeginTable(("##mesh" + mesh_name).c_str(), 3,
+                        ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders)) {
+    ImGui::TableSetupColumn("Mesh Name");
+    ImGui::TableSetupColumn("Num Faces");
+    ImGui::TableSetupColumn("Num Vertices");
+    ImGui::TableHeadersRow();
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("%s", mesh_name.c_str());
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Text("%d", (int)(indices.size() / 3));
+    ImGui::TableSetColumnIndex(2);
+    ImGui::Text("%d", (int)(vertices.size()));
+    ImGui::EndTable();
+  }
+  if (blend_shapes.size() > 0) {
+    if (ImGui::TreeNode("Blend Shapes")) {
+      for (auto &blend : blend_shapes) {
+        ImGui::SliderFloat(blend.name.c_str(), &(blend.weight), -10.0f, 10.0f);
+      }
+      ImGui::TreePop();
+    }
+  }
+}
+
+void mesh_data::init1() {
+  spdlog::warn("Mesh {0} init1 gets called", mesh_name);
+}
+
 struct _render_vertex {
   float position[4];
   float normal[4];
@@ -37,9 +67,9 @@ void init_opengl_buffers(mesh_data &data) {
                 4 * sizeof(float));
     std::memcpy(vertices[i].color, data.vertices[i].color.data(),
                 4 * sizeof(float));
-    std::memcpy(vertices[i].bone_ids, data.vertices[i].bond_indices,
+    std::memcpy(vertices[i].bone_ids, data.vertices[i].bone_indices.data(),
                 assets::MAX_BONES_PER_MESH * sizeof(int));
-    std::memcpy(vertices[i].bone_weights, data.vertices[i].bone_weights,
+    std::memcpy(vertices[i].bone_weights, data.vertices[i].bone_weights.data(),
                 assets::MAX_BONES_PER_MESH * sizeof(float));
   }
 

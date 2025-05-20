@@ -7,7 +7,7 @@
 
 namespace toolkit::opengl {
 
-struct mesh_data {
+struct mesh_data : public icomponent {
   std::string mesh_name, model_path;
   std::vector<assets::mesh_vertex> vertices;
   std::vector<uint32_t> indices;
@@ -16,10 +16,14 @@ struct mesh_data {
   vao vertex_array;
   buffer vertex_buffer, index_buffer;
   buffer blend_shape_buffer, blend_shape_weights_buffer;
+
+  void draw_gui(iapp *app) override;
+
+  void init1() override;
 };
 DECLARE_COMPONENT(mesh_data, data, mesh_name, model_path)
 
-struct scene_mesh_data {
+struct scene_mesh_data : public icomponent {
   bool should_render_mesh = true;
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
   int scene_vertex_offset = 0, scene_index_offset = 0;

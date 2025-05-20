@@ -235,6 +235,23 @@ void editor::draw_main_menubar() {
           }
         }
       }
+      if (ImGui::MenuItem("Import Prefab")) {
+        std::string filepath;
+        if (open_file_dialog("Import prefab to current scene", {"*.prefab"},
+                             "*.prefab", filepath)) {
+          std::ifstream input(filepath);
+          if (input.is_open()) {
+            auto data = nlohmann::json::parse(
+                std::string((std::istreambuf_iterator<char>(input)),
+                            std::istreambuf_iterator<char>()));
+            load_prefab(data);
+            spdlog::error("Import prefab to current scene from {0}", filepath);
+          } else {
+            spdlog::error("Failed to import prefab from {0}", filepath);
+          }
+          input.close();
+        }
+      }
       ImGui::Separator();
 
       // ---------------------- Assets save/load menu ----------------------
@@ -447,6 +464,21 @@ void editor::draw_entity_hierarchy() {
   };
   auto right_click_entity = [&](entt::entity entity) {
     ImGui::SeparatorText("Operation");
+    if (ImGui::MenuItem("Make Prefab")) {
+      std::string filepath;
+      if (save_file_dialog("Save entity hierarchy as prefab", {"*.prefab"},
+                           "*.prefab", filepath)) {
+        auto data = make_prefab(entity);
+        std::ofstream output(filepath);
+        if (output.is_open()) {
+          output << data.dump(2) << std::endl;
+          spdlog::info("Save prefab to filepath {0}", filepath);
+        } else {
+          spdlog::error("Failed to save prefab to filepath {0}", filepath);
+        }
+        output.close();
+      }
+    }
     if (ImGui::MenuItem("Clear Parent")) {
       auto &trans = registry.get<transform>(entity);
       trans.remove_parent();

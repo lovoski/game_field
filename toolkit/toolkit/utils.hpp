@@ -15,8 +15,10 @@ std::string replace(std::string str, std::string pattern, std::string replace);
 bool endswith(std::string target, std::string pattern);
 std::string str_format(const char *format, ...);
 
-inline std::filesystem::path relpath(std::filesystem::path filepath) {
-  return std::filesystem::relative(filepath);
+inline std::filesystem::path
+relpath(std::filesystem::path filepath,
+        std::filesystem::path base = std::filesystem::current_path()) {
+  return std::filesystem::relative(filepath, base);
 }
 inline std::filesystem::path abspath(std::filesystem::path filepath) {
   return std::filesystem::absolute(filepath);
