@@ -235,6 +235,9 @@ void editor::draw_main_menubar() {
           }
         }
       }
+      ImGui::Separator();
+
+      ImGui::MenuItem("Prefab", nullptr, false, false);
       if (ImGui::MenuItem("Import Prefab")) {
         std::string filepath;
         if (open_file_dialog("Import prefab to current scene", {"*.prefab"},
@@ -245,7 +248,7 @@ void editor::draw_main_menubar() {
                 std::string((std::istreambuf_iterator<char>(input)),
                             std::istreambuf_iterator<char>()));
             load_prefab(data);
-            spdlog::error("Import prefab to current scene from {0}", filepath);
+            spdlog::info("Import prefab to current scene from {0}", filepath);
           } else {
             spdlog::error("Failed to import prefab from {0}", filepath);
           }

@@ -12,31 +12,33 @@
 
 #pragma once
 
-#include "toolkit/math.hpp"
 #include "toolkit/loaders/motion.hpp"
+#include "toolkit/math.hpp"
+#include "toolkit/reflect.hpp"
 
 namespace toolkit::assets {
-
-constexpr uint32_t MAX_BONES_PER_MESH = 4;
-constexpr uint32_t MAX_BLEND_SHAPES_PER_MESH = 52;
 
 struct blend_shape_vertex {
   toolkit::math::vector4 offset_pos;
   toolkit::math::vector4 offset_normal;
 };
+REFLECT(blend_shape_vertex, offset_pos, offset_normal)
 struct blend_shape {
   float weight;
   std::string name;
   std::vector<blend_shape_vertex> data;
 };
+REFLECT(blend_shape, weight, name, data)
 struct mesh_vertex {
   toolkit::math::vector4 position;
   toolkit::math::vector4 normal;
   toolkit::math::vector4 tex_coords;
   toolkit::math::vector4 color;
-  std::array<int, MAX_BONES_PER_MESH> bone_indices;
-  std::array<float, MAX_BONES_PER_MESH> bone_weights;
+  std::array<int, 4> bone_indices;
+  std::array<float, 4> bone_weights;
 };
+REFLECT(mesh_vertex, position, normal, tex_coords, color, bone_indices,
+        bone_weights)
 struct mesh {
   std::string name;
   std::vector<unsigned int> indices;
@@ -52,4 +54,4 @@ struct model {
 
 std::vector<model> open_model(std::string filepath);
 
-}; // namespace Common::Assets
+}; // namespace toolkit::assets

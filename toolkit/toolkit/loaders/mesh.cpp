@@ -350,7 +350,7 @@ std::vector<model> open_model(std::string filepath) {
 
                   if (vertex_id < current_mesh.vertices.size()) {
                     int &count = bone_counts[vertex_id];
-                    if (count < MAX_BONES_PER_MESH) {
+                    if (count < 4) {
                       current_mesh.vertices[vertex_id].bone_indices[count] =
                           bone_index_in_skeleton;
                       current_mesh.vertices[vertex_id].bone_weights[count] =
@@ -359,7 +359,7 @@ std::vector<model> open_model(std::string filepath) {
                     } else {
                       spdlog::warn("Vertex {0} has more than {1} bone weights "
                                    "in mesh {2}. Some weights will be ignored.",
-                                   vertex_id, MAX_BONES_PER_MESH,
+                                   vertex_id, 4,
                                    current_mesh.name);
                     }
                   }
@@ -369,11 +369,11 @@ std::vector<model> open_model(std::string filepath) {
               // Normalize bone weights
               for (unsigned int j = 0; j < assimp_mesh->mNumVertices; ++j) {
                 float total_weight = 0.0f;
-                for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
+                for (int k = 0; k < 4; ++k) {
                   total_weight += current_mesh.vertices[j].bone_weights[k];
                 }
                 if (total_weight > 0.0f) {
-                  for (int k = 0; k < MAX_BONES_PER_MESH; ++k) {
+                  for (int k = 0; k < 4; ++k) {
                     current_mesh.vertices[j].bone_weights[k] /= total_weight;
                   }
                 }

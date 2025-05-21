@@ -8,20 +8,19 @@
 namespace toolkit::opengl {
 
 struct mesh_data : public icomponent {
-  std::string mesh_name, model_path;
+  std::string mesh_name, model_name;
   std::vector<assets::mesh_vertex> vertices;
   std::vector<uint32_t> indices;
   std::vector<assets::blend_shape> blend_shapes;
 
   vao vertex_array;
   buffer vertex_buffer, index_buffer;
-  buffer blend_shape_buffer, blend_shape_weights_buffer;
 
   void draw_gui(iapp *app) override;
 
   void init1() override;
 };
-DECLARE_COMPONENT(mesh_data, data, mesh_name, model_path)
+DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name)
 
 struct scene_mesh_data : public icomponent {
   bool should_render_mesh = true;
