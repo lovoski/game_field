@@ -98,9 +98,9 @@ nlohmann::json iapp::make_prefab(entt::entity root) {
 }
 
 void iapp::load_prefab(nlohmann::json &j) {
+  __entity_mapping__.clear();
   std::vector<entt::entity> old_entities =
       j["entities"].get<std::vector<entt::entity>>();
-  __entity_mapping__.clear();
   for (auto old_ent : old_entities) {
     auto new_ent = registry.create();
     __entity_mapping__[old_ent] = new_ent;
