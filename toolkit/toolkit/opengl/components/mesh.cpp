@@ -189,6 +189,8 @@ void mesh_data::init1() {
   input.close();
 }
 
+void mesh_data::draw(GLenum mode) { draw_mesh_data(*this, mode); }
+
 void draw_mesh_data(mesh_data &data, GLenum mode) {
   data.vertex_array.bind();
   glDrawElements(mode, data.indices.size(), GL_UNSIGNED_INT, 0);
@@ -388,6 +390,9 @@ void open_model(entt::registry &registry, std::string filepath) {
       mesh_comp.blend_shapes = mesh.blendshapes;
       mesh_comp.mesh_name = mesh.name;
       mesh_comp.model_name = model.name;
+      if (model.has_skeleton) {
+        mesh_comp.actor_entity = model_container;
+      }
       init_opengl_buffers(mesh_comp);
       model_base_trans.add_children(mesh_container);
     }

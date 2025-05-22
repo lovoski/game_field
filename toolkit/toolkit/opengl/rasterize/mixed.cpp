@@ -1,127 +1,23 @@
 #include "toolkit/opengl/rasterize/mixed.hpp"
+#include "toolkit/opengl/rasterize/kernal.hpp"
+#include "toolkit/opengl/rasterize/shaders.hpp"
 #include "toolkit/scriptable.hpp"
 
 namespace toolkit::opengl {
 
-const std::string gbuffer_geometry_pass_vs = R"(
-#version 430 core
-layout (location = 0) in vec4 aPos;
-layout (location = 1) in vec4 aNormal;
-
-uniform mat4 gModel;
-uniform mat4 gVP;
-
-out vec3 worldPos;
-out vec3 worldNormal;
-
-void main() {
-  worldNormal = normalize(mat3(gModel)*aNormal.xyz);
-  worldPos = (gModel * aPos).xyz;
-
-  gl_Position = gVP * vec4(worldPos, 1.0);
-}
-)";
-const std::string gbuffer_geometry_pass_fs = R"(
-#version 430 core
-
-layout (location = 0) out vec4 gPosition; // G-buffer position output
-layout (location = 1) out vec4 gNormal;   // G-buffer normal output
-layout (location = 2) out vec4 gMask;
-
-in vec3 worldPos;
-in vec3 worldNormal;
-
-void main() {
-  gPosition = vec4(worldPos, 1.0);
-  // map normal to range [0, 1]
-  gNormal = vec4(normalize(worldNormal) * 0.5 + 0.5, 1.0);
-  gMask = vec4(1,0,0,0);
-}
-)";
-
-const std::string defered_phong_pass_vs = R"(
-#version 430 core
-
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec2 aTexCoord;
-
-out vec2 texCoord;
-
-void main() {
-  texCoord = aTexCoord;
-  gl_Position = vec4(aPos, 1.0);
-}
-)";
-
-const std::string defered_phong_pass_fs = R"(
-#version 430 core
-
-uniform sampler2D gPosTex;
-uniform sampler2D gNormalTex;
-uniform sampler2D gGbufferDepthTex;
-uniform sampler2D gCbufferDepthTex;
-uniform sampler2D gMaskTex;
-
-uniform vec3 gViewDir;
-
-in vec2 texCoord;
-
-out vec4 FragColor;
-
-struct light_data_pacakge {
-  ivec4 idata;
-  vec4 pos;
-  vec4 color;
-  vec4 fdata0;
-  vec4 fdata1;
+struct _packed_vertex {
+  math::vector4 position;
+  math::vector4 normal;
 };
-layout(std430, binding = 0) buffer SceneLights {
-  light_data_pacakge gLights[];
-};
-
-void main() {
-  vec4 mask = texture(gMaskTex, texCoord);
-  // only perform color pass rendering when there's actual fragment.
-  if (mask.x == 0) {
-    discard;
-  }
-
-  float g_depth = texture(gGbufferDepthTex, texCoord).r;
-  float c_depth = texture(gCbufferDepthTex, texCoord).r;
-  // manual depth test
-  if (g_depth > c_depth) {
-    discard;
-  }
-  gl_FragDepth = g_depth;
-  vec3 result = vec3(0.0);
-  vec3 worldPos = texture(gPosTex, texCoord).xyz;
-  vec3 worldNormal = normalize(texture(gNormalTex, texCoord).xyz);
-  for (int i = 0; i < gLights.length(); i++) {
-    light_data_pacakge lightData = gLights[i];
-    vec3 lightColor = lightData.color.xyz;
-    vec3 lightPos = lightData.pos.xyz;
-    vec3 lightDir;
-    if (lightData.idata[0] == 0) {
-      lightDir = -normalize(lightData.fdata0.xyz);
-    } else if (lightData.idata[0] == 1) {
-      lightDir = normalize(lightPos-worldPos);
-    }
-    float diff = 0.5 * (dot(worldNormal, lightDir) + 1.0);
-    vec3 diffuse = diff * lightColor;
-    // vec3 halfwayDir = normalize(lightDir + normalize(gViewDir));
-    // float spec = pow(max(dot(fragWorldNormal, halfwayDir), 0.0), 32.0); // Shininess factor
-    // vec3 specular = spec * lightColor;
-    result += diffuse;
-  }
-
-  FragColor = vec4(result, 1.0);
-}
-)";
 
 void defered_forward_mixed::draw_menu_gui() {
+  ImGui::MenuItem("Grid", nullptr, nullptr, false);
   ImGui::Checkbox("Show Grid", &should_draw_grid);
-  ImGui::InputInt("Grid Size", &grid_size);
   ImGui::InputInt("Grid Spacing", &grid_spacing);
+  ImGui::Separator();
+
+  ImGui::MenuItem("Debug", nullptr, nullptr, false);
+  ImGui::Checkbox("Draw Debug", &should_draw_debug);
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -158,12 +54,22 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   defered_phong_pass.compile_shader_from_source(defered_phong_pass_vs,
                                                 defered_phong_pass_fs);
 
+  collect_scene_buffer_program.create(
+      str_format(collect_scene_buffer_program_source.c_str(),
+                 scene_buffer_program_workgroup_size));
+  scene_buffer_apply_blendshape_program.create(
+      str_format(scene_buffer_apply_blendshape_program_source.c_str(),
+                 scene_buffer_program_workgroup_size));
+  scene_buffer_apply_mesh_skinning_program.create(
+      str_format(scene_buffer_apply_mesh_skinning_program_source.c_str(),
+                 scene_buffer_program_workgroup_size));
+  scene_vertex_buffer.create();
+  scene_index_buffer.create();
+
   gbuffer.create();
   cbuffer.create();
   resize(g_instance.scene_width, g_instance.scene_height);
 
-  scene_vertex_buffer.create();
-  scene_index_buffer.create();
   light_data_buffer.create();
 }
 
@@ -232,7 +138,45 @@ void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
   });
 }
 
-void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {}
+void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
+  auto mesh_data_entities = registry.view<entt::entity, transform, mesh_data>();
+  int64_t current_scene_vertex_counter = 0, current_scene_index_counter = 0;
+  mesh_data_entities.each(
+      [&](entt::entity entity, transform &trans, mesh_data &data) {
+        current_scene_vertex_counter += data.vertices.size();
+        current_scene_index_counter += data.indices.size();
+      });
+  if (current_scene_vertex_counter != scene_vertex_counter) {
+    scene_vertex_counter = current_scene_vertex_counter;
+    // create new scene vertex and index buffer
+    scene_vertex_buffer.set_data_ssbo(
+        sizeof(_packed_vertex) * scene_vertex_counter, GL_DYNAMIC_DRAW);
+    scene_index_buffer.set_data_ssbo(
+        sizeof(unsigned int) * current_scene_index_counter, GL_DYNAMIC_DRAW);
+
+    int64_t current_vertex_offset = 0, current_index_offset = 0;
+    mesh_data_entities.each(
+        [&](entt::entity entity, transform &trans, mesh_data &data) {
+          data.scene_vertex_offset = current_vertex_offset;
+          data.scene_index_offset = current_index_offset;
+          current_vertex_offset += data.vertices.size();
+          current_index_offset += data.indices.size();
+        });
+  }
+  // use different methods depending on the type of mesh_data
+  mesh_data_entities.each(
+      [&](entt::entity entity, transform &trans, mesh_data &data) {
+        int active_blendshapes = 0;
+        for (auto &bs : data.blend_shapes) {
+          if (bs.weight != 0.0f) {
+            active_blendshapes += 1;
+          }
+        }
+        if (active_blendshapes == 0) {
+        } else {
+        }
+      });
+}
 
 void defered_forward_mixed::update_obj_bbox(entt::registry &registry) {}
 
@@ -295,10 +239,12 @@ void defered_forward_mixed::render(entt::registry &registry) {
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
 
-    // debug rendering
-    if (auto app_ptr = registry.ctx().get<iapp *>()) {
-      auto script_sys = app_ptr->get_sys<script_system>();
-      script_sys->draw_to_scene(app_ptr);
+    if (should_draw_debug) {
+      // debug rendering
+      if (auto app_ptr = registry.ctx().get<iapp *>()) {
+        auto script_sys = app_ptr->get_sys<script_system>();
+        script_sys->draw_to_scene(app_ptr);
+      }
     }
 
     glEnable(GL_DEPTH_TEST);

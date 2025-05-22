@@ -16,19 +16,20 @@ struct mesh_data : public icomponent {
   vao vertex_array;
   buffer vertex_buffer, index_buffer;
 
+  bool should_render_mesh = true;
+  int64_t scene_vertex_offset = 0, scene_index_offset = 0;
+  math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
+
+  entt::entity actor_entity = entt::null;
+
   void draw_gui(iapp *app) override;
+
+  void draw(GLenum mode = GL_TRIANGLES);
 
   void init1() override;
 };
-DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name)
-
-struct scene_mesh_data : public icomponent {
-  bool should_render_mesh = true;
-  math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
-  int scene_vertex_offset = 0, scene_index_offset = 0;
-};
-DECLARE_COMPONENT(scene_mesh_data, data, should_render_mesh, bb_min, bb_max,
-                  scene_vertex_offset, scene_index_offset)
+DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh,
+                  bb_min, bb_max, scene_vertex_offset, scene_index_offset)
 
 void draw_mesh_data(mesh_data &data, GLenum mode = GL_TRIANGLES);
 

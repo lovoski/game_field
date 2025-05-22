@@ -52,7 +52,9 @@ public:
   void draw_menu_gui() override;
 
   bool should_draw_grid = true;
-  int grid_spacing = 10, grid_size = 100;
+  int grid_spacing = 10;
+
+  bool should_draw_debug = true;
 
 protected:
   framebuffer gbuffer, cbuffer;
@@ -60,13 +62,21 @@ protected:
   texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex;
   texture color_buffer_depth_tex;
 
-  buffer scene_vertex_buffer, scene_index_buffer;
-
   // uniform buffer storing all active lights
   buffer light_data_buffer;
-
+  
   texture color_tex;
+
+  // scene unique buffer
+  buffer scene_vertex_buffer, scene_index_buffer;
+  int scene_buffer_program_workgroup_size = 256;
+  compute_shader collect_scene_buffer_program;
+  compute_shader scene_buffer_apply_blendshape_program;
+  compute_shader scene_buffer_apply_mesh_skinning_program;
+
+  int64_t scene_vertex_counter = 0;
 };
-DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing, grid_size)
+DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
+               should_draw_debug)
 
 }; // namespace toolkit::opengl
