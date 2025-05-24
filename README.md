@@ -40,9 +40,15 @@ target_link_libraries(main PRIVATE toolkit)
 5. `.scene`: 自定义场景文件，json 格式
 6. `.prefab`: 自定义 prefab 文件，json 格式
 
+这里对场景文件和 prefab 文件做出说明。场景指的是包含了一个场景中所有的实体，组件，系统参数的文件，本身就是完整的。prefab 文件保存了一个场景中一部分实体，组件的状态，并不是完整的场景中，但是可以快速融合到现有的场景中，可以用来保存一些角色，场景。
+
 ### 插件和 ecs 编写规范
 
-为了确保插件和组件能够正确通过静态反射机制实现序列化，所有插件和组件必须分别继承自 `scriptable` 和 `icomponent`，并分别通过宏 `DECLARE_SCRIPT` 和 `DECLARE_COMPONENT` 声明：
+由于这个工具包的架构非常简洁，**我们必须要手动维护插件的生命周期**。具体来说，我们不能直接复制一个插件（script）变量，否则会创建一个新的插件到同一个实体上，对于插件的操作必须是引用或者指针。同时，插件内部的变量如果需要被序列化，应当确保其能够被序列化反序列化为 `nlohmann::json` 格式，对于特殊的成员（opengl buffer，texture），我们应当在 `init1` 函数中确保这个插件反序列化后对象仍然是有效的，或者自己理清楚何时如何创建这些特殊成员，何时使用这些成员。
+
+另外，**插件内部可以安全保存实体（`entt::entity`），但是不能保存任何的组件（`component`）**，任何需要组件的操作都应该在函数的内部通过 `registry.get<T>(e)` 经过 $O(1)$ 时间获得。对于插件内部直接保存的实体（`entt::entity`），不论是直接保存当前的场景，还是保存部分场景为 prefab，我都能够确保反序列化之后保存的实体变量值被映射回当前有效的值。需要额外注意的是，保存实体不能保存实体的引用或者指针（实际上`entt::entity`大小与 `uint32_t` 相同，不必在意开销）。
+
+为了确保插件和组件能够正确通过静态反射机制实现序列化，**所有插件和组件必须分别继承自 `scriptable` 和 `icomponent`，并分别通过宏 `DECLARE_SCRIPT` 和 `DECLARE_COMPONENT` 声明**：
 
 ```cpp
 // Specifications for a script (插件)
@@ -76,7 +82,7 @@ struct point_light : public icomponent {
 DECLARE_COMPONENT(point_light, graphics, color, enabled)
 ```
 
-插件的功能类似于 unity 中的 c# 脚本，提供以下函数模板：
+插件的功能类似于 unity 中的 c# 脚本，提供以下函数模板，需要注意的是，如果有一些初始化操作要做，不能在插件的构造函数中编写，此时插件内部的 `registry` 和 `entity` 都还未正确设置，初始化操作应当在 `start` 函数中执行。对于特殊成员的初始化，我们需要在 `init1` 函数中执行（这个函数仅在反序列化场景或者 prefab 中所有的实体和组件之后对于每个组件及其子类调用一次），这种特殊成员的初始化可以参考 `toolkit/opengl/components/mesh.hpp`。
 
 ```cpp
 // toolkit/scriptable.hpp
@@ -141,5 +147,15 @@ struct test1 {
 
   test0 t0; // this is legal since `test0` is reflected.
 };
-REFLECT(test1, a, b, v, m, t1)
+REFLECT(test1, a, b, v, m, t0)
 ```
+
+对于反射的实现大致可以理解成通过宏函数将需要反射的成员指针存放到一个 tuple 中，随后在 `nlohmann::json` 的 `to_json` 和 `from_json` 中遍历这个 tuple，实现序列化和反序列化。
+
+因此，其实只要能够正确转化成 `nlohmann::json` 格式的结构，就能够直接放入到反射宏中。
+
+### 编程应当遵循的规范
+
+为了方便代码的维护和拓展，尽量注意以下几点：
+1. 把不同功能的函数份文件存放不是必需的，一切以方便浏览为前提
+2. 尽量不要声明过多类内的全局变量，能够在函数内部声明的变量在内部解决
