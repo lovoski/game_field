@@ -21,6 +21,17 @@ struct light_data_pacakge {
   math::vector4 fdata1;
 };
 
+struct draw_elements_indirect_command {
+  GLuint num_indices;   // Number of indices to draw for this mesh.
+  GLuint num_instances; // Typically 1, unless you are instancing the same mesh
+                        // multiple times with different model matrices (which
+                        // is also an option, but we'll focus on distinct meshes
+                        // first).
+  GLuint index_offset;  // Offset into the EBO for this mesh.
+  GLuint vertex_offset; // Offset into the VBO for this mesh.
+  GLuint base_instance; // Use this to index into custom SSBO.
+};
+
 class defered_forward_mixed : public isystem {
 public:
   void init0(entt::registry &registry) override;
@@ -64,17 +75,24 @@ protected:
 
   // uniform buffer storing all active lights
   buffer light_data_buffer;
-  
+
   texture color_tex;
 
   // scene unique buffer
+  vao scene_vao;
   buffer scene_vertex_buffer, scene_index_buffer;
+  buffer scene_model_matrices_buffer, scene_indirect_draw_commands_buffer;
+  buffer draw_indirect_buffer;
+  std::vector<draw_elements_indirect_command> indirect_commands;
   int scene_buffer_program_workgroup_size = 256;
   compute_shader collect_scene_buffer_program;
+  compute_shader collect_scene_index_buffer_program;
   compute_shader scene_buffer_apply_blendshape_program;
   compute_shader scene_buffer_apply_mesh_skinning_program;
 
-  int64_t scene_vertex_counter = 0;
+  buffer skeleton_matrices_buffer;
+  
+  int64_t scene_vertex_counter = 0, scene_index_counter = 0;
 };
 DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                should_draw_debug)

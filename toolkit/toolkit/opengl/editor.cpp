@@ -8,7 +8,7 @@ namespace toolkit::opengl {
 
 void editor::init() {
   auto &instance = context::get_instance();
-  instance.init();
+  instance.init(1920, 1080, "Editor", 4, 6);
   reset();
 
   // init imgui

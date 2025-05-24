@@ -2,7 +2,7 @@
 
 本项目主体包括下面的几个部分：
 
-1. `toolkit`: ecs 架构的精简游戏引擎框架，是其他项目的基础，同时也包含一个 editor 提供可视化编辑，editor 通过 opengl 4.3 可视化，实现了简易但是易于使用的编译期反射，包含序列化和 c++ 插件功能
+1. `toolkit`: ecs 架构的精简游戏引擎框架，是其他项目的基础，同时也包含一个 editor 提供可视化编辑，editor 通过 opengl 4.6 可视化，实现了简易但是易于使用的编译期反射，包含序列化和 c++ 插件功能
 2. `manga_viewer`: 可以读入 **.pdf**,**.epub** 格式电子书的阅读器，基于 `toolkit` 封装的 opengl 命令，实现了仿真翻页功能，通过异步加载尽可能避免了加载电子书的时间
 3. `python`: 用于数据处理的 python 代码，包含了读入 bvh 文件的库，可能用到的 motion builder 和 blender 脚本
 5. `scripts`: 适用于 toolkit 中 editor 的 c++ 插件（一般用来可视化数据）
@@ -11,7 +11,7 @@
 
 ### 首要说明
 
-工具包本身完全采用 c++20 编写，在 msvc 上编译，通过 cmake 构建，没有使用到编译器独有的特性，支持 window，linux，macos 平台。（macos 原生不支持 opengl 4.3，可能无法编译）。
+工具包本身完全采用 c++20 编写，在 msvc 上编译，通过 cmake 构建，没有使用到编译器独有的特性，支持 window，linux，macos 平台。（macos 原生不支持 opengl 4.6，可能无法编译）。
 
 工具包中使用右手坐标系，以正 Y 为上方向，正 Z 为前方向（不同于 unity 中的左手系，正 Y 上方向，正 Z 前方向）。渲染时摄像机朝向负 Z 方向，遵循 opengl 的规范。采用 32 位浮点数。
 

@@ -15,3 +15,6 @@ target_link_libraries(test_tk PRIVATE toolkit)
 
 add_executable(test_gl test_gl.cpp ${SCRIPTS_SRC})
 target_link_libraries(test_gl PRIVATE toolkit)
+
+add_executable(test_cmd test_cmd.cpp)
+target_link_libraries(test_cmd PRIVATE toolkit)

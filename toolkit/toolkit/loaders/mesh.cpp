@@ -25,7 +25,7 @@ math::matrix4 to_matrix4(const aiMatrix4x4 &mat) {
   result(3, 1) = mat.d2;
   result(3, 2) = mat.d3;
   result(3, 3) = mat.d4;
-  return result;
+  return result.transpose();
 }
 
 std::vector<model> open_model(std::string filepath) {

@@ -126,7 +126,8 @@ void mesh_data::draw_gui(iapp *app) {
   if (blend_shapes.size() > 0) {
     if (ImGui::TreeNode("Blend Shapes")) {
       for (auto &blend : blend_shapes) {
-        ImGui::SliderFloat(blend.name.c_str(), &(blend.weight), -10.0f, 10.0f);
+        ImGui::DragFloat(blend.name.c_str(), &(blend.weight), 0.001f, -1e5,
+                         1e5);
       }
       ImGui::TreePop();
     }
@@ -223,6 +224,15 @@ void init_opengl_buffers_internal(mesh_data &data,
   data.vertex_array.unbind();
   data.vertex_buffer.unbind_as(GL_ARRAY_BUFFER);
   data.index_buffer.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
+
+  if (blendshapes.size() > 0) {
+    data.blendshape_targets.resize(blendshapes.size());
+    for (int i = 0; i < blendshapes.size(); i++) {
+      data.blendshape_targets[i].create();
+      data.blendshape_targets[i].set_data_ssbo(blendshapes[i].vertices,
+                                               GL_STATIC_DRAW);
+    }
+  }
 
   if (save_asset) {
     // save data into text file relative to binary file
