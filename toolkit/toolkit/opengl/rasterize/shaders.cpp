@@ -10,17 +10,14 @@ layout(std430, binding = 0) buffer ModelMatrices {
 };
 
 uniform mat4 gVP;
+uniform mat4 gModel;
 
 out vec3 worldPos;
 out vec3 worldNormal;
 
 void main() {
-  mat4 model_mat = gModels[gl_BaseInstance];
-  worldNormal = normalize(mat3(model_mat)*aNormal.xyz);
-  worldPos = (model_mat * aPos).xyz;
-
-  // worldNormal = normalize(aNormal.xyz);
-  // worldPos = aPos.xyz;
+  worldNormal = normalize(mat3(gModel)*aNormal.xyz);
+  worldPos = (gModel * aPos).xyz;
 
   gl_Position = gVP * vec4(worldPos, 1.0);
 }

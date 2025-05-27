@@ -72,8 +72,6 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   scene_vertex_buffer.create();
   scene_index_buffer.create();
   scene_vao.create();
-  scene_model_matrices_buffer.create();
-  indirect_draw_buffer.create();
 
   skeleton_matrices_buffer.create();
 
@@ -153,24 +151,17 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
   auto mesh_data_entities = registry.view<entt::entity, transform, mesh_data>();
 
   int64_t current_scene_vertex_counter = 0, current_scene_index_counter = 0;
-  std::vector<math::matrix4> scene_model_matrices;
   mesh_data_entities.each(
       [&](entt::entity entity, transform &trans, mesh_data &data) {
-        scene_model_matrices.push_back(data.actor_entity == entt::null
-                                           ? trans.matrix()
-                                           : math::matrix4::Identity());
         current_scene_vertex_counter += data.vertices.size();
         current_scene_index_counter += data.indices.size();
       });
-  scene_model_matrices_buffer.set_data_ssbo(scene_model_matrices,
-                                            GL_DYNAMIC_DRAW);
 
   if ((current_scene_vertex_counter != scene_vertex_counter) ||
       (scene_mesh_counter != mesh_data_entities.size_hint())) {
     spdlog::info("Detect change in scnene vertex count or scene mesh count, "
                  "resize scene vertex buffer and scene index buffer.");
     scene_mesh_counter = mesh_data_entities.size_hint();
-    indirect_commands.clear();
     scene_vertex_counter = current_scene_vertex_counter;
     scene_index_counter = current_scene_index_counter;
     // create new scene vertex and index buffer
@@ -207,32 +198,11 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
             (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
             1);
         collect_scene_vertex_buffer_program.barrier();
-
-        if (glGetError()) {
-          int a = 10;
-        }
       }
 
       current_vertex_offset += data.vertices.size();
       current_index_offset += data.indices.size();
-
-      // record the mesh draw command in its indirect command
-      indirect_draw_command indirect_command;
-      indirect_command.num_indices = data.indices.size();
-      indirect_command.num_instances = 1;
-      indirect_command.index_offset = data.scene_index_offset;
-      indirect_command.vertex_offset = data.scene_vertex_offset;
-      indirect_command.base_instance = base_instance_idx++;
-      indirect_commands.emplace_back(indirect_command);
     });
-
-    indirect_draw_buffer.set_data_as(GL_DRAW_INDIRECT_BUFFER, indirect_commands,
-                                     GL_DYNAMIC_DRAW);
-    glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
-
-    if (glGetError()) {
-      int a = 10;
-    }
 
     collect_scene_index_buffer_program.use();
     mesh_data_entities.each([&](entt::entity entity, transform &trans,
@@ -250,107 +220,103 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
           (data.indices.size() + work_group_size - 1) / work_group_size, 1, 1);
       collect_scene_index_buffer_program.barrier(GL_ELEMENT_ARRAY_BARRIER_BIT |
                                                  GL_SHADER_STORAGE_BARRIER_BIT);
-
-      if (glGetError()) {
-        int a = 10;
-      }
     });
   }
 
-  // // check for blend shapes and skinned meshes
-  // std::set<entt::entity> mesh_with_active_bs;
-  // std::map<entt::entity, std::vector<entt::entity>> mesh_with_skeleton;
-  // collect_scene_vertex_buffer_program.use();
-  // mesh_data_entities.each([&](entt::entity entity, transform &trans,
-  //                             mesh_data &data) {
-  //   int bs_count = 0;
-  //   for (auto &bs : data.blend_shapes) {
-  //     if (bs.weight != 0.0f) {
-  //       bs_count++;
-  //     }
-  //   }
-  //   if (bs_count > 0) {
-  //     mesh_with_active_bs.insert(entity);
-  //     // reset default position and normal for mesh with blend shapes
-  //     collect_scene_vertex_buffer_program
-  //         .bind_buffer(data.vertex_buffer.get_handle(), 0)
-  //         .bind_buffer(scene_vertex_buffer.get_handle(), 1);
-  //     collect_scene_vertex_buffer_program.set_int("gActualSize",
-  //                                                 data.vertices.size());
-  //     collect_scene_vertex_buffer_program.set_int("gVertexOffset",
-  //                                                 data.scene_vertex_offset);
-  //     collect_scene_vertex_buffer_program.dispatch(
-  //         (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
-  //         1);
-  //     collect_scene_vertex_buffer_program.barrier(
-  //         GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT |
-  //         GL_COMMAND_BARRIER_BIT);
-  //   }
-  //   if (data.actor_entity != entt::null) {
-  //     mesh_with_skeleton[data.actor_entity].push_back(entity);
-  //   }
-  // });
-  // // perform blend shape deform first
-  // if (mesh_with_active_bs.size() > 0) {
-  //   scene_buffer_apply_blendshape_program.use();
-  //   for (auto ent : mesh_with_active_bs) {
-  //     auto &data = mesh_data_entities.get<mesh_data>(ent);
+  // check for blend shapes and skinned meshes
+  std::set<entt::entity> mesh_with_active_bs;
+  std::map<entt::entity, std::vector<entt::entity>> mesh_with_skeleton;
+  collect_scene_vertex_buffer_program.use();
+  mesh_data_entities.each([&](entt::entity entity, transform &trans,
+                              mesh_data &data) {
+    int bs_count = 0;
+    for (auto &bs : data.blend_shapes) {
+      if (bs.weight != 0.0f) {
+        bs_count++;
+      }
+    }
+    if (bs_count > 0) {
+      mesh_with_active_bs.insert(entity);
+      // reset default position and normal for mesh with blend shapes
+      collect_scene_vertex_buffer_program
+          .bind_buffer(data.vertex_buffer.get_handle(), 0)
+          .bind_buffer(scene_vertex_buffer.get_handle(), 1);
+      collect_scene_vertex_buffer_program.set_int("gActualSize",
+                                                  data.vertices.size());
+      collect_scene_vertex_buffer_program.set_int("gVertexOffset",
+                                                  data.scene_vertex_offset);
+      collect_scene_vertex_buffer_program.dispatch(
+          (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
+          1);
+      collect_scene_vertex_buffer_program.barrier(
+          GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT |
+          GL_COMMAND_BARRIER_BIT);
+    }
+    if (data.actor_entity != entt::null) {
+      mesh_with_skeleton[data.actor_entity].push_back(entity);
+    }
+  });
+  // perform blend shape deform first
+  if (mesh_with_active_bs.size() > 0) {
+    scene_buffer_apply_blendshape_program.use();
+    for (auto ent : mesh_with_active_bs) {
+      auto &data = mesh_data_entities.get<mesh_data>(ent);
 
-  //     for (int i = 0; i < data.blend_shapes.size(); i++) {
-  //       if (data.blend_shapes[i].weight == 0.0f) {
-  //         continue; // skip inactive blend shapes
-  //       }
-  //       scene_buffer_apply_blendshape_program
-  //           .bind_buffer(data.blendshape_targets[i].get_handle(), 0)
-  //           .bind_buffer(scene_vertex_buffer.get_handle(), 1);
-  //       scene_buffer_apply_blendshape_program.set_int("gActualSize",
-  //                                                     data.vertices.size());
-  //       scene_buffer_apply_blendshape_program.set_int("gVertexOffset",
-  //                                                     data.scene_vertex_offset);
-  //       scene_buffer_apply_blendshape_program.set_float(
-  //           "gWeightValue", data.blend_shapes[i].weight);
-  //       scene_buffer_apply_blendshape_program.dispatch(
-  //           (data.vertices.size() + work_group_size - 1) / work_group_size,
-  //           1, 1);
-  //       scene_buffer_apply_blendshape_program.barrier();
-  //     }
-  //   }
-  // }
-  // // perform skinned mesh deform latter
-  // if (mesh_with_skeleton.size() > 0) {
-  //   scene_buffer_apply_mesh_skinning_program.use();
-  //   std::vector<_bone_matrix_block> bone_matrices;
-  //   for (auto p : mesh_with_skeleton) {
-  //     auto &actor_comp = registry.get<anim::actor>(p.first);
+      for (int i = 0; i < data.blend_shapes.size(); i++) {
+        if (data.blend_shapes[i].weight == 0.0f) {
+          continue; // skip inactive blend shapes
+        }
+        scene_buffer_apply_blendshape_program
+            .bind_buffer(data.blendshape_targets[i].get_handle(), 0)
+            .bind_buffer(scene_vertex_buffer.get_handle(), 1);
+        scene_buffer_apply_blendshape_program.set_int("gActualSize",
+                                                      data.vertices.size());
+        scene_buffer_apply_blendshape_program.set_int("gVertexOffset",
+                                                      data.scene_vertex_offset);
+        scene_buffer_apply_blendshape_program.set_float(
+            "gWeightValue", data.blend_shapes[i].weight);
+        scene_buffer_apply_blendshape_program.dispatch(
+            (data.vertices.size() + work_group_size - 1) / work_group_size,
+            1, 1);
+        scene_buffer_apply_blendshape_program.barrier();
+      }
+    }
+  }
+  // perform skinned mesh deform latter
+  if (mesh_with_skeleton.size() > 0) {
+    scene_buffer_apply_mesh_skinning_program.use();
+    std::vector<_bone_matrix_block> bone_matrices;
+    for (auto p : mesh_with_skeleton) {
+      auto &actor_comp = registry.get<anim::actor>(p.first);
 
-  //     bone_matrices.resize(actor_comp.ordered_entities.size());
-  //     for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
-  //       auto &joint_trans =
-  //           registry.get<transform>(actor_comp.ordered_entities[i]);
-  //       bone_matrices[i].model_mat = joint_trans.matrix();
-  //       bone_matrices[i].offset_mat = actor_comp.skel.offset_matrices[i];
-  //     }
-  //     skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
+      bone_matrices.resize(actor_comp.ordered_entities.size());
+      for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
+        auto &joint_trans =
+            registry.get<transform>(actor_comp.ordered_entities[i]);
+        bone_matrices[i].model_mat = joint_trans.matrix();
+        bone_matrices[i].offset_mat = actor_comp.skel.offset_matrices[i];
+      }
+      skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
 
-  //     for (auto ent : p.second) {
-  //       auto &data = mesh_data_entities.get<mesh_data>(ent);
-  //       scene_buffer_apply_mesh_skinning_program
-  //           .bind_buffer(data.vertex_buffer.get_handle(), 0)
-  //           .bind_buffer(skeleton_matrices_buffer.get_handle(), 1)
-  //           .bind_buffer(scene_vertex_buffer.get_handle(), 2);
-  //       scene_buffer_apply_mesh_skinning_program.set_int("gActualSize",
-  //                                                        data.vertices.size());
-  //       scene_buffer_apply_mesh_skinning_program.set_int(
-  //           "gVertexOffset", data.scene_vertex_offset);
-  //       scene_buffer_apply_mesh_skinning_program.set_bool(
-  //           "gBlended", mesh_with_active_bs.count(ent) > 0);
-  //       scene_buffer_apply_mesh_skinning_program.dispatch(
-  //           (data.vertices.size() + work_group_size - 1) / work_group_size,
-  //           1, 1);
-  //       scene_buffer_apply_mesh_skinning_program.barrier();
-  //     }
-  //   }
-  // }
+      for (auto ent : p.second) {
+        auto &data = mesh_data_entities.get<mesh_data>(ent);
+        scene_buffer_apply_mesh_skinning_program
+            .bind_buffer(data.vertex_buffer.get_handle(), 0)
+            .bind_buffer(skeleton_matrices_buffer.get_handle(), 1)
+            .bind_buffer(scene_vertex_buffer.get_handle(), 2);
+        scene_buffer_apply_mesh_skinning_program.set_int("gActualSize",
+                                                         data.vertices.size());
+        scene_buffer_apply_mesh_skinning_program.set_int(
+            "gVertexOffset", data.scene_vertex_offset);
+        scene_buffer_apply_mesh_skinning_program.set_bool(
+            "gBlended", mesh_with_active_bs.count(ent) > 0);
+        scene_buffer_apply_mesh_skinning_program.dispatch(
+            (data.vertices.size() + work_group_size - 1) / work_group_size,
+            1, 1);
+        scene_buffer_apply_mesh_skinning_program.barrier();
+      }
+    }
+  }
 
   // bind new scene vertex buffer and index buffer to scene vao
   scene_vao.bind();
@@ -363,10 +329,6 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
   scene_vao.unbind();
   scene_vertex_buffer.unbind_as(GL_ARRAY_BUFFER);
   scene_index_buffer.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
-
-  if (glGetError()) {
-    int a = 10;
-  }
 }
 
 void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
@@ -407,28 +369,19 @@ void defered_forward_mixed::render(entt::registry &registry) {
     glClearColor(0, 0, 0, 1);
 
     // render gbuffer
-    if (indirect_commands.size() > 0) {
+    if (scene_mesh_counter > 0) {
       scene_vao.bind();
       gbuffer_geometry_pass.use();
       gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
-      glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0,
-                       scene_model_matrices_buffer.get_handle());
-      if (glGetError()) {
-        int a = 10;
-      }
-      scene_index_buffer.bind_as(GL_ELEMENT_ARRAY_BUFFER);
-      indirect_draw_buffer.bind_as(GL_DRAW_INDIRECT_BUFFER);
-      if (glGetError()) {
-        int a = 10;
-      }
-      glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0,
-                                  indirect_commands.size(),
-                                  sizeof(indirect_draw_command));
-      if (glGetError()) {
-        int a = 10;
-      }
-      // glDrawElements(GL_TRIANGLES, scene_index_counter, GL_UNSIGNED_INT,
-      // nullptr);
+      registry.view<entt::entity, transform, mesh_data>().each(
+          [&](entt::entity entity, transform &trans, mesh_data &data) {
+            gbuffer_geometry_pass.set_mat4("gModel",
+                                           data.actor_entity == entt::null
+                                               ? trans.matrix()
+                                               : math::matrix4::Identity());
+            glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                           (void *)(data.scene_index_offset * sizeof(GLuint)));
+          });
       scene_vao.unbind();
     }
 
