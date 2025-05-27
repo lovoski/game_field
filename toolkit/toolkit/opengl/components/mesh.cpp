@@ -404,7 +404,7 @@ void open_model(entt::registry &registry, std::string filepath) {
         mesh_comp.actor_entity = model_container;
       }
       init_opengl_buffers(mesh_comp);
-      model_base_trans.add_children(mesh_container);
+      container_trans.add_children(mesh_container);
     }
     if (model.has_skeleton) {
       anim::create_actor_with_skeleton(registry, model_container,

@@ -212,7 +212,7 @@ std::vector<model> open_model(std::string filepath) {
   // further logic based on file structure.
 
   model static_mesh_model;
-  static_mesh_model.name = "static mesh";
+  static_mesh_model.name = "no skinning mesh";
   static_mesh_model.has_skeleton = false;
 
   std::function<void(const aiNode *, int)> assign_model_to_node_and_children =

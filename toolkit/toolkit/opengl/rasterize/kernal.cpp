@@ -1,6 +1,6 @@
 #include "toolkit/opengl/rasterize/kernal.hpp"
 
-std::string collect_scene_buffer_program_source = R"(
+std::string collect_scene_vertex_buffer_program_source = R"(
 #version 430 core
 #define WORK_GROUP_SIZE %d
 layout(local_size_x = WORK_GROUP_SIZE) in;
@@ -51,7 +51,7 @@ layout(local_size_x = WORK_GROUP_SIZE) in;
 layout(std430, binding = 0) buffer OriginalIndicesBuffer {
   uint gIndices[];
 };
-layout(std430, binding = 1) buffer ShiftedIndicesBuffer {
+layout(std430, binding = 1) coherent buffer ShiftedIndicesBuffer {
   uint gShiftedIndices[];
 };
 

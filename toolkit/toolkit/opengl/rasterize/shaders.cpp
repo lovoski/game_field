@@ -5,9 +5,9 @@ std::string gbuffer_geometry_pass_vs = R"(
 layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;
 
-// layout(std430, binding = 0) buffer ModelMatrices {
-//   mat4 gModels[];
-// };
+layout(std430, binding = 0) buffer ModelMatrices {
+  mat4 gModels[];
+};
 
 uniform mat4 gVP;
 
@@ -15,14 +15,12 @@ out vec3 worldPos;
 out vec3 worldNormal;
 
 void main() {
-  // mat4 model_mat = gModels[gl_BaseInstance];
-  // worldNormal = normalize(mat3(model_mat)*aNormal.xyz);
-  // worldPos = (model_mat * aPos).xyz;
+  mat4 model_mat = gModels[gl_BaseInstance];
+  worldNormal = normalize(mat3(model_mat)*aNormal.xyz);
+  worldPos = (model_mat * aPos).xyz;
 
-  // gl_Position = gVP * vec4(worldPos, 1.0);
-
-  worldNormal = normalize(aNormal.xyz);
-  worldPos = (aPos).xyz;
+  // worldNormal = normalize(aNormal.xyz);
+  // worldPos = aPos.xyz;
 
   gl_Position = gVP * vec4(worldPos, 1.0);
 }

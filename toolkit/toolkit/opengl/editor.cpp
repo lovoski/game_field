@@ -58,8 +58,6 @@ void editor::run() {
     timer.reset();
 
     transform_sys->update_transform(registry);
-
-    render_sys->update_obj_bbox(registry);
     render_sys->update_scene_buffers(registry);
 
     for (auto sys : systems)
