@@ -131,7 +131,7 @@ void editor::reset() {
 void editor::add_default_objects() {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
-  trans.name = "main camera";
+  trans.name = str_format("%s main camera", ICON_LC_CAMERA);
   trans.set_global_position(math::vector3(0, 0, 5));
   auto &cam_comp = registry.emplace<camera>(ent);
   g_instance.active_camera = ent;

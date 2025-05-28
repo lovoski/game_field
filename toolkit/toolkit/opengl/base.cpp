@@ -49,9 +49,15 @@ void context::init(unsigned int width, unsigned int height, const char *title,
   ImGui_ImplOpenGL3_Init();
   ImPlot::CreateContext();
 
-  ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(
+  default_font = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(
       cascadia_code_yahei_data, cascadia_code_yahei_size, 16.0f, nullptr,
       ImGui::GetIO().Fonts->GetGlyphRangesChineseFull());
+
+  static const ImWchar icons_ranges[] = {ICON_MIN_LC, ICON_MAX_LC, 0};
+  ImFontConfig icon_font_config;
+  icon_font_config.MergeMode = true;
+  icon_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
+      lucide_ttf, lucide_ttf_len, 12.0f, &icon_font_config, icons_ranges);
 }
 
 void context::shutdown() {

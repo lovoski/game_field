@@ -2,6 +2,7 @@
 
 #include "toolkit/opengl/imp.hpp"
 #include "toolkit/system.hpp"
+#include "toolkit/assets/icons_lucide.h"
 
 namespace toolkit::opengl {
 
@@ -139,6 +140,8 @@ private:
   std::unordered_map<int, bool> mouse_button_states;
   double mouse_x, mouse_y;
   math::vector2 scroll_offset{0.0, 0.0};
+
+  ImFont *default_font, *icon_font;
 };
 
 static context &g_instance = context::get_instance();
