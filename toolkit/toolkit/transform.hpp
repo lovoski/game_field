@@ -63,6 +63,9 @@ public:
   const math::vector3 world_to_local(math::vector3 world);
   const math::vector3 local_to_world(math::vector3 local);
 
+  const math::vector3 world_to_parent_local(math::vector3 world);
+  const math::vector3 parent_local_to_world(math::vector3 local);
+
   void get_parent_local_axes(math::vector3 &pLocalForward,
                              math::vector3 &pLocalLeft,
                              math::vector3 &pLocalUp);
@@ -70,6 +73,8 @@ public:
   const math::vector3 parent_position() const;
   const math::quat parent_rotation() const;
   const math::vector3 parent_scale() const;
+
+  void force_update_all();
 
 private:
   math::vector3 m_pos = math::vector3::Zero(),

@@ -11,8 +11,8 @@ void vis_skeleton::draw_to_scene(iapp *app) {
                                               transform &cam_trans,
                                               opengl::camera &cam_comp) {
     if (auto actor_ptr = eptr->registry.try_get<actor>(entity)) {
-      collect_skeleton_draw_queue(eptr->registry, *actor_ptr, draw_queue,
-                                  active_joint_entities);
+      spdlog::info("Entity {0} draw to scene, active entitiies {1}", entt::to_integral(entity), (uint64_t)&active_joint_entities);
+      collect_skeleton_draw_queue(*actor_ptr);
       opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
       // get the average length of bone
       float avg_bone_length = 0.0f;
@@ -70,10 +70,7 @@ void vis_skeleton::draw_gui(iapp *app) {
   gui::color_edit_3("Bone Color", bone_color);
 }
 
-void collect_skeleton_draw_queue(
-    entt::registry &registry, actor &actor_comp,
-    std::vector<std::pair<math::vector3, math::vector3>> &draw_queue,
-    std::set<entt::entity> &active_joint_entities) {
+void vis_skeleton::collect_skeleton_draw_queue(actor &actor_comp) {
   draw_queue.clear();
   active_joint_entities.clear();
   // only collect joints defined in the actor
@@ -114,9 +111,9 @@ void collect_skeleton_draw_queue(
   }
   for (auto &entry : tmp_queue)
     draw_queue.push_back(std::make_pair(
-        registry.get<transform>(actor_comp.ordered_entities[entry.first])
+        registry->get<transform>(actor_comp.ordered_entities[entry.first])
             .position(),
-        registry.get<transform>(actor_comp.ordered_entities[entry.second])
+        registry->get<transform>(actor_comp.ordered_entities[entry.second])
             .position()));
 }
 

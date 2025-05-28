@@ -1,8 +1,11 @@
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/anim/components/actor.hpp"
+#include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/scripts/camera.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
+
+#include <ufbx.h>
 
 namespace toolkit::opengl {
 
@@ -259,23 +262,13 @@ void editor::draw_main_menubar() {
       ImGui::MenuItem("Assets", nullptr, false, false);
       if (ImGui::MenuItem("Import Model")) {
         std::string filepath;
-        if (open_file_dialog(
-                "Open model asset file",
-                {"*.fbx", "*.FBX", "*.pmx", "*.PMX", "*.obj", "*.OBJ"},
-                "*.fbx, *.pmx, *.obj", filepath)) {
+        if (open_file_dialog("Open model asset file",
+                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
+                             "*.fbx, *.obj", filepath)) {
           spdlog::info("Load model file {0}", filepath);
-          open_model(registry, filepath);
+          assets::open_model(registry, filepath);
         }
       }
-      // if (ImGui::MenuItem("Import  Model")) {
-      //   std::string filepath;
-      //   if (open_file_dialog("Import One Asset",
-      //                        {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
-      //                        "*.fbx, *.obj", filepath)) {
-      //     spdlog::info("Load model file {0}", filepath);
-      //     create_geometry_model(registry, filepath);
-      //   }
-      // }
       if (ImGui::MenuItem("Import   BVH")) {
         std::string filepath;
         if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
@@ -564,3 +557,230 @@ void editor::draw_entity_components() {
 }
 
 }; // namespace toolkit::opengl
+
+namespace toolkit::assets {
+
+#ifdef _WIN32
+#include <Windows.h>
+std::string wstring_to_string(const std::wstring &wstr) {
+  int buffer_size = WideCharToMultiByte(
+      CP_UTF8,         // UTF-8 encoding for Chinese support
+      0,               // No flags
+      wstr.c_str(),    // Input wide string
+      -1,              // Auto-detect length
+      nullptr, 0,      // Null to calculate required buffer size
+      nullptr, nullptr // Optional parameters (not needed here)
+  );
+
+  if (buffer_size == 0)
+    return ""; // Handle error if needed
+
+  std::string str(buffer_size, 0);
+  WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], buffer_size,
+                      nullptr, nullptr);
+  str.pop_back(); // Remove null terminator added by -1
+  return str;
+}
+#endif
+
+math::vector2 ufbx_to_vec2(ufbx_vec2 v) {
+  return math::vector2((float)v.x, (float)v.y);
+}
+math::vector3 ufbx_to_vec3(ufbx_vec3 v) {
+  return math::vector3((float)v.x, (float)v.y, (float)v.z);
+}
+math::quat ufbx_to_quat(ufbx_quat v) {
+  return math::quat((float)v.w, (float)v.x, (float)v.y, (float)v.z);
+}
+math::matrix4 ufbx_to_mat(ufbx_matrix m) {
+  math::matrix4 result = math::matrix4::Zero();
+  result(0, 0) = (float)m.m00;
+  result(0, 1) = (float)m.m01;
+  result(0, 2) = (float)m.m02;
+  result(0, 3) = (float)m.m03;
+  result(1, 0) = (float)m.m10;
+  result(1, 1) = (float)m.m11;
+  result(1, 2) = (float)m.m12;
+  result(1, 3) = (float)m.m13;
+  result(2, 0) = (float)m.m20;
+  result(2, 1) = (float)m.m21;
+  result(2, 2) = (float)m.m22;
+  result(2, 3) = (float)m.m23;
+  result(3, 3) = 1;
+  return result;
+}
+
+ufbx_node *find_first_bone_parent(ufbx_node *node) {
+  while (node) {
+    if (node->bone)
+      return node;
+    node = node->parent;
+  }
+  return nullptr;
+}
+
+ufbx_node *find_last_bone_parent(ufbx_node *node) {
+  ufbx_node *bone_parent = nullptr;
+  while (node) {
+    if (node->bone)
+      bone_parent = node;
+    node = node->parent;
+  }
+  return bone_parent;
+}
+
+std::map<ufbx_node *, entt::entity>
+read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
+  std::map<ufbx_node *, entt::entity> ufbx_node_to_entity;
+  for (int i = 0; i < scene->nodes.count; i++) {
+    auto unode = scene->nodes[i];
+    auto ent = registry.create();
+    auto &trans = registry.emplace<transform>(ent);
+    trans.name = unode->is_root ? filename : unode->name.data;
+    ufbx_node_to_entity[unode] = ent;
+  }
+  // setup parent child hierarchy
+  for (int i = 0; i < scene->nodes.count; i++) {
+    auto unode = scene->nodes[i];
+    if (unode->parent) {
+      auto ent = ufbx_node_to_entity[unode];
+      auto &trans = registry.get<transform>(ent);
+      auto p_ent = ufbx_node_to_entity[unode->parent];
+      auto &p_trans = registry.get<transform>(p_ent);
+      p_trans.add_children(ent);
+      trans.set_local_position(
+          ufbx_to_vec3(unode->local_transform.translation));
+      trans.set_local_rotation(ufbx_to_quat(unode->local_transform.rotation));
+      trans.set_local_scale(ufbx_to_vec3(unode->local_transform.scale));
+    }
+  }
+  if (scene->nodes.count > 0) {
+    registry.get<transform>(ufbx_node_to_entity[scene->nodes[0]])
+        .force_update_all();
+  }
+  // find root bones, add actor component to them
+  std::vector<ufbx_node *> root_nodes;
+  for (int i = 0; i < scene->nodes.count; i++) {
+    if (scene->nodes[i]->is_root)
+      root_nodes.push_back(scene->nodes[i]);
+  }
+  for (auto root_node : root_nodes) {
+    std::queue<std::pair<ufbx_node *, ufbx_node *>> q;
+    std::vector<std::pair<ufbx_node *, ufbx_node *>> bone_nodes;
+    q.push(std::make_pair(root_node, nullptr));
+    while (!q.empty()) {
+      auto node = q.front();
+      if (node.first->bone)
+        bone_nodes.push_back(node);
+      q.pop();
+      for (auto c : node.first->children) {
+        q.push(std::make_pair(c, find_first_bone_parent(node.first)));
+      }
+    }
+    if (bone_nodes.size() > 0) {
+      // use bone nodes to create a skeleton
+      std::vector<ufbx_node *> roots;
+      for (int i = 0; i < bone_nodes.size(); i++) {
+        if (bone_nodes[i].second == nullptr)
+          roots.push_back(bone_nodes[i].first);
+      }
+      for (auto root : roots) {
+        auto root_ent = ufbx_node_to_entity[root];
+        std::vector<std::pair<ufbx_node *, ufbx_node *>> bone_nodes_sub;
+        for (int i = 0; i < bone_nodes.size(); i++)
+          if (find_last_bone_parent(bone_nodes[i].first) == root)
+            bone_nodes_sub.push_back(bone_nodes[i]);
+        int joint_num = bone_nodes_sub.size();
+        auto &actor_comp = registry.emplace<anim::actor>(root_ent);
+        auto &vis_script = registry.emplace<anim::vis_skeleton>(root_ent);
+        actor_comp.skel.as_empty(joint_num);
+        actor_comp.joint_active.resize(joint_num, true);
+        actor_comp.ordered_entities.resize(joint_num);
+        std::map<entt::entity, int> ent_to_joint_id;
+        for (int i = 0; i < joint_num; i++) {
+          auto joint_ent = ufbx_node_to_entity[bone_nodes_sub[i].first];
+          auto &joint_trans = registry.get<transform>(joint_ent);
+          actor_comp.name_to_entity[joint_trans.name] = joint_ent;
+
+          ent_to_joint_id[joint_ent] = i;
+          actor_comp.ordered_entities[i] = joint_ent;
+          actor_comp.skel.joint_names[i] = joint_trans.name;
+          // actor_comp.skel.offset_matrices[i] = bone_nodes_sub[i].first->bone.
+
+          auto p_unode = bone_nodes_sub[i].second;
+          if (p_unode) {
+            auto p_joint_ent = ufbx_node_to_entity[bone_nodes_sub[i].second];
+            auto &p_joint_trans = registry.get<transform>(p_joint_ent);
+            actor_comp.skel.joint_parent[i] = ent_to_joint_id[p_joint_ent];
+            actor_comp.skel.joint_offset[i] =
+                p_joint_trans.world_to_local(joint_trans.position());
+            actor_comp.skel.joint_scale[i] =
+                joint_trans.scale().array() / p_joint_trans.scale().array();
+            actor_comp.skel.joint_rotation[i] =
+                p_joint_trans.rotation().inverse() * joint_trans.rotation();
+            actor_comp.skel.joint_children[ent_to_joint_id[p_joint_ent]]
+                .push_back(i);
+          } else {
+            actor_comp.skel.joint_parent[i] = -1;
+            auto &root_trans = registry.get<transform>(root_ent);
+            actor_comp.skel.joint_offset[i] = root_trans.position();
+            actor_comp.skel.joint_scale[i] = root_trans.scale();
+            actor_comp.skel.joint_rotation[i] = root_trans.rotation();
+          }
+        }
+
+        // std::ofstream output("skel.json");
+        // nlohmann::json d = actor_comp.skel;
+        // output << d.dump(2);
+        // output.close();
+
+        // auto container = registry.create();
+        // auto &trans = registry.emplace<transform>(container);
+        // trans.name = "test";
+        // auto &vvv = registry.emplace<anim::vis_skeleton>(container);
+        // anim::create_actor_with_skeleton(registry, container, actor_comp.skel);
+      }
+    }
+  }
+  return ufbx_node_to_entity;
+}
+
+void read_mesh(entt::registry &registry, ufbx_mesh *mesh) {}
+
+void open_model(entt::registry &registry, std::string filepath) {
+  ufbx_error error;
+  ufbx_load_opts opts = {
+      .load_external_files = true,
+      .ignore_missing_external_files = true,
+      .generate_missing_normals = true,
+      .target_axes =
+          {
+              .right = UFBX_COORDINATE_AXIS_POSITIVE_X,
+              .up = UFBX_COORDINATE_AXIS_POSITIVE_Y,
+              .front = UFBX_COORDINATE_AXIS_POSITIVE_Z,
+          },
+      .target_unit_meters = 1.0f,
+  };
+  ufbx_scene *scene = ufbx_load_file(filepath.c_str(), &opts, &error);
+  if (!scene) {
+    spdlog::error("Failed to load: {0}", error.description.data);
+    return;
+  }
+
+// create nodes
+#ifdef _WIN32
+  std::string filename =
+      wstring_to_string(std::filesystem::u8path(filepath).filename().wstring());
+#else
+  std::string filename = std::filesystem::path(filepath).filename().string();
+#endif
+  auto ufbx_node_to_entity = read_nodes(registry, scene, filename);
+  // create meshes
+  for (int i = 0; i < scene->meshes.count; i++) {
+    read_mesh(registry, scene->meshes[i]);
+  }
+
+  ufbx_free_scene(scene);
+}
+
+}; // namespace toolkit::assets

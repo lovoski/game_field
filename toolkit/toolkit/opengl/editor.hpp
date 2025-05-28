@@ -7,9 +7,16 @@
 
 #include "toolkit/transform.hpp"
 
+#include "toolkit/anim/anim_system.hpp"
 #include "toolkit/opengl/components/camera.hpp"
 #include "toolkit/opengl/rasterize/mixed.hpp"
-#include "toolkit/anim/anim_system.hpp"
+
+
+namespace toolkit::assets {
+
+void open_model(entt::registry &registry, std::string filepath);
+
+};
 
 namespace toolkit::opengl {
 

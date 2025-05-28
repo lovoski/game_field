@@ -16,6 +16,8 @@ public:
   float axes_length = 1.0f;
   math::vector3 bone_color = opengl::Green;
 
+  void collect_skeleton_draw_queue(actor &actor_comp);
+
 private:
   std::set<entt::entity> active_joint_entities;
   std::vector<math::vector3> joint_positions;
@@ -24,10 +26,5 @@ private:
 };
 DECLARE_SCRIPT(vis_skeleton, animation, draw_axes, draw_spheres, axes_length,
                bone_color)
-
-void collect_skeleton_draw_queue(
-    entt::registry &registry, actor &actor_comp,
-    std::vector<std::pair<math::vector3, math::vector3>> &draw_queue,
-    std::set<entt::entity> &active_joint_entities);
 
 }; // namespace toolkit::anim

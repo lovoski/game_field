@@ -43,6 +43,4 @@ entt::entity create_sphere(entt::registry &registry,
 entt::entity create_cylinder(entt::registry &registry,
                              math::matrix4 t = math::matrix4::Identity());
 
-void open_model(entt::registry &registry, std::string filepath);
-
 }; // namespace toolkit::opengl

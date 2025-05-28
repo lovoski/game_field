@@ -24,6 +24,5 @@ instantiate_skeleton_data(entt::registry &registry, assets::skeleton &skel,
                           std::map<std::string, entt::entity> &name_to_entity);
 
 entt::entity create_bvh_actor(entt::registry &registry, std::string filepath);
-entt::entity create_fbx_actor(entt::registry &registry, std::string filepath);
 
 }; // namespace toolkit::anim

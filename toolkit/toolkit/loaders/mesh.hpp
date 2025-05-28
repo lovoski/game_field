@@ -45,13 +45,5 @@ struct mesh {
   std::vector<mesh_vertex> vertices;
   std::vector<blend_shape> blendshapes;
 };
-struct model {
-  std::string name;
-  skeleton skeleton;
-  std::vector<mesh> meshes;
-  bool has_skeleton = false;
-};
-
-std::vector<model> open_model(std::string filepath);
 
 }; // namespace toolkit::assets

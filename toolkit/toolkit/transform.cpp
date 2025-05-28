@@ -1,4 +1,5 @@
 #include "toolkit/transform.hpp"
+#include <spdlog/spdlog.h>
 
 namespace toolkit {
 
@@ -76,7 +77,7 @@ void transform::set_transform_matrix(math::matrix4 t) {}
 
 void transform::set_global_position(math::vector3 p) {
   m_pos = p;
-  m_local_pos = world_to_local(p);
+  m_local_pos = world_to_parent_local(p);
   dirty = true;
 }
 
@@ -183,19 +184,24 @@ void transform::update_local_axes() {
 }
 
 const math::vector3 transform::world_to_local(math::vector3 world) {
-  math::vector3 pLocalForward, pLocalLeft, pLocalUp;
-  get_parent_local_axes(pLocalForward, pLocalLeft, pLocalUp);
-  _M_p << pLocalLeft, pLocalUp, pLocalForward;
-  _M << math::world_left, math::world_up, math::world_forward;
-  return _M_p.inverse() * _M * (world - parent_position());
+  _M << m_local_left, m_local_up, m_local_forward;
+  return _M.inverse() * (world - m_pos);
 }
-
 const math::vector3 transform::local_to_world(math::vector3 local) {
+  _M << m_local_left, m_local_up, m_local_forward;
+  return (_M * local) + m_pos;
+}
+const math::vector3 transform::world_to_parent_local(math::vector3 world) {
   math::vector3 pLocalForward, pLocalLeft, pLocalUp;
   get_parent_local_axes(pLocalForward, pLocalLeft, pLocalUp);
   _M_p << pLocalLeft, pLocalUp, pLocalForward;
-  _M << math::world_left, math::world_up, math::world_forward;
-  return (_M.inverse() * _M_p * local) + parent_position();
+  return _M_p.inverse() * (world - parent_position());
+}
+const math::vector3 transform::parent_local_to_world(math::vector3 local) {
+  math::vector3 pLocalForward, pLocalLeft, pLocalUp;
+  get_parent_local_axes(pLocalForward, pLocalLeft, pLocalUp);
+  _M_p << pLocalLeft, pLocalUp, pLocalForward;
+  return (_M_p * local) + parent_position();
 }
 
 void transform::get_parent_local_axes(math::vector3 &pLocalForward,
@@ -233,6 +239,14 @@ const math::vector3 transform::parent_scale() const {
     return registry->get<transform>(m_parent).m_scale;
   else
     return math::vector3::Ones();
+}
+
+void transform::force_update_all() {
+  if (auto ptr = registry->ctx().get<iapp *>()->get_sys<transform_system>()) {
+    ptr->update_transform(*registry);
+  } else {
+    spdlog::error("Failed to find transform system.");
+  }
 }
 
 void transform_system::draw_gui(entt::registry &registry, entt::entity entity) {
@@ -275,7 +289,7 @@ void transform_system::update_transform(entt::registry &registry) {
     }
     // update global positions with local positions
     if (dirty) {
-      trans.m_pos = trans.local_to_world(trans.m_local_pos);
+      trans.m_pos = trans.parent_local_to_world(trans.m_local_pos);
       // the global rotation is constructed from m_local_rot
       // all dirty children will get this updated parent orientation
       trans.m_rot = trans.parent_rotation() * trans.m_local_rot;
