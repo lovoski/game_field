@@ -7,12 +7,6 @@
 
 namespace toolkit::opengl {
 
-struct bone_node : public icomponent {
-  std::string name;
-  math::matrix4 offset_matrix;
-};
-DECLARE_COMPONENT(bone_node, data, name, offset_matrix)
-
 struct mesh_data : public icomponent {
   std::string mesh_name, model_name;
   std::vector<assets::mesh_vertex> vertices;

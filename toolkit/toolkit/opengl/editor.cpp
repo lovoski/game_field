@@ -365,7 +365,7 @@ void draw_entity_hierarchy_recursive(
 
   // Draw current node
   std::string entity_name = current_transform.name;
-  if (registry.try_get<bone_node>(current)) {
+  if (registry.try_get<anim::bone_node>(current)) {
     entity_name = str_format("%s %s", ICON_LC_BONE, entity_name.c_str());
   } else if (registry.try_get<camera>(current)) {
     entity_name = str_format("%s %s", ICON_LC_CAMERA, entity_name.c_str());
@@ -678,7 +678,7 @@ read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
     if (scene->nodes[i]->is_root)
       root_nodes.push_back(scene->nodes[i]);
     if (scene->nodes[i]->bone) {
-      auto &bone_comp = registry.emplace<opengl::bone_node>(
+      auto &bone_comp = registry.emplace<anim::bone_node>(
           ufbx_node_to_entity[scene->nodes[i]]);
       bone_comp.name = std::string(scene->nodes[i]->name.data);
     }
@@ -922,7 +922,7 @@ std::vector<entt::entity> create_skinned_mesh_bundle_data(
           auto bone_entity = ufbx_node_to_entity[cluster->bone_node];
           for (int k = 0; k < bone_entities.size(); k++) {
             if (bone_entities[k] == bone_entity) {
-              auto &bone_node = registry.get<opengl::bone_node>(bone_entity);
+              auto &bone_node = registry.get<anim::bone_node>(bone_entity);
               bone_node.offset_matrix = ufbx_to_mat(cluster->geometry_to_bone);
               break;
             }

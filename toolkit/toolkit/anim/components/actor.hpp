@@ -14,6 +14,12 @@ struct actor : public icomponent {
 DECLARE_COMPONENT(actor, animation, joint_active, ordered_entities,
                   name_to_entity)
 
+struct bone_node : public icomponent {
+  std::string name;
+  math::matrix4 offset_matrix;
+};
+DECLARE_COMPONENT(bone_node, data, name, offset_matrix)
+
 void create_actor_with_skeleton(entt::registry &registry,
                                 entt::entity container, assets::skeleton &skel);
 

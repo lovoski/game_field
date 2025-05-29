@@ -277,7 +277,7 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
           bone_matrices[i].model_mat =
               registry.get<transform>(bundle.bone_entities[i]).matrix();
           bone_matrices[i].offset_mat =
-              registry.get<bone_node>(bundle.bone_entities[i]).offset_matrix;
+              registry.get<anim::bone_node>(bundle.bone_entities[i]).offset_matrix;
         }
         skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
         for (auto mesh_entity : bundle.mesh_entities) {
@@ -376,20 +376,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
 
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-
-    if (should_draw_debug) {
-      // debug rendering
-      if (auto app_ptr = registry.ctx().get<iapp *>()) {
-        auto script_sys = app_ptr->get_sys<script_system>();
-        script_sys->draw_to_scene(app_ptr);
-      }
-    }
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-
     defered_phong_pass.use();
     defered_phong_pass.set_vec3("gViewDir", -cam_trans.local_forward());
     defered_phong_pass.set_texture2d("gPosTex", pos_tex.get_handle(), 0);
@@ -410,6 +396,16 @@ void defered_forward_mixed::render(entt::registry &registry) {
       draw_infinite_grid(cam_comp.view, cam_comp.proj, grid_spacing);
 
     glDisable(GL_BLEND);
+
+    if (should_draw_debug) {
+      glDisable(GL_DEPTH_TEST);
+      // debug rendering
+      if (auto app_ptr = registry.ctx().get<iapp *>()) {
+        auto script_sys = app_ptr->get_sys<script_system>();
+        script_sys->draw_to_scene(app_ptr);
+      }
+      glEnable(GL_DEPTH_TEST);
+    }
 
     cbuffer.unbind();
   }
