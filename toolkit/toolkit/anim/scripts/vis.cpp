@@ -11,7 +11,6 @@ void vis_skeleton::draw_to_scene(iapp *app) {
                                               transform &cam_trans,
                                               opengl::camera &cam_comp) {
     if (auto actor_ptr = eptr->registry.try_get<actor>(entity)) {
-      spdlog::info("Entity {0} draw to scene, active entitiies {1}", entt::to_integral(entity), (uint64_t)&active_joint_entities);
       collect_skeleton_draw_queue(*actor_ptr);
       opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
       // get the average length of bone
@@ -73,48 +72,28 @@ void vis_skeleton::draw_gui(iapp *app) {
 void vis_skeleton::collect_skeleton_draw_queue(actor &actor_comp) {
   draw_queue.clear();
   active_joint_entities.clear();
-  // only collect joints defined in the actor
-  int njoints = actor_comp.skel.get_num_joints();
-  std::vector<int> start_points;
-  std::set<std::pair<int, int>> tmp_queue;
-  // collect end effectors as start points
-  for (int i = 0; i < njoints; ++i) {
-    if (actor_comp.skel.joint_children[i].size() == 0)
-      start_points.push_back(i);
-  }
-  // traverse from start points to root joint
-  for (auto start_point_ind : start_points) {
-    int current = start_point_ind, parent;
-    bool currentActive = actor_comp.joint_active[current], parentActive = false;
-    entt::entity currentEntity = actor_comp.ordered_entities[current],
-                 parentEntity = entt::null;
-    int tobe_matched = -1;
-    while (actor_comp.skel.joint_parent[current] != -1) {
-      parent = actor_comp.skel.joint_parent[current];
-      parentEntity = actor_comp.ordered_entities[parent];
-      parentActive = actor_comp.joint_active[parent];
-      if (currentActive && parentActive) {
-        tmp_queue.insert(std::make_pair(parent, current));
-        active_joint_entities.insert(actor_comp.ordered_entities[current]);
-        active_joint_entities.insert(actor_comp.ordered_entities[parent]);
-      } else if (currentActive && !parentActive) {
-        tobe_matched = current;
-      } else if (!currentActive && parentActive && tobe_matched != -1) {
-        tmp_queue.insert(std::make_pair(parent, tobe_matched));
-        active_joint_entities.insert(actor_comp.ordered_entities[tobe_matched]);
-        active_joint_entities.insert(actor_comp.ordered_entities[parent]);
+  for (int i = 0; i < actor_comp.joint_active.size(); i++)
+    if (actor_comp.joint_active[i])
+      active_joint_entities.insert(actor_comp.ordered_entities[i]);
+  auto [parent, children, roots] =
+      estimate_actor_bone_hierarchy(*registry, actor_comp, true);
+  for (auto root : roots) {
+    std::queue<int> q;
+    q.push(root);
+    while (!q.empty()) {
+      auto current = q.front();
+      auto &current_trans =
+          registry->get<transform>(actor_comp.ordered_entities[current]);
+      q.pop();
+      for (auto c : children[current]) {
+        auto &child_trans =
+            registry->get<transform>(actor_comp.ordered_entities[c]);
+        draw_queue.emplace_back(
+            std::make_pair(current_trans.position(), child_trans.position()));
+        q.push(c);
       }
-      current = parent;
-      currentActive = parentActive;
-      currentEntity = parentEntity;
     }
   }
-  for (auto &entry : tmp_queue)
-    draw_queue.push_back(std::make_pair(
-        registry->get<transform>(actor_comp.ordered_entities[entry.first])
-            .position(),
-        registry->get<transform>(actor_comp.ordered_entities[entry.second])
-            .position()));
 }
 
 }; // namespace toolkit::anim

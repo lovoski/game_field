@@ -100,8 +100,6 @@ void prepare_plain_data(mesh_data &data, std::vector<_render_vertex> &vertices,
   }
 }
 
-void init_opengl_buffers(mesh_data &data, bool save_asset = true);
-
 void init_opengl_buffers_internal(mesh_data &data,
                                   std::vector<_render_vertex> &vertices,
                                   std::vector<_blendshape_data> &blendshapes,

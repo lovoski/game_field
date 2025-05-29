@@ -1,5 +1,6 @@
 #include "toolkit/opengl/components/camera.hpp"
 #include "toolkit/opengl/components/lights.hpp"
+#include "toolkit/opengl/editor.hpp"
 
 namespace toolkit::opengl {
 
@@ -51,6 +52,35 @@ bool frustom_check(entt::registry &registry, entt::entity entity,
     }
   }
   return true; // Inside or intersects the frustum
+}
+
+void dir_light::draw_to_scene(iapp *app) {
+  std::vector<std::pair<math::vector3, math::vector3>> lines;
+  script_draw_to_scene_proxy(app, [&](editor *editor, transform &cam_trans,
+                                      camera &cam_comp) {
+    auto &trans = registry->get<transform>(entity);
+    lines.push_back(std::make_pair(
+        trans.position() + 0.8 * trans.local_left() + 0.5 * trans.local_up(),
+        trans.position() - 0.8 * trans.local_left() + 0.5 * trans.local_up()));
+    lines.push_back(std::make_pair(
+        trans.position() + 0.8 * trans.local_left() - 0.5 * trans.local_up(),
+        trans.position() - 0.8 * trans.local_left() - 0.5 * trans.local_up()));
+    lines.push_back(std::make_pair(
+        trans.position() + 0.8 * trans.local_left() + 0.5 * trans.local_up(),
+        trans.position() + 0.8 * trans.local_left() - 0.5 * trans.local_up()));
+    lines.push_back(std::make_pair(
+        trans.position() - 0.8 * trans.local_left() + 0.5 * trans.local_up(),
+        trans.position() - 0.8 * trans.local_left() - 0.5 * trans.local_up()));
+    lines.push_back(std::make_pair(
+        trans.position() + 0.8 * trans.local_left() + 0.5 * trans.local_up(),
+        trans.position() - 0.8 * trans.local_left() - 0.5 * trans.local_up()));
+    lines.push_back(std::make_pair(
+        trans.position() + 0.8 * trans.local_left() - 0.5 * trans.local_up(),
+        trans.position() - 0.8 * trans.local_left() + 0.5 * trans.local_up()));
+    draw_arrow(trans.position(), trans.position() + 0.5 * trans.local_forward(),
+               cam_comp.vp, White, 0.1f);
+    draw_lines(lines, cam_comp.vp);
+  });
 }
 
 }; // namespace toolkit::opengl

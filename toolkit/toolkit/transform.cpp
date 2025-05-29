@@ -118,7 +118,7 @@ void transform::set_local_euler_degrees(math::vector3 a) {
   dirty = true;
 }
 
-void transform::add_children(entt::entity child) {
+void transform::add_child(entt::entity child) {
   if (child == entt::null) {
     std::cout << "Can't add nullptr as a child entity." << std::endl;
     return;

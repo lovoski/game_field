@@ -3,10 +3,12 @@
 #include "toolkit/opengl/base.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/system.hpp"
+#include "toolkit/scriptable.hpp"
+#include "toolkit/opengl/draw.hpp"
 
 namespace toolkit::opengl {
 
-struct dir_light : public icomponent {
+struct dir_light : public scriptable {
   math::vector3 dir = math::world_forward;
   math::vector3 color = White;
 
@@ -19,11 +21,13 @@ struct dir_light : public icomponent {
       ImGui::EndDisabled();
   }
 
+  void draw_to_scene(iapp *app) override;
+
   bool enabled = true;
 };
-DECLARE_COMPONENT(dir_light, graphics, dir, color, enabled)
+DECLARE_SCRIPT(dir_light, graphics, dir, color, enabled)
 
-struct point_light : public icomponent {
+struct point_light : public scriptable {
   math::vector3 color = White;
 
   void draw_gui(iapp *app) override {
@@ -37,6 +41,6 @@ struct point_light : public icomponent {
 
   bool enabled = true;
 };
-DECLARE_COMPONENT(point_light, graphics, color, enabled)
+DECLARE_SCRIPT(point_light, graphics, color, enabled)
 
 }; // namespace toolkit::opengl

@@ -17,88 +17,92 @@ void anim_system::draw_gui(entt::registry &registry, entt::entity entity) {
 
 void export_proxy_skeleton(entt::registry &registry, actor &actor_comp,
                            std::string filepath) {
-  int activeJointNum = 0;
-  assets::skeleton proxySkeleton;
-  std::vector<int> activeJointInd;
-  std::vector<math::quat> activeJointGlobalRot;
-  std::vector<math::vector3> activeJointGlobalPos;
-  std::vector<entt::entity> proxySkeletonEntityMap;
-  std::map<std::string, int> proxySkeletonNameToInd;
-  // reset character's pose at rest pose
-  apply_pose(registry, actor_comp, actor_comp.skel.get_rest_pose(),
-             actor_comp.skel);
+  //   int activeJointNum = 0;
+  //   assets::skeleton proxySkeleton;
+  //   std::vector<int> activeJointInd;
+  //   std::vector<math::quat> activeJointGlobalRot;
+  //   std::vector<math::vector3> activeJointGlobalPos;
+  //   std::vector<entt::entity> proxySkeletonEntityMap;
+  //   std::map<std::string, int> proxySkeletonNameToInd;
+  //   // reset character's pose at rest pose
+  //   apply_pose(registry, actor_comp, actor_comp.skel.get_rest_pose(),
+  //              actor_comp.skel);
 
-  registry.ctx().get<iapp *>()->get_sys<transform_system>()->update_transform(
-      registry);
-  for (int i = 0; i < actor_comp.joint_active.size(); i++) {
-    if (actor_comp.joint_active[i]) {
-      activeJointInd.push_back(i);
-      activeJointNum++;
-      auto &joint_trans =
-          registry.get<transform>(actor_comp.ordered_entities[i]);
-      proxySkeleton.joint_names.push_back(joint_trans.name);
-      activeJointGlobalPos.push_back(joint_trans.position());
-      activeJointGlobalRot.push_back(joint_trans.rotation());
-    }
-  }
-  proxySkeleton.as_empty(activeJointNum);
-  proxySkeletonEntityMap.resize(activeJointNum, entt::null);
-  for (int i = 0; i < activeJointInd.size(); i++) {
-    // rebuild proxy joint parent child relation
-    auto oldCurrentJointInd = activeJointInd[i];
-    proxySkeletonNameToInd[proxySkeleton.joint_names[i]] = i;
-    proxySkeletonEntityMap[i] = actor_comp.ordered_entities[oldCurrentJointInd];
-    for (int j = i - 1; j >= 0; j--) {
-      // check if activeJointInd[j] could be a parent of activeJointInd[i]
-      auto potentialParentJointInd = activeJointInd[j];
-      auto cur = actor_comp.skel.joint_parent[oldCurrentJointInd];
-      bool isParent = false;
-      while (cur != -1) {
-        if (cur == potentialParentJointInd) {
-          isParent = true;
-          break;
-        }
-        cur = actor_comp.skel.joint_parent[cur];
-      }
-      if (isParent) {
-        proxySkeleton.joint_parent[i] = j;
-        proxySkeleton.joint_children[j].push_back(i);
-        break;
-      }
-    }
-  }
-  // convert global position to relative ones
-  for (int i = 0; i < activeJointNum; i++) {
-    int parentInd = proxySkeleton.joint_parent[i];
-    if (parentInd != -1) {
-      proxySkeleton.joint_offset[i] =
-          activeJointGlobalPos[i] - activeJointGlobalPos[parentInd];
-    } else
-      proxySkeleton.joint_offset[i] = activeJointGlobalPos[i];
-  }
+  //   registry.ctx().get<iapp
+  //   *>()->get_sys<transform_system>()->update_transform(
+  //       registry);
+  //   for (int i = 0; i < actor_comp.joint_active.size(); i++) {
+  //     if (actor_comp.joint_active[i]) {
+  //       activeJointInd.push_back(i);
+  //       activeJointNum++;
+  //       auto &joint_trans =
+  //           registry.get<transform>(actor_comp.ordered_entities[i]);
+  //       proxySkeleton.joint_names.push_back(joint_trans.name);
+  //       activeJointGlobalPos.push_back(joint_trans.position());
+  //       activeJointGlobalRot.push_back(joint_trans.rotation());
+  //     }
+  //   }
+  //   proxySkeleton.as_empty(activeJointNum);
+  //   proxySkeletonEntityMap.resize(activeJointNum, entt::null);
+  //   for (int i = 0; i < activeJointInd.size(); i++) {
+  //     // rebuild proxy joint parent child relation
+  //     auto oldCurrentJointInd = activeJointInd[i];
+  //     proxySkeletonNameToInd[proxySkeleton.joint_names[i]] = i;
+  //     proxySkeletonEntityMap[i] =
+  //     actor_comp.ordered_entities[oldCurrentJointInd]; for (int j = i - 1; j
+  //     >= 0; j--) {
+  //       // check if activeJointInd[j] could be a parent of activeJointInd[i]
+  //       auto potentialParentJointInd = activeJointInd[j];
+  //       auto cur = actor_comp.skel.joint_parent[oldCurrentJointInd];
+  //       bool isParent = false;
+  //       while (cur != -1) {
+  //         if (cur == potentialParentJointInd) {
+  //           isParent = true;
+  //           break;
+  //         }
+  //         cur = actor_comp.skel.joint_parent[cur];
+  //       }
+  //       if (isParent) {
+  //         proxySkeleton.joint_parent[i] = j;
+  //         proxySkeleton.joint_children[j].push_back(i);
+  //         break;
+  //       }
+  //     }
+  //   }
+  //   // convert global position to relative ones
+  //   for (int i = 0; i < activeJointNum; i++) {
+  //     int parentInd = proxySkeleton.joint_parent[i];
+  //     if (parentInd != -1) {
+  //       proxySkeleton.joint_offset[i] =
+  //           activeJointGlobalPos[i] - activeJointGlobalPos[parentInd];
+  //     } else
+  //       proxySkeleton.joint_offset[i] = activeJointGlobalPos[i];
+  //   }
 
-  proxySkeleton.export_as_bvh(filepath);
+  //   proxySkeleton.export_as_bvh(filepath);
 }
 
 void draw_skeleton_gui(entt::registry &registry, entt::entity entity) {
   auto &actor_comp = registry.get<actor>(entity);
-  if (ImGui::Button("Export Active Skeleton", {-1, 30})) {
-    std::string filepath;
-    if (save_file_dialog("Save active joints as proxy skeleton", {"*.bvh"},
-                         "*.bvh", filepath))
-      export_proxy_skeleton(registry, actor_comp, filepath);
-  }
-  int num_active_joints = 0;
-  for (int i = 0; i < actor_comp.skel.get_num_joints(); ++i)
+  // if (ImGui::Button("Export Active Skeleton", {-1, 30})) {
+  //   std::string filepath;
+  //   if (save_file_dialog("Save active joints as proxy skeleton", {"*.bvh"},
+  //                        "*.bvh", filepath))
+  //     export_proxy_skeleton(registry, actor_comp, filepath);
+  // }
+  int num_active_joints = 0, njoints = actor_comp.ordered_entities.size();
+  auto [parent, children, roots] =
+      estimate_actor_bone_hierarchy(registry, actor_comp);
+  for (int i = 0; i < njoints; ++i)
     num_active_joints += actor_comp.joint_active[i] ? 1 : 0;
   ImGui::MenuItem(("Num Joints: " + std::to_string(num_active_joints)).c_str(),
                   nullptr, nullptr, false);
 
   ImGui::BeginChild("skeletonhierarchy", {-1, -1});
-  for (int i = 0; i < actor_comp.skel.get_num_joints(); ++i) {
+  for (int i = 0; i < njoints; ++i) {
     int depth = 1, cur = i;
-    while (actor_comp.skel.joint_parent[cur] != -1) {
-      cur = actor_comp.skel.joint_parent[cur];
+    while (parent[cur] != -1) {
+      cur = parent[cur];
       depth++;
     }
     std::string depthHeader = "";
@@ -116,15 +120,16 @@ void draw_skeleton_gui(entt::registry &registry, entt::entity entity) {
           auto tmpCur = q.front();
           actor_comp.joint_active[tmpCur] = false;
           q.pop();
-          for (auto c : actor_comp.skel.joint_children[tmpCur])
+          for (auto c : children[tmpCur])
             q.push(c);
         }
       } else
         actor_comp.joint_active[i] = true;
     }
     ImGui::SameLine();
-    ImGui::Text("%s %s", depthHeader.c_str(),
-                actor_comp.skel.joint_names[i].c_str());
+    ImGui::Text(
+        "%s %s", depthHeader.c_str(),
+        registry.get<transform>(actor_comp.ordered_entities[i]).name.c_str());
   }
   ImGui::EndChild();
 }

@@ -54,7 +54,7 @@ public:
   math::matrix4 matrix() const { return m_matrix; }
   math::matrix4 update_matrix();
 
-  void add_children(entt::entity child);
+  void add_child(entt::entity child);
   void clear_relations();
   bool remove_parent();
 

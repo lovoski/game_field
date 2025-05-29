@@ -32,14 +32,6 @@ void defered_forward_mixed::draw_gui(entt::registry &registry,
     if (ImGui::CollapsingHeader("Camera"))
       ptr->draw_gui(nullptr);
   }
-  if (auto ptr = registry.try_get<dir_light>(entity)) {
-    if (ImGui::CollapsingHeader("Dir Light"))
-      ptr->draw_gui(nullptr);
-  }
-  if (auto ptr = registry.try_get<point_light>(entity)) {
-    if (ImGui::CollapsingHeader("Point Light"))
-      ptr->draw_gui(nullptr);
-  }
   if (auto ptr = registry.try_get<mesh_data>(entity)) {
     if (ImGui::CollapsingHeader("Mesh Data"))
       ptr->draw_gui(nullptr); // TODO: no need for mesh data component to access
@@ -182,10 +174,6 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
           (data.scene_vertex_offset == 0) || (data.scene_index_offset == 0)) {
         data.scene_vertex_offset = current_vertex_offset;
         data.scene_index_offset = current_index_offset;
-        spdlog::info("Refresh scene buffer for mesh {0}, vertex offset {1}, "
-                     "index offset {2}",
-                     data.mesh_name, current_vertex_offset,
-                     current_index_offset);
         // dispatch collect scene buffer program
         collect_scene_vertex_buffer_program
             .bind_buffer(data.vertex_buffer.get_handle(), 0)
@@ -225,7 +213,6 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
 
   // check for blend shapes and skinned meshes
   std::set<entt::entity> mesh_with_active_bs;
-  std::map<entt::entity, std::vector<entt::entity>> mesh_with_skeleton;
   collect_scene_vertex_buffer_program.use();
   mesh_data_entities.each([&](entt::entity entity, transform &trans,
                               mesh_data &data) {
@@ -246,14 +233,10 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
       collect_scene_vertex_buffer_program.set_int("gVertexOffset",
                                                   data.scene_vertex_offset);
       collect_scene_vertex_buffer_program.dispatch(
-          (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
-          1);
+          (data.vertices.size() + work_group_size - 1) / work_group_size, 1, 1);
       collect_scene_vertex_buffer_program.barrier(
           GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_ELEMENT_ARRAY_BARRIER_BIT |
           GL_COMMAND_BARRIER_BIT);
-    }
-    if (data.actor_entity != entt::null) {
-      mesh_with_skeleton[data.actor_entity].push_back(entity);
     }
   });
   // perform blend shape deform first
@@ -276,47 +259,45 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
         scene_buffer_apply_blendshape_program.set_float(
             "gWeightValue", data.blend_shapes[i].weight);
         scene_buffer_apply_blendshape_program.dispatch(
-            (data.vertices.size() + work_group_size - 1) / work_group_size,
-            1, 1);
+            (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
+            1);
         scene_buffer_apply_blendshape_program.barrier();
       }
     }
   }
   // perform skinned mesh deform latter
-  if (mesh_with_skeleton.size() > 0) {
-    scene_buffer_apply_mesh_skinning_program.use();
-    std::vector<_bone_matrix_block> bone_matrices;
-    for (auto p : mesh_with_skeleton) {
-      auto &actor_comp = registry.get<anim::actor>(p.first);
-
-      bone_matrices.resize(actor_comp.ordered_entities.size());
-      for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
-        auto &joint_trans =
-            registry.get<transform>(actor_comp.ordered_entities[i]);
-        bone_matrices[i].model_mat = joint_trans.matrix();
-        bone_matrices[i].offset_mat = actor_comp.skel.offset_matrices[i];
-      }
-      skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
-
-      for (auto ent : p.second) {
-        auto &data = mesh_data_entities.get<mesh_data>(ent);
-        scene_buffer_apply_mesh_skinning_program
-            .bind_buffer(data.vertex_buffer.get_handle(), 0)
-            .bind_buffer(skeleton_matrices_buffer.get_handle(), 1)
-            .bind_buffer(scene_vertex_buffer.get_handle(), 2);
-        scene_buffer_apply_mesh_skinning_program.set_int("gActualSize",
-                                                         data.vertices.size());
-        scene_buffer_apply_mesh_skinning_program.set_int(
-            "gVertexOffset", data.scene_vertex_offset);
-        scene_buffer_apply_mesh_skinning_program.set_bool(
-            "gBlended", mesh_with_active_bs.count(ent) > 0);
-        scene_buffer_apply_mesh_skinning_program.dispatch(
-            (data.vertices.size() + work_group_size - 1) / work_group_size,
-            1, 1);
-        scene_buffer_apply_mesh_skinning_program.barrier();
-      }
-    }
-  }
+  registry.view<entt::entity, skinned_mesh_bundle>().each(
+      [&](entt::entity entity, skinned_mesh_bundle &bundle) {
+        if (bundle.mesh_entities.size() == 0 ||
+            bundle.bone_entities.size() == 0)
+          return;
+        std::vector<_bone_matrix_block> bone_matrices(
+            bundle.bone_entities.size());
+        for (int i = 0; i < bundle.bone_entities.size(); i++) {
+          bone_matrices[i].model_mat =
+              registry.get<transform>(bundle.bone_entities[i]).matrix();
+          bone_matrices[i].offset_mat =
+              registry.get<bone_node>(bundle.bone_entities[i]).offset_matrix;
+        }
+        skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
+        for (auto mesh_entity : bundle.mesh_entities) {
+          auto &data = mesh_data_entities.get<mesh_data>(mesh_entity);
+          scene_buffer_apply_mesh_skinning_program
+              .bind_buffer(data.vertex_buffer.get_handle(), 0)
+              .bind_buffer(skeleton_matrices_buffer.get_handle(), 1)
+              .bind_buffer(scene_vertex_buffer.get_handle(), 2);
+          scene_buffer_apply_mesh_skinning_program.set_int(
+              "gActualSize", data.vertices.size());
+          scene_buffer_apply_mesh_skinning_program.set_int(
+              "gVertexOffset", data.scene_vertex_offset);
+          scene_buffer_apply_mesh_skinning_program.set_bool(
+              "gBlended", mesh_with_active_bs.count(mesh_entity) > 0);
+          scene_buffer_apply_mesh_skinning_program.dispatch(
+              (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
+              1);
+          scene_buffer_apply_mesh_skinning_program.barrier();
+        }
+      });
 
   // bind new scene vertex buffer and index buffer to scene vao
   scene_vao.bind();
@@ -375,10 +356,10 @@ void defered_forward_mixed::render(entt::registry &registry) {
       gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
       registry.view<entt::entity, transform, mesh_data>().each(
           [&](entt::entity entity, transform &trans, mesh_data &data) {
-            gbuffer_geometry_pass.set_mat4("gModel",
-                                           data.actor_entity == entt::null
-                                               ? trans.matrix()
-                                               : math::matrix4::Identity());
+            // gbuffer_geometry_pass.set_mat4(
+            //     "gModel", data.num_bones == 0 ? trans.matrix()
+            //                                   : math::matrix4::Identity());
+            gbuffer_geometry_pass.set_mat4("gModel", trans.matrix());
             glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
                            (void *)(data.scene_index_offset * sizeof(GLuint)));
           });

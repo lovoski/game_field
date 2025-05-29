@@ -7,6 +7,12 @@
 
 namespace toolkit::opengl {
 
+struct bone_node : public icomponent {
+  std::string name;
+  math::matrix4 offset_matrix;
+};
+DECLARE_COMPONENT(bone_node, data, name, offset_matrix)
+
 struct mesh_data : public icomponent {
   std::string mesh_name, model_name;
   std::vector<assets::mesh_vertex> vertices;
@@ -21,16 +27,20 @@ struct mesh_data : public icomponent {
   int64_t scene_vertex_offset = 0, scene_index_offset = 0;
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
 
-  entt::entity actor_entity = entt::null;
-
   void draw_gui(iapp *app) override;
 
   void draw(GLenum mode = GL_TRIANGLES);
 
   void init1() override;
 };
-DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh,
-                  actor_entity)
+DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh)
+
+struct skinned_mesh_bundle : public icomponent {
+  std::vector<entt::entity> bone_entities, mesh_entities;
+};
+DECLARE_COMPONENT(skinned_mesh_bundle, data, bone_entities, mesh_entities)
+
+void init_opengl_buffers(mesh_data &data, bool save_asset = true);
 
 void draw_mesh_data(mesh_data &data, GLenum mode = GL_TRIANGLES);
 
