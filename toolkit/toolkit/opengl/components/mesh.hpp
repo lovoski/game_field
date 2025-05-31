@@ -21,6 +21,8 @@ struct mesh_data : public icomponent {
   int64_t scene_vertex_offset = 0, scene_index_offset = 0;
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
 
+  bool skinned = false;
+
   void draw_gui(iapp *app) override;
 
   void draw(GLenum mode = GL_TRIANGLES);

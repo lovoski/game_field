@@ -14,7 +14,7 @@ add_subdirectory("toolkit/deps/spdlog")
 add_subdirectory("toolkit/deps/imgui")
 
 if(MSVC)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:preprocessor /bigobj" CACHE STRING "" FORCE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:preprocessor /bigobj /utf-8" CACHE STRING "" FORCE)
 endif()
 
 set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/assets")

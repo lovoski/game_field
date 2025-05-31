@@ -637,18 +637,18 @@ void manga_viewer::main_loop() {
 
 void manga_viewer::draw_gui() {
   if (ImGui::BeginMainMenuBar()) {
-    if (ImGui::MenuItem("Import")) {
+    if (ImGui::MenuItem("导入")) {
       std::string filepath;
-      if (toolkit::open_file_dialog("Select a .pdf or .epub file",
+      if (toolkit::open_file_dialog("选择一个 .pdf 或者 .epub 文件导入",
                                     {"*.PDF", "*.EPUB", "*.pdf", "*.epub"},
                                     "*.pdf, *.epub", filepath)) {
         std::thread t(&manga_viewer::on_load_file, this, filepath);
         t.detach();
       }
     }
-    ImGui::SetItemTooltip("Import an ebook from .pdf or .epub format file.");
-    if (ImGui::BeginMenu("Setting")) {
-      ImGui::SeparatorText("Import");
+    ImGui::SetItemTooltip("从 .pdf 或者 .epub 文件导入电子书");
+    if (ImGui::BeginMenu("设置")) {
+      ImGui::SeparatorText("导入选项");
       ImGui::Text(toolkit::str_format(
                       "dpi %d, (%d,%d,%d), %.3f MB", dpi, page_width.load(),
                       page_height.load(), page_channles.load(),
@@ -667,46 +667,32 @@ void manga_viewer::draw_gui() {
           },
           "Default");
       ImGui::SetItemTooltip(
-          "At the initial loading of a book, if the memory size of \nthe first "
-          "loaded page is greater than `max_page_size_mb`, \nan automatic "
-          "scale to dpi will be applied.");
+          "导入一本电子书时，如果第一页占用内存的大小超过 "
+          "max_page_size_mb，会执行一个默认的缩放确保内存占用不至于过大。");
 
-      ImGui::SeparatorText("Page Turning");
-      ImGui::Checkbox("Page Flow RTL", &pageFlowRTL);
+      ImGui::SeparatorText("翻页选项");
+      ImGui::Checkbox("右开本", &pageFlowRTL);
       ImGui::SetItemTooltip(
-          "Most ebooks are published in RTL page flow, but most Japanese manga "
-          "and light novel are in LTR.\nThis option provides a more natural "
-          "way to read these contents.");
-      ImGui::Checkbox("Pad After First Page", &padAfterFirstPage);
-      ImGui::SetItemTooltip("Insert a blank page after the first page, can be "
-                            "utilized to align cross pages.");
-      ImGui::SliderFloat("Speed", &autoTurnPageSpeed, 0.1f, 10.0f);
-      ImGui::SetItemTooltip("The speed for turning virtual pages.");
+          "大陆的书籍基本上都是右开本，即从左向右翻页阅读。日本的轻小说和漫画大"
+          "部分是左开本，需要从右向左翻页。");
+      ImGui::Checkbox("填充扉页", &padAfterFirstPage);
+      ImGui::SetItemTooltip("在扉页之后填充一个白色的空白页，如果漫画的跨页没有"
+                            "对齐，可以用这个选项手动对齐。");
+      ImGui::SliderFloat("翻页速度", &autoTurnPageSpeed, 0.1f, 10.0f);
+      ImGui::SetItemTooltip("仿真书翻页动画的播放速度。");
 
-      ImGui::SeparatorText("Rendering");
-      gui::color_edit_3("Background", backgroundColor);
-      ImGui::Checkbox("Eye Protection", &eyeProtection);
+      ImGui::SeparatorText("渲染选项");
+      gui::color_edit_3("背景颜色", backgroundColor);
+      ImGui::Checkbox("护眼模式", &eyeProtection);
       if (!eyeProtection)
         ImGui::BeginDisabled();
-      gui::color_edit_3("Color", eyeProtectionColor);
+      gui::color_edit_3("护眼颜色", eyeProtectionColor);
       if (!eyeProtection)
         ImGui::EndDisabled();
-
-      ImGui::SeparatorText("Book Caching");
-      ImGui::Text("%s", cacheDirPath.c_str());
-      if (ImGui::Button("Delete Book Cache", {-1, 30})) {
-        if (std::filesystem::exists(cacheDirPath)) {
-          std::filesystem::remove_all(cacheDirPath);
-          logger->info("Delete caching dir {0}", cacheDirPath);
-        } else {
-          logger->error("Cache dir {0} doesn't exists", cacheDirPath);
-        }
-      }
-
-      ImGui::SeparatorText("IO Options");
-      if (ImGui::Button("Dump Settings", {-1, 30}))
+      ImGui::SeparatorText("IO 选项");
+      if (ImGui::Button("保存设置", {-1, 30}))
         dump_preference();
-      if (ImGui::Button("Load Settings", {-1, 30}))
+      if (ImGui::Button("载入设置", {-1, 30}))
         load_preference();
 
       ImGui::EndMenu();
@@ -731,13 +717,13 @@ void manga_viewer::draw_gui() {
 
   static int pageNumber = 0;
   if (bookLoaded.load() && openSwitchPageWnd) {
-    ImGui::OpenPopup("Jump To Page##jumptopage");
+    ImGui::OpenPopup("跳转到对应页数##jumptopage");
     auto size = ImGui::GetContentRegionAvail();
     auto center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowSize({0.7f * size.x, -1.0f}, ImGuiCond_Appearing);
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
-    if (ImGui::BeginPopupModal("Jump To Page##jumptopage", &openSwitchPageWnd,
+    if (ImGui::BeginPopupModal("跳转到对应页数##jumptopage", &openSwitchPageWnd,
                                ImGuiWindowFlags_NoResize |
                                    ImGuiWindowFlags_NoMove)) {
       ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
@@ -745,7 +731,7 @@ void manga_viewer::draw_gui() {
 
       float spacing = ImGui::GetStyle().ItemSpacing.x;
       float button_width = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
-      if (ImGui::Button("Confirm", ImVec2(button_width, 0))) {
+      if (ImGui::Button("确认", ImVec2(button_width, 0))) {
         pageNumber = std::clamp(pageNumber, 1, pageCount.load());
         pageNumber -= 1;
         leadingPageIdx = pageNumber % 2 == 0 ? pageNumber - 1 : pageNumber;
@@ -754,7 +740,7 @@ void manga_viewer::draw_gui() {
         ImGui::CloseCurrentPopup();
       }
       ImGui::SameLine(0, spacing);
-      if (ImGui::Button("Cancel", ImVec2(button_width, 0))) {
+      if (ImGui::Button("取消", ImVec2(button_width, 0))) {
         openSwitchPageWnd = false;
         ImGui::CloseCurrentPopup();
       }
@@ -765,13 +751,13 @@ void manga_viewer::draw_gui() {
   }
 
   if (!bookLoaded && isLoadingBook) {
-    ImGui::OpenPopup("Loading...##modalwindow");
+    ImGui::OpenPopup("导入中...##modalwindow");
     auto size = ImGui::GetContentRegionAvail();
     auto center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowSize({0.7f * size.x, -1.0f}, ImGuiCond_Appearing);
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
-    if (ImGui::BeginPopupModal("Loading...##modalwindow", nullptr,
+    if (ImGui::BeginPopupModal("导入中...##modalwindow", nullptr,
                                ImGuiWindowFlags_NoResize |
                                    ImGuiWindowFlags_NoMove)) {
       ImGui::ProgressBar(loadingProgress.load());

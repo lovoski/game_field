@@ -277,11 +277,13 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
           bone_matrices[i].model_mat =
               registry.get<transform>(bundle.bone_entities[i]).matrix();
           bone_matrices[i].offset_mat =
-              registry.get<anim::bone_node>(bundle.bone_entities[i]).offset_matrix;
+              registry.get<anim::bone_node>(bundle.bone_entities[i])
+                  .offset_matrix;
         }
         skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
         for (auto mesh_entity : bundle.mesh_entities) {
           auto &data = mesh_data_entities.get<mesh_data>(mesh_entity);
+          data.skinned = true;
           scene_buffer_apply_mesh_skinning_program
               .bind_buffer(data.vertex_buffer.get_handle(), 0)
               .bind_buffer(skeleton_matrices_buffer.get_handle(), 1)
@@ -356,10 +358,9 @@ void defered_forward_mixed::render(entt::registry &registry) {
       gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
       registry.view<entt::entity, transform, mesh_data>().each(
           [&](entt::entity entity, transform &trans, mesh_data &data) {
-            // gbuffer_geometry_pass.set_mat4(
-            //     "gModel", data.num_bones == 0 ? trans.matrix()
-            //                                   : math::matrix4::Identity());
-            gbuffer_geometry_pass.set_mat4("gModel", trans.matrix());
+            gbuffer_geometry_pass.set_mat4(
+                "gModel",
+                data.skinned ? math::matrix4::Identity() : trans.matrix());
             glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
                            (void *)(data.scene_index_offset * sizeof(GLuint)));
           });
