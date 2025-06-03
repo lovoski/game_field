@@ -794,11 +794,20 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     auto mesh_entity = registry.create();
     auto &mesh_trans = registry.emplace<transform>(mesh_entity);
     auto &mesh_comp = registry.emplace<opengl::mesh_data>(mesh_entity);
-    auto material = mesh->materials[pi];
-    mesh_trans.name = str_format("%s:%s:%s", mesh->instances.data[0]->name.data,
-                                 mesh->name.data, material->name.data);
-    mesh_comp.mesh_name =
-        str_format("%s:%s", mesh->name.data, material->name.data);
+    if (mesh->materials.count >= pi + 1) {
+      auto material = mesh->materials[pi];
+      mesh_trans.name =
+          str_format("%s:%s:%s", mesh->instances.data[0]->name.data,
+                     mesh->name.data, material->name.data);
+      mesh_comp.mesh_name =
+          str_format("%s:%s", mesh->name.data, material->name.data);
+    } else {
+      mesh_trans.name =
+          str_format("%s:%s:%d", mesh->instances.data[0]->name.data,
+                     mesh->name.data, mesh_part->index);
+      mesh_comp.mesh_name =
+          str_format("%s:%d", mesh->name.data, mesh_part->index);
+    }
     mesh_comp.model_name = std::string(mesh->instances.data[0]->name.data);
     mesh_base_trans.add_child(mesh_entity);
 

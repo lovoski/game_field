@@ -30,7 +30,7 @@ target_link_libraries(main PRIVATE toolkit)
 为此，这个工具包必须对多种输入文件提供支持，目前支持下面的文件：
 
 1. `.npy,.npz`: 借助 cnpy 实现
-2. `.fbx,.obj`: 借助 assimp 实现，支持 skinned mesh 和 blend shape
+2. `.fbx,.obj`: 借助 ufbx 实现，支持 skinned mesh 和 blend shape
 3. `.bvh`: 自主实现
 4. `.png,.jpg,.bmp`: 借助 stb_image 实现
 5. `.json`: 借助 nlohmann json 实现
