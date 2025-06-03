@@ -41,20 +41,22 @@ public:
   transform *parent() const;
   std::vector<transform *> children() const;
 
-  void set_global_position(math::vector3 p);
-  void set_global_scale(math::vector3 s);
-  void set_global_rotation(math::quat q);
-  void set_local_position(math::vector3 p);
+  void set_world_pos(math::vector3 p);
+  void set_world_scale(math::vector3 s);
+  void set_world_rot(math::quat q);
+  void set_local_pos(math::vector3 p);
   void set_local_scale(math::vector3 s);
-  void set_local_rotation(math::quat q);
+  void set_local_rot(math::quat q);
   void set_local_euler_degrees(math::vector3 a);
-  void set_transform_matrix(math::matrix4 t);
+  void set_world_transform(math::matrix4 t);
 
   void reset();
   math::matrix4 matrix() const { return m_matrix; }
+  math::matrix4 parent_matrix() const;
   math::matrix4 update_matrix();
 
-  void add_child(entt::entity child);
+  void add_child(entt::entity child, bool keep_transform = true);
+  void set_parent(entt::entity parent, bool keep_transform = true);
   void clear_relations();
   bool remove_parent();
 
@@ -63,42 +65,37 @@ public:
   const math::vector3 world_to_local(math::vector3 world);
   const math::vector3 local_to_world(math::vector3 local);
 
-  const math::vector3 world_to_parent_local(math::vector3 world);
-  const math::vector3 parent_local_to_world(math::vector3 local);
-
-  void get_parent_local_axes(math::vector3 &pLocalForward,
-                             math::vector3 &pLocalLeft,
-                             math::vector3 &pLocalUp);
+  void parent_local_axes(math::vector3 &p_local_forward,
+                         math::vector3 &p_local_left,
+                         math::vector3 &p_local_up);
 
   const math::vector3 parent_position() const;
   const math::quat parent_rotation() const;
   const math::vector3 parent_scale() const;
 
-  void force_update_all();
+  void force_update_hierarchy();
 
 private:
-  math::vector3 m_pos = math::vector3::Zero(),
-                m_local_pos = math::vector3::Zero();
-  math::vector3 m_scale = math::vector3::Ones(),
-                m_local_scale = math::vector3::Ones();
-  math::quat m_rot = math::quat::Identity(),
-             m_local_rot = math::quat::Identity();
+  // ---------- cache data for faster reference ----------
+  math::vector3 m_pos = math::vector3::Zero();
+  math::vector3 m_scale = math::vector3::Ones();
+  math::quat m_rot = math::quat::Identity();
   // local euler angle in degrees
   math::vector3 m_local_euler = math::vector3::Zero();
-
-  math::matrix3 _M, _M_p;
-
   math::vector3 m_local_up = math::world_up,
                 m_local_forward = math::world_forward,
                 m_local_left = math::world_left;
-
   math::matrix4 m_matrix = math::matrix4::Identity();
+
+  // ---------- actual data for hierarchy update ----------
+  math::vector3 m_local_pos = math::vector3::Zero();
+  math::vector3 m_local_scale = math::vector3::Ones();
+  math::quat m_local_rot = math::quat::Identity();
 
   REFLECT_PRIVATE(transform)
 };
-DECLARE_COMPONENT(transform, basic, m_pos, m_local_pos, m_scale, m_local_scale,
-                  m_rot, m_local_up, m_local_forward, m_local_left, m_local_rot,
-                  m_local_euler, m_matrix, name, dirty, m_parent, m_children)
+DECLARE_COMPONENT(transform, basic, m_local_pos, m_local_scale, m_local_rot,
+                  m_local_euler, name, m_parent, m_children)
 
 class transform_system : public isystem {
 public:

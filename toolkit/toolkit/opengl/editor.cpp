@@ -133,7 +133,7 @@ void editor::add_default_objects() {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   trans.name = "main camera";
-  trans.set_global_position(math::vector3(0, 0, 5));
+  trans.set_world_pos(math::vector3(0, 0, 5));
   auto &cam_comp = registry.emplace<camera>(ent);
   g_instance.active_camera = ent;
   auto &editor_cam = registry.emplace<editor_camera>(ent);
@@ -178,7 +178,7 @@ void editor::draw_gizmos(bool enable) {
         if ((current_gizmo_operation() & ImGuizmo::TRANSLATE) != 0) {
           math::vector3 position(transform(0, 3), transform(1, 3),
                                  transform(2, 3));
-          selTrans.set_global_position(position);
+          selTrans.set_world_pos(position);
         }
         math::vector3 scale(transform.col(0).norm(), transform.col(1).norm(),
                             transform.col(2).norm());
@@ -187,10 +187,10 @@ void editor::draw_gizmos(bool enable) {
           rotation << transform.col(0) / scale.x(),
               transform.col(1) / scale.y(), transform.col(2) / scale.z(),
               math::vector4(0.0, 0.0, 0.0, 1.0);
-          selTrans.set_global_rotation(math::quat(rotation.block<3, 3>(0, 0)));
+          selTrans.set_world_rot(math::quat(rotation.block<3, 3>(0, 0)));
         }
         if ((current_gizmo_operation() & ImGuizmo::SCALE) != 0)
-          selTrans.set_global_scale(scale);
+          selTrans.set_world_scale(scale);
       }
     }
   }
@@ -662,15 +662,14 @@ read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
       auto p_ent = ufbx_node_to_entity[unode->parent];
       auto &p_trans = registry.get<transform>(p_ent);
       p_trans.add_child(ent);
-      trans.set_local_position(
-          ufbx_to_vec3(unode->local_transform.translation));
-      trans.set_local_rotation(ufbx_to_quat(unode->local_transform.rotation));
+      trans.set_local_pos(ufbx_to_vec3(unode->local_transform.translation));
+      trans.set_local_rot(ufbx_to_quat(unode->local_transform.rotation));
       trans.set_local_scale(ufbx_to_vec3(unode->local_transform.scale));
     }
   }
   if (scene->nodes.count > 0) {
-    registry.get<transform>(ufbx_node_to_entity[scene->nodes[0]])
-        .force_update_all();
+    registry.ctx().get<iapp *>()->get_sys<transform_system>()->update_transform(
+        registry);
   }
   // find root bones, add actor component to them
   std::vector<ufbx_node *> root_nodes;
@@ -734,16 +733,6 @@ struct skin_vertex {
   unsigned int bone_ids[4];
 };
 
-struct blend_vertex {
-  math::vector4 pos_offset = math::vector4::Zero();
-  math::vector4 normal_offset = math::vector4::Zero();
-};
-
-struct blendshape {
-  std::string name;
-  std::vector<blend_vertex> vertices;
-};
-
 void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
                std::map<ufbx_node *, entt::entity> &ufbx_node_to_entity,
                ufbx_scene *scene) {
@@ -792,25 +781,6 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     }
   }
 
-  // fetch blend shape channels
-  std::vector<blendshape> blendshapes;
-  if (mesh->blend_deformers.count > 0) {
-    ufbx_blend_deformer *deformer = mesh->blend_deformers.data[0];
-    blendshapes.resize(deformer->channels.count);
-    for (int i = 0; i < deformer->channels.count; i++) {
-      ufbx_blend_channel *channel = deformer->channels[i];
-      blendshapes[i].name = std::string(channel->name.data);
-      blendshapes[i].vertices.resize(mesh->num_vertices);
-      for (int vi = 0; vi < mesh->num_vertices; vi++) {
-        if (channel->keyframes.count == 0)
-          continue;
-        blendshapes[i].vertices[vi].pos_offset << ufbx_to_vec3(
-            ufbx_get_blend_shape_vertex_offset(channel->target_shape, vi)),
-            0.0f;
-      }
-    }
-  }
-
   // create one mesh component per part
   auto mesh_base_entity = ufbx_node_to_entity[mesh->instances.data[0]];
   auto &mesh_base_trans = registry.get<transform>(mesh_base_entity);
@@ -822,23 +792,22 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     auto mesh_entity = registry.create();
     auto &mesh_trans = registry.emplace<transform>(mesh_entity);
     auto &mesh_comp = registry.emplace<opengl::mesh_data>(mesh_entity);
+    auto material = mesh->materials[pi];
     mesh_trans.name =
-        str_format("%s:%s:%d", mesh->instances.data[0]->name.data,
-                   mesh->name.data, mesh->material_parts[pi].index);
+        str_format("%s:%s:%s", mesh->instances.data[0]->name.data,
+                   mesh->name.data, material->name.data);
     mesh_comp.mesh_name =
-        str_format("%s:%d", mesh->name.data, mesh->material_parts[pi].index);
+        str_format("%s:%s", mesh->name.data, material->name.data);
     mesh_comp.model_name = std::string(mesh->instances.data[0]->name.data);
     mesh_base_trans.add_child(mesh_entity);
 
-    // if (skinned_mesh) {
-    //   auto &bundle_comp = registry.get<opengl::skinned_mesh_bundle>(
-    //       ufbx_node_to_entity[scene->root_node]);
-    //   bundle_comp.mesh_entities.push_back(mesh_entity);
-    // }
+    if (skinned_mesh) {
+      auto &bundle_comp = registry.get<opengl::skinned_mesh_bundle>(
+          ufbx_node_to_entity[scene->root_node]);
+      bundle_comp.mesh_entities.push_back(mesh_entity);
+    }
 
     mesh_comp.indices.resize(mesh_part->num_triangles * 3);
-    std::vector<skin_vertex> mesh_skin_vertices;
-    ufbx_vec2 default_uv = {0};
     int num_indices = 0;
     for (int face_index : mesh_part->face_indices) {
       ufbx_face face = mesh->faces[face_index];
@@ -847,37 +816,99 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
       for (int i = 0; i < num_tris * 3; i++) {
         int index = mesh_comp.indices[i];
         assets::mesh_vertex vertex;
-        vertex.position << ufbx_to_vec3(
-            ufbx_get_vertex_vec3(&mesh->vertex_position, index)),
-            1.0f;
-        vertex.normal << ufbx_to_vec3(
-            ufbx_get_vertex_vec3(&mesh->vertex_normal, index)),
-            0.0f;
-        vertex.tex_coords << ufbx_to_vec2(
-            mesh->vertex_uv.exists
-                ? ufbx_get_vertex_vec2(&mesh->vertex_uv, index)
-                : default_uv),
-            0.0f, 0.0f;
-        mesh_comp.vertices.push_back(vertex);
-        if (skinned_mesh) {
-          mesh_skin_vertices.push_back(
-              skin_vertices[mesh->vertex_indices.data[index]]);
+        vertex.position << ufbx_to_vec3(mesh->vertex_position[index]), 1.0f;
+        vertex.normal << ufbx_to_vec3(mesh->vertex_normal[index]), 0.0f;
+        if (mesh->uv_sets.count > 0) {
+          vertex.tex_coords.x() = mesh->vertex_uv[index].x;
+          vertex.tex_coords.y() = mesh->vertex_uv[index].y;
+          if (mesh->uv_sets.count > 1) {
+            vertex.tex_coords.z() = mesh->uv_sets[1].vertex_uv[index].x;
+            vertex.tex_coords.w() = mesh->uv_sets[1].vertex_uv[index].y;
+          } else {
+            vertex.tex_coords.z() = 0;
+            vertex.tex_coords.w() = 0;
+          }
         }
+        if (mesh->vertex_color.exists) {
+          vertex.color.x() = mesh->vertex_color[index].x;
+          vertex.color.y() = mesh->vertex_color[index].y;
+          vertex.color.z() = mesh->vertex_color[index].z;
+          vertex.color.w() = mesh->vertex_color[index].w;
+        }
+        for (int k = 0; k < 4; k++) {
+          vertex.bone_indices[k] = 0;
+          vertex.bone_weights[k] = 0.0f;
+        }
+        if (skinned_mesh) {
+          auto bundle_entity = ufbx_node_to_entity[scene->root_node];
+          auto &bundle_comp =
+              registry.get<opengl::skinned_mesh_bundle>(bundle_entity);
+          auto skin = mesh->skin_deformers.data[0];
+          auto vertex_id = mesh->vertex_indices[index];
+          auto skin_vertex = skin->vertices[vertex_id];
+          auto num_weights =
+              skin_vertex.num_weights > 4 ? 4 : skin_vertex.num_weights;
+          float total_weights = 0.0f;
+          for (int k = 0; k < num_weights; k++) {
+            auto skin_weight = skin->weights[skin_vertex.weight_begin + k];
+            auto bone_entity =
+                ufbx_node_to_entity[skin->clusters[skin_weight.cluster_index]
+                                        ->bone_node];
+            for (int bone_id = 0; bone_id < bundle_comp.bone_entities.size();
+                 bone_id++) {
+              if (bundle_comp.bone_entities[bone_id] == bone_entity) {
+                vertex.bone_indices[k] = bone_id;
+                vertex.bone_weights[k] = (float)skin_weight.weight;
+                total_weights += (float)skin_weight.weight;
+              }
+            }
+          }
+          if (total_weights != 0.0f) {
+            for (int k = 0; k < num_weights; k++) {
+              vertex.bone_weights[k] /= total_weights;
+            }
+          } else {
+            // parent this mesh to root joint if it's not binded
+            vertex.bone_indices[0] = 0;
+            vertex.bone_weights[0] = 1.0f;
+          }
+        }
+
+        if (mesh->blend_deformers.count > 0) {
+          auto blend_deformer = mesh->blend_deformers.data[0];
+          uint32_t vert_id = mesh->vertex_indices[index];
+          size_t num_blends = blend_deformer->channels.count;
+          mesh_comp.blend_shapes.resize(num_blends);
+          for (int bsi = 0; bsi < num_blends; bsi++) {
+            ufbx_blend_channel *channel = blend_deformer->channels[bsi];
+            ufbx_blend_shape *shape = channel->target_shape;
+            mesh_comp.blend_shapes[bsi].name = shape->name.data;
+            blend_shape_vertex bs_vertex;
+            bs_vertex.offset_pos << ufbx_to_vec3(
+                ufbx_get_blend_shape_vertex_offset(shape, vert_id)),
+                0.0f;
+            bs_vertex.offset_normal = math::vector4::Zero();
+            mesh_comp.blend_shapes[bsi].data.emplace_back(bs_vertex);
+          }
+        }
+        mesh_comp.vertices.push_back(vertex);
         num_indices++;
       }
     }
 
     assert(mesh_comp.vertices.size() == mesh_part->num_triangles * 3);
 
-    ufbx_vertex_stream streams[2];
-    int num_streams = skinned_mesh ? 2 : 1;
+    ufbx_vertex_stream streams[1000];
+    int num_streams = mesh_comp.blend_shapes.size() == 0
+                          ? 1
+                          : 1 + mesh_comp.blend_shapes.size();
     streams[0].data = mesh_comp.vertices.data();
     streams[0].vertex_count = num_indices;
     streams[0].vertex_size = sizeof(assets::mesh_vertex);
-    if (skinned_mesh) {
-      streams[1].data = mesh_skin_vertices.data();
-      streams[1].vertex_count = num_indices;
-      streams[1].vertex_size = sizeof(skin_vertex);
+    for (int i = 1; i < mesh_comp.blend_shapes.size() + 1; i++) {
+      streams[i].data = mesh_comp.blend_shapes[i - 1].data.data();
+      streams[i].vertex_count = num_indices;
+      streams[i].vertex_size = sizeof(assets::blend_shape_vertex);
     }
 
     mesh_comp.indices.resize(mesh_part->num_triangles * 3);
@@ -885,18 +916,6 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
         ufbx_generate_indices(streams, num_streams, mesh_comp.indices.data(),
                               mesh_comp.indices.size(), nullptr, nullptr);
     mesh_comp.vertices.resize(num_vertices);
-
-    if (skinned_mesh) {
-      mesh_skin_vertices.resize(num_vertices);
-      for (int i = 0; i < num_vertices; i++) {
-        std::memcpy(mesh_comp.vertices[i].bone_indices.data(),
-                    mesh_skin_vertices[i].bone_ids,
-                    sizeof(mesh_skin_vertices[i].bone_ids));
-        std::memcpy(mesh_comp.vertices[i].bone_weights.data(),
-                    mesh_skin_vertices[i].bone_weights,
-                    sizeof(mesh_skin_vertices[i].bone_weights));
-      }
-    }
 
     opengl::init_opengl_buffers(mesh_comp);
   }

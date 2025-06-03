@@ -73,21 +73,29 @@ math::matrix4 transform::update_matrix() {
   return m_matrix;
 }
 
-void transform::set_transform_matrix(math::matrix4 t) {}
+void transform::set_world_transform(math::matrix4 t) {
+  math::decompose_transform(t, m_pos, m_rot, m_scale);
+  set_world_pos(m_pos);
+  set_world_rot(m_rot);
+  set_world_scale(m_scale);
+}
 
-void transform::set_global_position(math::vector3 p) {
+void transform::set_world_pos(math::vector3 p) {
   m_pos = p;
-  m_local_pos = world_to_parent_local(p);
+  if (m_parent == entt::null)
+    m_local_pos = m_pos;
+  else
+    m_local_pos = registry->get<transform>(m_parent).world_to_local(m_pos);
   dirty = true;
 }
 
-void transform::set_global_scale(math::vector3 s) {
+void transform::set_world_scale(math::vector3 s) {
   m_local_scale = s.array() / parent_scale().array();
-  m_scale = s;
+  set_local_scale(s);
   dirty = true;
 }
 
-void transform::set_global_rotation(math::quat q) {
+void transform::set_world_rot(math::quat q) {
   m_rot = q;
   math::quat pRot = parent_rotation();
   m_local_rot = pRot.inverse() * m_rot;
@@ -96,7 +104,7 @@ void transform::set_global_rotation(math::quat q) {
   dirty = true;
 }
 
-void transform::set_local_position(math::vector3 p) {
+void transform::set_local_pos(math::vector3 p) {
   m_local_pos = p;
   dirty = true;
 }
@@ -106,7 +114,7 @@ void transform::set_local_scale(math::vector3 s) {
   dirty = true;
 }
 
-void transform::set_local_rotation(math::quat q) {
+void transform::set_local_rot(math::quat q) {
   m_local_rot = q;
   m_local_euler = math::rad_to_deg(math::quat_to_euler(m_local_rot));
   dirty = true;
@@ -118,7 +126,7 @@ void transform::set_local_euler_degrees(math::vector3 a) {
   dirty = true;
 }
 
-void transform::add_child(entt::entity child) {
+void transform::add_child(entt::entity child, bool keep_transform) {
   if (child == entt::null) {
     std::cout << "Can't add nullptr as a child entity." << std::endl;
     return;
@@ -144,9 +152,29 @@ void transform::add_child(entt::entity child) {
   }
   cTrans.m_parent = self;
   m_children.push_back(child);
-  cTrans.set_global_position(cTrans.m_pos);
-  cTrans.set_global_rotation(cTrans.m_rot);
-  cTrans.set_global_scale(cTrans.m_scale);
+  if (keep_transform) {
+    cTrans.set_world_pos(cTrans.m_pos);
+    cTrans.set_world_rot(cTrans.m_rot);
+    cTrans.set_world_scale(cTrans.m_scale);
+  }
+}
+
+void transform::set_parent(entt::entity parent, bool keep_transform) {
+  if (m_parent != entt::null) {
+    auto &p_trans = registry->get<transform>(m_parent);
+    auto it =
+        std::find(p_trans.m_children.begin(), p_trans.m_children.end(), self);
+    if (it != p_trans.m_children.end())
+      p_trans.m_children.erase(it);
+  }
+  m_parent = parent;
+  auto &np_trans = registry->get<transform>(parent);
+  np_trans.m_children.push_back(self);
+  if (keep_transform) {
+    set_world_pos(m_pos);
+    set_world_rot(m_rot);
+    set_world_scale(m_scale);
+  }
 }
 
 void transform::clear_relations() {
@@ -184,29 +212,19 @@ void transform::update_local_axes() {
 }
 
 const math::vector3 transform::world_to_local(math::vector3 world) {
-  _M << m_local_left, m_local_up, m_local_forward;
-  return _M.inverse() * (world - m_pos);
+  math::vector4 p;
+  p << world, 1.0f;
+  return (m_matrix.inverse() * p).head<3>();
 }
 const math::vector3 transform::local_to_world(math::vector3 local) {
-  _M << m_local_left, m_local_up, m_local_forward;
-  return (_M * local) + m_pos;
-}
-const math::vector3 transform::world_to_parent_local(math::vector3 world) {
-  math::vector3 pLocalForward, pLocalLeft, pLocalUp;
-  get_parent_local_axes(pLocalForward, pLocalLeft, pLocalUp);
-  _M_p << pLocalLeft, pLocalUp, pLocalForward;
-  return _M_p.inverse() * (world - parent_position());
-}
-const math::vector3 transform::parent_local_to_world(math::vector3 local) {
-  math::vector3 pLocalForward, pLocalLeft, pLocalUp;
-  get_parent_local_axes(pLocalForward, pLocalLeft, pLocalUp);
-  _M_p << pLocalLeft, pLocalUp, pLocalForward;
-  return (_M_p * local) + parent_position();
+  math::vector4 p;
+  p << local, 1.0f;
+  return (m_matrix * p).head<3>();
 }
 
-void transform::get_parent_local_axes(math::vector3 &pLocalForward,
-                                      math::vector3 &pLocalLeft,
-                                      math::vector3 &pLocalUp) {
+void transform::parent_local_axes(math::vector3 &pLocalForward,
+                                  math::vector3 &pLocalLeft,
+                                  math::vector3 &pLocalUp) {
   if (m_parent == entt::null) {
     pLocalForward = math::world_forward;
     pLocalLeft = math::world_left;
@@ -240,12 +258,32 @@ const math::vector3 transform::parent_scale() const {
   else
     return math::vector3::Ones();
 }
-
-void transform::force_update_all() {
-  if (auto ptr = registry->ctx().get<iapp *>()->get_sys<transform_system>()) {
-    ptr->update_transform(*registry);
+math::matrix4 transform::parent_matrix() const {
+  if (m_parent != entt::null) {
+    return registry->get<transform>(m_parent).m_matrix;
   } else {
-    spdlog::error("Failed to find transform system.");
+    return math::matrix4::Identity();
+  }
+}
+
+void transform::force_update_hierarchy() {
+  std::stack<entt::entity> s;
+  s.push(self);
+  while (!s.empty()) {
+    auto cur = s.top();
+    s.pop();
+    auto &cur_trans = registry->get<transform>(cur);
+
+    cur_trans.m_matrix =
+        parent_matrix() *
+        math::compose_transform(m_local_pos, m_local_rot, m_local_scale);
+    math::decompose_transform(cur_trans.m_matrix, cur_trans.m_pos,
+                              cur_trans.m_rot, cur_trans.m_scale);
+    cur_trans.update_local_axes();
+    cur_trans.dirty = false;
+
+    for (auto c : cur_trans.m_children)
+      s.push(c);
   }
 }
 
@@ -254,13 +292,13 @@ void transform_system::draw_gui(entt::registry &registry, entt::entity entity) {
     if (ImGui::CollapsingHeader("Transform")) {
       auto position = trans->position();
       auto localEuler = trans->local_euler_degrees();
-      auto scale = trans->local_scale();
-      if (ImGui::DragFloat3("Positions", position.data(), 0.01f))
-        trans->set_global_position(position);
-      if (ImGui::DragFloat3("Rotations", localEuler.data(), 0.01f))
+      auto scale = trans->scale();
+      if (ImGui::DragFloat3("World Pos.", position.data(), 0.01f))
+        trans->set_world_pos(position);
+      if (ImGui::DragFloat3("Local Rot.", localEuler.data(), 0.01f))
         trans->set_local_euler_degrees(localEuler);
-      if (ImGui::DragFloat3("   Scales", scale.data(), 0.01f))
-        trans->set_global_scale(scale);
+      if (ImGui::DragFloat3("World Scl.", scale.data(), 0.01f))
+        trans->set_world_scale(scale);
     }
   }
 }
@@ -289,13 +327,12 @@ void transform_system::update_transform(entt::registry &registry) {
     }
     // update global positions with local positions
     if (dirty) {
-      trans.m_pos = trans.parent_local_to_world(trans.m_local_pos);
-      // the global rotation is constructed from m_local_rot
-      // all dirty children will get this updated parent orientation
-      trans.m_rot = trans.parent_rotation() * trans.m_local_rot;
-      trans.m_scale =
-          trans.parent_scale().array() * trans.m_local_scale.array();
-      trans.update_matrix();
+      trans.m_matrix =
+          trans.parent_matrix() * math::compose_transform(trans.m_local_pos,
+                                                          trans.m_local_rot,
+                                                          trans.m_local_scale);
+      math::decompose_transform(trans.m_matrix, trans.m_pos, trans.m_rot,
+                                trans.m_scale);
       trans.update_local_axes();
       trans.dirty = false;
     }

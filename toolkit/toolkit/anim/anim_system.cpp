@@ -147,7 +147,7 @@ void apply_pose(entt::registry &registry, actor &actor_comp,
   std::vector<std::string> missing_joint_names;
   // apply root translation
   registry.get<transform>(root->second)
-      .set_local_position(pose_data.root_local_pos);
+      .set_local_pos(pose_data.root_local_pos);
   // apply joint rotations for joints defined in the pose
   for (int pose_joint_ind = 0; pose_joint_ind < pose_joint_num;
        ++pose_joint_ind) {
@@ -158,7 +158,7 @@ void apply_pose(entt::registry &registry, actor &actor_comp,
       missing_joint_names.push_back(boneName);
     } else {
       registry.get<transform>(joint_entity->second)
-          .set_local_rotation(pose_data.joint_local_rot[pose_joint_ind]);
+          .set_local_rot(pose_data.joint_local_rot[pose_joint_ind]);
     }
   }
   // output the missing joints

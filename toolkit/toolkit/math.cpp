@@ -117,4 +117,22 @@ quat from_to_rot(vector3 from, vector3 to) {
   return quat(angle_axis(theta, axis.normalized()));
 }
 
-}; // namespace toolkit::Math
+void decompose_transform(matrix4 transform, vector3 &translation,
+                         quat &rotation, vector3 &scale) {
+  translation = vector3(transform(0, 3), transform(1, 3), transform(2, 3));
+  scale = vector3(transform.col(0).norm(), transform.col(1).norm(),
+                  transform.col(2).norm());
+  matrix4 rot;
+  rot << transform.col(0) / scale.x(), transform.col(1) / scale.y(),
+      transform.col(2) / scale.z(), math::vector4(0.0, 0.0, 0.0, 1.0);
+  rotation = math::quat(rot.block<3, 3>(0, 0));
+}
+math::matrix4 compose_transform(vector3 &translation, quat &rotation,
+                                vector3 &scale) {
+  Eigen::Transform<float, 3, 2> transform =
+      Eigen::Transform<float, 3, 2>::Identity();
+  transform.translate(translation).rotate(rotation).scale(scale);
+  return transform.matrix();
+}
+
+}; // namespace toolkit::math

@@ -8,8 +8,8 @@
 #include <json.hpp>
 
 #ifdef _WIN32
-  #define NOMINMAX
-  #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
 #endif
 
 namespace toolkit::math {
@@ -52,6 +52,11 @@ std::tuple<quat, quat> decompose_axis(quat q, vector3 axis);
 // Create rotation between from and to
 quat from_to_rot(vector3 from, vector3 to);
 
+void decompose_transform(matrix4 transform, vector3 &translation,
+                         quat &rotation, vector3 &scale);
+math::matrix4 compose_transform(vector3 &translation, quat &rotation,
+                                vector3 &scale);
+
 float rad_to_deg(const float rad);
 float deg_to_rad(const float deg);
 vector3 rad_to_deg(const vector3 &radVector);
@@ -68,7 +73,7 @@ matrix4 perspective(float fovy, float aspect, float znear, float zfar);
 matrix4 ortho(float left, float right, float top, float bottom, float zNear,
               float zFar);
 
-}; // namespace toolkit::Math
+}; // namespace toolkit::math
 
 namespace nlohmann {
 template <typename Scalar, int Rows, int Cols, int Options, int MaxRows,

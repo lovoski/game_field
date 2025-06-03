@@ -18,8 +18,8 @@ instantiate_skeleton_data(entt::registry &registry, assets::skeleton &skel,
     auto &trans = registry.emplace<transform>(ent);
     joint_trans[i] = registry.try_get<transform>(ent);
     trans.name = skel.joint_names[i];
-    trans.set_local_position(skel.joint_offset[i]);
-    trans.set_local_rotation(skel.joint_rotation[i]);
+    trans.set_local_pos(skel.joint_offset[i]);
+    trans.set_local_rot(skel.joint_rotation[i]);
     trans.set_local_scale(skel.joint_scale[i]);
     name_to_entity[trans.name] = ent;
     ordered_entities[i] = ent;

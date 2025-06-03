@@ -42,7 +42,7 @@ void editor_camera::preupdate(iapp *app, float dt) {
       if (g_instance.cursor_in_scene_window()) {
         // check action queue for mouse scroll event
         math::vector2 scrollOffset = g_instance.get_scroll_offsets();
-        cam_trans->set_global_position(cam_trans->position() -
+        cam_trans->set_world_pos(cam_trans->position() -
                                        cam_trans->local_forward() *
                                            scrollOffset.y() * movement_delta);
       }
@@ -101,7 +101,7 @@ void editor_camera::preupdate(iapp *app, float dt) {
                               worldRayDir.dot(cam_trans->local_up()) *
                                   cam_trans->local_up();
               camera_pivot += deltaPos;
-              cam_trans->set_global_position(cam_trans->position() + deltaPos);
+              cam_trans->set_world_pos(cam_trans->position() + deltaPos);
             }
           } else {
             // repose the camera
@@ -114,7 +114,7 @@ void editor_camera::preupdate(iapp *app, float dt) {
                                      cam_trans->local_left()) *
                     (posVector - camera_pivot) +
                 camera_pivot;
-            cam_trans->set_global_position(newPos);
+            cam_trans->set_world_pos(newPos);
           }
         }
         mouse_last_pos = mouse_current_pos;
@@ -132,7 +132,7 @@ void editor_camera::preupdate(iapp *app, float dt) {
       up = (forward.cross(left)).normalized();
       math::matrix3 rot;
       rot << left, up, forward;
-      cam_trans->set_global_rotation(math::quat(rot));
+      cam_trans->set_world_rot(math::quat(rot));
     }
   }
 }

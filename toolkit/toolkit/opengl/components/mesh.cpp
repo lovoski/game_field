@@ -106,19 +106,42 @@ void init_opengl_buffers_internal(mesh_data &data,
                                   bool save_asset);
 
 void mesh_data::draw_gui(iapp *app) {
-  if (ImGui::BeginTable(("##mesh" + mesh_name).c_str(), 3,
+  if (ImGui::BeginTable(("##mesh" + mesh_name).c_str(), 2,
                         ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders)) {
-    ImGui::TableSetupColumn("Mesh Name");
-    ImGui::TableSetupColumn("Num Faces");
-    ImGui::TableSetupColumn("Num Vertices");
+    ImGui::TableSetupColumn("Property");
+    ImGui::TableSetupColumn("Value");
     ImGui::TableHeadersRow();
+
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    ImGui::Text("%s", mesh_name.c_str());
+    ImGui::Text("Mesh Name");
     ImGui::TableSetColumnIndex(1);
-    ImGui::Text("%d", (int)(indices.size() / 3));
-    ImGui::TableSetColumnIndex(2);
-    ImGui::Text("%d", (int)(vertices.size()));
+    ImGui::Text("%s", mesh_name.c_str());
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("Num Vertices");
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Text("%d", vertices.size());
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("Num Indices");
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Text("%d", indices.size());
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("Num Faces");
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Text("%d", indices.size() / 3);
+
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    ImGui::Text("Skinned Mesh");
+    ImGui::TableSetColumnIndex(1);
+    ImGui::Text(skinned ? "True" : "False");
+
     ImGui::EndTable();
   }
   if (blend_shapes.size() > 0) {
@@ -268,7 +291,7 @@ entt::entity create_cube(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  trans.set_transform_matrix(t);
+  trans.set_world_transform(t);
   trans.name = "Cube";
   mesh.indices.resize(cube_nindicies);
   for (int i = 0; i < cube_nindicies; i++)
@@ -289,7 +312,7 @@ entt::entity create_plane(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  trans.set_transform_matrix(t);
+  trans.set_world_transform(t);
   trans.name = "Plane";
   mesh.indices.resize(plane_nindicies);
   for (int i = 0; i < plane_nindicies; i++)
@@ -310,7 +333,7 @@ entt::entity create_sphere(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  trans.set_transform_matrix(t);
+  trans.set_world_transform(t);
   trans.name = "Sphere";
   mesh.indices.resize(sphere_nindicies);
   for (int i = 0; i < sphere_nindicies; i++)
@@ -331,7 +354,7 @@ entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  trans.set_transform_matrix(t);
+  trans.set_world_transform(t);
   trans.name = "Cylinder";
   mesh.indices.resize(cylinder_nindicies);
   for (int i = 0; i < cylinder_nindicies; i++)

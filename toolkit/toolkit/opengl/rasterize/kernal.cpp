@@ -101,8 +101,8 @@ void main() {
 
   _packed_vertex vertex = gSceneVertices[gVertexOffset+gid];
 
-  vertex.position = gWeightValue * vec4((gBlendShapeVertices[gid].position).xyz, 0.0) + (1-gWeightValue) * vertex.position;
-  vertex.normal = gWeightValue * vec4((gBlendShapeVertices[gid].normal).xyz, 0.0) +  (1-gWeightValue) * vertex.normal;
+  vertex.position = gWeightValue * gBlendShapeVertices[gid].position + vertex.position;
+  vertex.normal = gWeightValue * gBlendShapeVertices[gid].normal + vertex.normal;
 
   gSceneVertices[gVertexOffset+gid] = vertex;
 }

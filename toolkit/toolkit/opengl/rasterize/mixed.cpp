@@ -266,6 +266,7 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
     }
   }
   // perform skinned mesh deform latter
+  scene_buffer_apply_mesh_skinning_program.use();
   registry.view<entt::entity, skinned_mesh_bundle>().each(
       [&](entt::entity entity, skinned_mesh_bundle &bundle) {
         if (bundle.mesh_entities.size() == 0 ||
@@ -281,8 +282,10 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
                   .offset_matrix;
         }
         skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
-        for (auto mesh_entity : bundle.mesh_entities) {
-          auto &data = mesh_data_entities.get<mesh_data>(mesh_entity);
+        for (int k = 0; k < bundle.mesh_entities.size(); k++) {
+          if (k == bundle.mesh_entities.size() - 1)
+            int a = 10;
+          auto &data = mesh_data_entities.get<mesh_data>(bundle.mesh_entities[k]);
           data.skinned = true;
           scene_buffer_apply_mesh_skinning_program
               .bind_buffer(data.vertex_buffer.get_handle(), 0)
@@ -293,7 +296,7 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
           scene_buffer_apply_mesh_skinning_program.set_int(
               "gVertexOffset", data.scene_vertex_offset);
           scene_buffer_apply_mesh_skinning_program.set_bool(
-              "gBlended", mesh_with_active_bs.count(mesh_entity) > 0);
+              "gBlended", mesh_with_active_bs.count(bundle.mesh_entities[k]) > 0);
           scene_buffer_apply_mesh_skinning_program.dispatch(
               (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
               1);
