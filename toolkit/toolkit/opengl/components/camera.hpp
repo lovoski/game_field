@@ -14,7 +14,7 @@ struct camera : public icomponent {
 
   bool perspective = true;
   float h_size = 10.0f, v_size = 10.0f;
-  float fovy_degree = 45.0f, z_near = 0.1f, z_far = 10000.0f;
+  float fovy_degree = 45.0f, z_near = 0.1f, z_far = 200.0f;
 
   void draw_gui(iapp *app) override {
     ImGui::Checkbox("Perspective", &perspective);

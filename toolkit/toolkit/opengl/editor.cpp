@@ -646,6 +646,8 @@ ufbx_node *find_last_bone_parent(ufbx_node *node) {
 std::map<ufbx_node *, entt::entity>
 read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
   std::map<ufbx_node *, entt::entity> ufbx_node_to_entity;
+  // create node hierarchy given the fbx scene nodes, each node correspond to
+  // one entity in the scene.
   for (int i = 0; i < scene->nodes.count; i++) {
     auto unode = scene->nodes[i];
     auto ent = registry.create();
@@ -671,7 +673,7 @@ read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
     registry.ctx().get<iapp *>()->get_sys<transform_system>()->update_transform(
         registry);
   }
-  // find root bones, add actor component to them
+  // find root bones, add actor and bone_node component to them.
   std::vector<ufbx_node *> root_nodes;
   for (int i = 0; i < scene->nodes.count; i++) {
     if (scene->nodes[i]->is_root)
@@ -793,9 +795,8 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     auto &mesh_trans = registry.emplace<transform>(mesh_entity);
     auto &mesh_comp = registry.emplace<opengl::mesh_data>(mesh_entity);
     auto material = mesh->materials[pi];
-    mesh_trans.name =
-        str_format("%s:%s:%s", mesh->instances.data[0]->name.data,
-                   mesh->name.data, material->name.data);
+    mesh_trans.name = str_format("%s:%s:%s", mesh->instances.data[0]->name.data,
+                                 mesh->name.data, material->name.data);
     mesh_comp.mesh_name =
         str_format("%s:%s", mesh->name.data, material->name.data);
     mesh_comp.model_name = std::string(mesh->instances.data[0]->name.data);
@@ -835,6 +836,8 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
           vertex.color.z() = mesh->vertex_color[index].z;
           vertex.color.w() = mesh->vertex_color[index].w;
         }
+
+        // handle skinned mesh import
         for (int k = 0; k < 4; k++) {
           vertex.bone_indices[k] = 0;
           vertex.bone_weights[k] = 0.0f;
@@ -874,6 +877,7 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
           }
         }
 
+        // handle blend shape import
         if (mesh->blend_deformers.count > 0) {
           auto blend_deformer = mesh->blend_deformers.data[0];
           uint32_t vert_id = mesh->vertex_indices[index];

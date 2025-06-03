@@ -753,8 +753,13 @@ out vec4 FragColor;
 uniform mat4 gView;
 uniform mat4 gProj;
 
+uniform int gridSize; // Add this line
+
+uniform float zNear;
+uniform float zFar;
+
 vec4 grid_color(vec3 worldPos) {
-  vec2 coord = worldPos.xz;
+  vec2 coord = worldPos.xz / gridSize; // Modify this line
   vec2 derivative = fwidth(coord);
   vec2 grid = abs(fract(coord - 0.5) - 0.5) / derivative;
   float line = min(grid.x, grid.y);
@@ -763,17 +768,19 @@ vec4 grid_color(vec3 worldPos) {
   vec4 color = vec4(vec3(0.2), 1.0 - min(line, 1.0));
   bool setup = false;
   // z axis
-  if(worldPos.x > -0.1 * minimumx && worldPos.x < 0.1 * minimumx) {
+  // We need to adjust the axis thickness based on the grid spacing as well,
+  // or make it independent if that's desired. For now, let's keep it relative.
+  if(worldPos.x > -1 * minimumx * gridSize && worldPos.x < minimumx * gridSize) {
     color.z = 1.0;
     setup = true;
   }
   // x axis
-  if(worldPos.z > -0.1 * minimumz && worldPos.z < 0.1 * minimumz) {
+  if(worldPos.z > -1 * minimumz * gridSize && worldPos.z < minimumz * gridSize) {
     color.x = 1.0;
     setup = true;
   }
   // if (!setup)
-  //   discard;
+  //  discard;
   return color;
 }
 
@@ -783,6 +790,11 @@ float compute_depth(vec3 pos) {
   return 0.5*(clip_space_pos.z/clip_space_pos.w)+0.5;
 }
 
+float linearizeDepth(float depth) {
+  float z_ndc = depth * 2.0 - 1.0; // Convert from [0,1] to NDC [-1,1]
+  return (2.0 * zNear * zFar) / (zFar + zNear - z_ndc * (zFar - zNear)) / (zFar-zNear);
+}
+
 void main() {
   float t = -near_point.y/(far_point.y-near_point.y);
   if (t < 0) {
@@ -790,12 +802,15 @@ void main() {
   }
 
   vec3 worldPos = near_point+t*(far_point-near_point);
-  gl_FragDepth = compute_depth(worldPos);
-  FragColor = grid_color(worldPos);
+  float depth = compute_depth(worldPos);
+  gl_FragDepth = depth;
+  vec4 color = grid_color(worldPos);
+  color.a *= pow(1.0-linearizeDepth(depth), 2);
+  FragColor = color;
 }
 )";
-void draw_infinite_grid(math::matrix4 view, math::matrix4 proj,
-                        unsigned int grid_spacing) {
+void draw_infinite_grid(math::matrix4 view, math::matrix4 proj, float z_near,
+                        float z_far, unsigned int grid_spacing) {
   static vao vertex_array;
   static buffer vertex_buffer;
   static shader program;
@@ -827,6 +842,9 @@ void draw_infinite_grid(math::matrix4 view, math::matrix4 proj,
   program.use();
   program.set_mat4("gView", view);
   program.set_mat4("gProj", proj);
+  program.set_int("gridSize", grid_spacing);
+  program.set_float("zNear", z_near);
+  program.set_float("zFar", z_far);
   program.set_int("gGridSpacing", grid_spacing);
   vertex_array.bind();
   glDrawArrays(GL_TRIANGLES, 0, 6);

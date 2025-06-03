@@ -275,6 +275,12 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
         std::vector<_bone_matrix_block> bone_matrices(
             bundle.bone_entities.size());
         for (int i = 0; i < bundle.bone_entities.size(); i++) {
+          // mark invalid bones as null entity, we can't remove it since the
+          // bone id in each vertex should remain static.
+          if (!registry.valid(bundle.bone_entities[i])) {
+            bundle.bone_entities[i] = entt::null;
+            continue;
+          }
           bone_matrices[i].model_mat =
               registry.get<transform>(bundle.bone_entities[i]).matrix();
           bone_matrices[i].offset_mat =
@@ -282,10 +288,25 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
                   .offset_matrix;
         }
         skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
+
+        // check if there are any invalid mesh entities, if so, remove them from
+        // the list.
+        int valid_counter = 0;
         for (int k = 0; k < bundle.mesh_entities.size(); k++) {
-          if (k == bundle.mesh_entities.size() - 1)
-            int a = 10;
-          auto &data = mesh_data_entities.get<mesh_data>(bundle.mesh_entities[k]);
+          if (registry.valid(bundle.mesh_entities[k]))
+            valid_counter++;
+        }
+        if (valid_counter != bundle.mesh_entities.size()) {
+          std::vector<entt::entity> valid_mesh_entities;
+          for (int k = 0; k < bundle.mesh_entities.size(); k++) {
+            if (registry.valid(bundle.mesh_entities[k]))
+              valid_mesh_entities.push_back(bundle.mesh_entities[k]);
+          }
+          bundle.mesh_entities = valid_mesh_entities;
+        }
+        for (int k = 0; k < bundle.mesh_entities.size(); k++) {
+          auto &data =
+              mesh_data_entities.get<mesh_data>(bundle.mesh_entities[k]);
           data.skinned = true;
           scene_buffer_apply_mesh_skinning_program
               .bind_buffer(data.vertex_buffer.get_handle(), 0)
@@ -296,7 +317,8 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
           scene_buffer_apply_mesh_skinning_program.set_int(
               "gVertexOffset", data.scene_vertex_offset);
           scene_buffer_apply_mesh_skinning_program.set_bool(
-              "gBlended", mesh_with_active_bs.count(bundle.mesh_entities[k]) > 0);
+              "gBlended",
+              mesh_with_active_bs.count(bundle.mesh_entities[k]) > 0);
           scene_buffer_apply_mesh_skinning_program.dispatch(
               (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
               1);
@@ -397,7 +419,8 @@ void defered_forward_mixed::render(entt::registry &registry) {
     glBlendEquation(GL_FUNC_ADD);
 
     if (should_draw_grid)
-      draw_infinite_grid(cam_comp.view, cam_comp.proj, grid_spacing);
+      draw_infinite_grid(cam_comp.view, cam_comp.proj, cam_comp.z_near,
+                         cam_comp.z_far, grid_spacing);
 
     glDisable(GL_BLEND);
 

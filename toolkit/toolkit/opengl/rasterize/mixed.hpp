@@ -51,7 +51,7 @@ public:
   void draw_menu_gui() override;
 
   bool should_draw_grid = true;
-  int grid_spacing = 10;
+  int grid_spacing = 1;
 
   bool should_draw_debug = true;
 
