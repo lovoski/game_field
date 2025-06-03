@@ -212,7 +212,7 @@ template <> struct adl_serializer<entt::entity> {
 
   static void from_json(const json &j, entt::entity &e) {
     uint32_t raw_id = j.get<uint32_t>();
-    entt::entity original = entt::entity{entt::to_entity(raw_id)};
+    entt::entity original = entt::entity{raw_id};
 
     e = original;
     if (toolkit::iapp::__entity_mapping__.find(original) !=
