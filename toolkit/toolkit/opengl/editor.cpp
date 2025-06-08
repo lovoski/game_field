@@ -737,7 +737,7 @@ struct skin_vertex {
 
 void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
                std::map<ufbx_node *, entt::entity> &ufbx_node_to_entity,
-               ufbx_scene *scene) {
+               ufbx_scene *scene, std::string filename) {
   bool skinned_mesh = mesh->skin_deformers.count > 0;
   std::vector<skin_vertex> skin_vertices;
   if (skinned_mesh) {
@@ -808,7 +808,7 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
       mesh_comp.mesh_name =
           str_format("%s:%d", mesh->name.data, mesh_part->index);
     }
-    mesh_comp.model_name = std::string(mesh->instances.data[0]->name.data);
+    mesh_comp.model_name = filename;
     mesh_base_trans.add_child(mesh_entity);
 
     if (skinned_mesh) {
@@ -1007,7 +1007,7 @@ void open_model(entt::registry &registry, std::string filepath) {
   }
   // create meshes
   for (int i = 0; i < scene->meshes.count; i++) {
-    read_mesh(registry, scene->meshes[i], ufbx_node_to_entity, scene);
+    read_mesh(registry, scene->meshes[i], ufbx_node_to_entity, scene, filename);
   }
 
   ufbx_free_scene(scene);

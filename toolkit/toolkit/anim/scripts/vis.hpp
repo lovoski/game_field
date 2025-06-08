@@ -12,6 +12,9 @@ public:
   void draw_to_scene(iapp *app) override;
   void draw_gui(iapp *app) override;
 
+  void start() override;
+  void destroy() override;
+
   bool draw_axes = false, draw_spheres = true;
   float axes_length = 1.0f;
   math::vector3 bone_color = opengl::Green;

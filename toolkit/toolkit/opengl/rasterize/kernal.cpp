@@ -15,6 +15,7 @@ struct _render_vertex {
 struct _packed_vertex {
   vec4 position;
   vec4 normal;
+  vec4 texcoords;
 };
 layout(std430, binding = 0) buffer OriginalVerticesBuffer {
   _render_vertex gVertices[];
@@ -39,6 +40,7 @@ void main() {
   _packed_vertex newVertex;
   newVertex.position = oldVertex.position;
   newVertex.normal = vec4(normalize(oldVertex.normal.xyz), 0.0);
+  newVertex.texcoords = oldVertex.tex_coords;
   gPackedVertices[newIndex] = newVertex;
 }
 )";
@@ -81,6 +83,7 @@ struct _blendshape_vertex {
 struct _packed_vertex {
   vec4 position;
   vec4 normal;
+  vec4 texcoords;
 };
 layout(std430, binding = 0) buffer BlendShapeDataBuffer {
   _blendshape_vertex gBlendShapeVertices[];
@@ -127,6 +130,7 @@ struct _bone_matrix_block {
 struct _packed_vertex {
   vec4 position;
   vec4 normal;
+  vec4 texcoords;
 };
 layout(std430, binding = 0) buffer OriginalVerticesBuffer {
   _render_vertex gOriginalVertices[];
@@ -174,6 +178,7 @@ void main() {
   new_vertex.position.w = 1.0;
   new_vertex.normal.w = 0.0;
   new_vertex.normal = normalize(new_vertex.normal);
+  new_vertex.texcoords = original_vertex.tex_coords;
 
   gSceneVertices[gid+gVertexOffset] = new_vertex;
 }

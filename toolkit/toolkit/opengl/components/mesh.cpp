@@ -156,9 +156,10 @@ void mesh_data::draw_gui(iapp *app) {
 }
 
 void mesh_data::init1() {
-  std::string asset_path = join_path(
-      ".", "mesh_assets",
-      str_format("%s_%s.mesh", model_name.c_str(), mesh_name.c_str()));
+  std::string base_path = join_path(
+      ".", "mesh_assets", replace(replace(model_name, " ", ""), ":", ""));
+  std::string asset_path =
+      join_path(base_path, str_format("%s.mesh", mesh_name.c_str()));
   asset_path = replace(replace(asset_path, ":", ""), " ", "");
   std::ifstream input(asset_path, std::ios::binary);
   if (input.is_open()) {
@@ -257,11 +258,12 @@ void init_opengl_buffers_internal(mesh_data &data,
 
   if (save_asset) {
     // save data into text file relative to binary file
-    mkdir(join_path(".", "mesh_assets"));
-    std::string asset_path =
+    std::string base_path =
         join_path(".", "mesh_assets",
-                  str_format("%s_%s.mesh", data.model_name.c_str(),
-                             data.mesh_name.c_str()));
+                  replace(replace(data.model_name, " ", ""), ":", ""));
+    mkdir(base_path);
+    std::string asset_path =
+        join_path(base_path, str_format("%s.mesh", data.mesh_name.c_str()));
     asset_path = replace(replace(asset_path, ":", ""), " ", "");
     std::ofstream output(asset_path, std::ios::binary);
     if (output.is_open()) {

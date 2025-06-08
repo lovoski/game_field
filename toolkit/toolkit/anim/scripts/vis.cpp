@@ -6,6 +6,14 @@
 
 namespace toolkit::anim {
 
+void vis_skeleton::start() {
+  spdlog::info("Start vis_skeleton script");
+}
+
+void vis_skeleton::destroy() {
+  spdlog::info("Destroy vis_skeleton script");
+}
+
 void vis_skeleton::draw_to_scene(iapp *app) {
   opengl::script_draw_to_scene_proxy(app, [&](opengl::editor *eptr,
                                               transform &cam_trans,

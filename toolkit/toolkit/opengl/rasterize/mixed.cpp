@@ -1,5 +1,6 @@
 #include "toolkit/opengl/rasterize/mixed.hpp"
 #include "toolkit/anim/components/actor.hpp"
+#include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/rasterize/kernal.hpp"
 #include "toolkit/opengl/rasterize/shaders.hpp"
 #include "toolkit/scriptable.hpp"
@@ -9,6 +10,7 @@ namespace toolkit::opengl {
 struct _packed_vertex {
   math::vector4 position;
   math::vector4 normal;
+  math::vector4 texcoords;
 };
 
 struct _bone_matrix_block {
@@ -36,6 +38,13 @@ void defered_forward_mixed::draw_gui(entt::registry &registry,
     if (ImGui::CollapsingHeader("Mesh Data"))
       ptr->draw_gui(nullptr); // TODO: no need for mesh data component to access
                               // app settings
+  }
+  if (has_any_materials(registry, entity)) {
+    if (ImGui::CollapsingHeader("Materials")) {
+      for (auto &func : material::__material_draw_gui__) {
+        func(registry, entity);
+      }
+    }
   }
 }
 
@@ -413,6 +422,41 @@ void defered_forward_mixed::render(entt::registry &registry) {
     defered_phong_pass.set_texture2d("gMaskTex", mask_tex.get_handle(), 4);
     defered_phong_pass.set_buffer_ssbo(light_data_buffer, 0);
     quad_draw_call();
+
+    // iterate through all material types
+    scene_vao.bind();
+    for (auto &mat_shader_pair : material::__material_shaders__) {
+      auto mat_name = mat_shader_pair.first;
+      auto &mat_shader = mat_shader_pair.second;
+      mat_shader.use();
+      // bind common bindings
+      mat_shader.set_mat4("gViewMat", cam_comp.view);
+      mat_shader.set_mat4("gProjMat", cam_comp.proj);
+      mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
+      mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
+      mat_shader.set_buffer_ssbo(light_data_buffer, 0);
+      material::__material_view__[mat_name](registry, [&](entt::entity entity,
+                                                          material *mat) {
+        if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
+          if (mesh_ptr->should_render_mesh) {
+            auto &trans = registry.get<transform>(entity);
+            mat_shader.set_int("gVertexOffset", mesh_ptr->scene_vertex_offset);
+            mat_shader.set_mat4("gModelToWorldPoint",
+                                mesh_ptr->skinned ? math::matrix4::Identity()
+                                                  : trans.matrix());
+            mat_shader.set_mat3(
+                "gModelToWorldDir",
+                mesh_ptr->skinned
+                    ? (math::matrix3)(math::matrix3::Identity())
+                    : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
+            glDrawElements(
+                GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
+                (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
+          }
+        }
+      });
+    }
+    scene_vao.unbind();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

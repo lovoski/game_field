@@ -18,7 +18,7 @@ namespace toolkit {
  */
 class scriptable : public icomponent {
 public:
-  scriptable() { __registered_scripts__.insert(this); }
+  scriptable() {}
 
   virtual void start() {}
   virtual void destroy() {}
@@ -33,59 +33,71 @@ public:
 
   entt::registry *registry = nullptr;
   entt::entity entity = entt::null;
-
-  static inline std::set<scriptable *> __registered_scripts__;
 };
 
 class script_system : public isystem {
 public:
-  static inline std::vector<std::function<void(entt::registry &)>>
+  static inline std::map<
+      std::string,
+      std::function<void(entt::registry &,
+                         std::function<void(entt::entity, scriptable *)>)>>
+      script_views;
+  static inline std::map<std::string, std::function<void(entt::registry &)>>
       __construct_destroy_registry__;
 
   void init0(entt::registry &registry) override {
-    scriptable::__registered_scripts__.clear();
     for (auto &f : __construct_destroy_registry__)
-      f(registry);
+      f.second(registry);
   }
 
   void init1(entt::registry &registry) override {}
 
   void draw_gui(entt::registry &registry, entt::entity entity) override {
     auto ptr = registry.ctx().get<iapp *>();
-    for (auto script : scriptable::__registered_scripts__) {
-      if (script->entity == entity) {
-        if (ImGui::CollapsingHeader(script->get_name().c_str())) {
-          ImGui::Checkbox("Active", &script->enabled);
-          ImGui::Separator();
-          if (!script->enabled)
-            ImGui::BeginDisabled();
-          script->draw_gui(ptr);
-          if (!script->enabled)
-            ImGui::EndDisabled();
+    for (auto &sv : script_views) {
+      sv.second(registry, [&](entt::entity it_entity, scriptable *script) {
+        if (it_entity == entity) {
+          if (ImGui::CollapsingHeader(script->get_name().c_str())) {
+            ImGui::Checkbox("Active", &script->enabled);
+            ImGui::Separator();
+            if (!script->enabled)
+              ImGui::BeginDisabled();
+            script->draw_gui(ptr);
+            if (!script->enabled)
+              ImGui::EndDisabled();
+          }
         }
-      }
+      });
     }
   }
   void draw_to_scene(iapp *app) {
-    for (auto script : scriptable::__registered_scripts__)
-      if (script->enabled)
+    for (auto &sv : script_views) {
+      sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
         script->draw_to_scene(app);
+      });
+    }
   }
 
   void preupdate(iapp *app, float dt) {
-    for (auto script : scriptable::__registered_scripts__)
-      if (script->enabled)
+    for (auto &sv : script_views) {
+      sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
         script->preupdate(app, dt);
+      });
+    }
   }
   void update(iapp *app, float dt) {
-    for (auto script : scriptable::__registered_scripts__)
-      if (script->enabled)
+    for (auto &sv : script_views) {
+      sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
         script->update(app, dt);
+      });
+    }
   }
   void lateupdate(iapp *app, float dt) {
-    for (auto script : scriptable::__registered_scripts__)
-      if (script->enabled)
+    for (auto &sv : script_views) {
+      sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
         script->lateupdate(app, dt);
+      });
+    }
   }
 };
 DECLARE_SYSTEM(script_system)
@@ -102,22 +114,30 @@ DECLARE_SYSTEM(script_system)
   inline void __on_destroy_##class_name(entt::registry &registry,              \
                                         entt::entity entity) {                 \
     auto &script = registry.get<class_name>(entity);                           \
-    toolkit::scriptable::__registered_scripts__.erase(&script);                \
     script.destroy();                                                          \
   }                                                                            \
-  struct __register_construct_destroy_##class_name {                           \
-    __register_construct_destroy_##class_name() {                              \
-      toolkit::script_system::__construct_destroy_registry__.push_back(        \
-          [](entt::registry &registry) {                                       \
+  struct __register_##class_name {                                             \
+    __register_##class_name() {                                                \
+      toolkit::script_system::__construct_destroy_registry__.insert(           \
+          std::make_pair(#class_name, [](entt::registry &registry) {           \
             registry.on_construct<class_name>()                                \
                 .connect<&__on_construct_##class_name>();                      \
             registry.on_destroy<class_name>()                                  \
                 .connect<&__on_destroy_##class_name>();                        \
-          });                                                                  \
+          }));                                                                 \
+      toolkit::script_system::script_views.insert(std::make_pair(              \
+          #class_name,                                                         \
+          [](entt::registry &registry,                                         \
+             std::function<void(entt::entity, toolkit::scriptable *)>          \
+                 &&func) {                                                     \
+            registry.view<entt::entity, class_name>().each(                    \
+                [&](entt::entity it_entity, class_name &script) {              \
+                  func(it_entity, &script);                                    \
+                });                                                            \
+          }));                                                                 \
     }                                                                          \
   };                                                                           \
-  static __register_construct_destroy_##class_name                             \
-      __register_construct_destroy_instance_##class_name =                     \
-          __register_construct_destroy_##class_name();
+  static __register_##class_name __register_instance_##class_name =            \
+      __register_##class_name();
 
 }; // namespace toolkit

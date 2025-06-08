@@ -1,7 +1,7 @@
-#include "ToolKit/Loaders/Image.hpp"
-#include "ToolKit/Reflect.hpp"
-#include "ToolKit/System.hpp"
-#include "ToolKit/Transform.hpp"
+#include "toolkit/loaders/image.hpp"
+#include "toolkit/reflect.hpp"
+#include "toolkit/system.hpp"
+#include "toolkit/transform.hpp"
 #include <fstream>
 #include <iostream>
 #include <json.hpp>
@@ -25,9 +25,19 @@ struct test1 {
 };
 REFLECT(test1, m0, m1, m2)
 
+#include "toolkit/opengl/components/materials/all.hpp"
+
 int main() {
-  std::string filepath;
-  // if (toolkit::open_file_dialog("Select image file", {"*.png"}, "*.png", filepath)) {
+  toolkit::opengl::blinn_phong_material bp_mat;
+  auto results = toolkit::opengl::parse_glsl_uniforms(
+      {bp_mat.vertex_shader_source, bp_mat.fragment_shader_source,
+       bp_mat.geometry_shader_source});
+
+  std::cout << ((nlohmann::json)results).dump(2) << std::endl;
+
+  // std::string filepath;
+  // if (toolkit::open_file_dialog("Select image file", {"*.png"}, "*.png",
+  // filepath)) {
   //   image img;
   //   img.load(filepath);
   //   nlohmann::json data = img;
@@ -43,11 +53,11 @@ int main() {
   //                  "C:\\repo\\toolkit\\build\\Debug\\test_image.png")
   //           << std::endl;
 
-  test1 t1;
+  // test1 t1;
 
-  nlohmann::json data = t1;
+  // nlohmann::json data = t1;
 
-  std::cout << data.dump(2) << std::endl;
+  // std::cout << data.dump(2) << std::endl;
 
   return 0;
 }

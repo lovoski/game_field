@@ -1,7 +1,7 @@
 #pragma once
 
+#include "entt/entity/registry.hpp"
 #include <algorithm>
-#include <entt.hpp>
 #include <queue>
 #include <stack>
 #include <toolkit/math.hpp>
