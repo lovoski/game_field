@@ -73,7 +73,8 @@ public:
   void draw_to_scene(iapp *app) {
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
-        script->draw_to_scene(app);
+        if (script->enabled)
+          script->draw_to_scene(app);
       });
     }
   }
@@ -81,21 +82,24 @@ public:
   void preupdate(iapp *app, float dt) {
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
-        script->preupdate(app, dt);
+        if (script->enabled)
+          script->preupdate(app, dt);
       });
     }
   }
   void update(iapp *app, float dt) {
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
-        script->update(app, dt);
+        if (script->enabled)
+          script->update(app, dt);
       });
     }
   }
   void lateupdate(iapp *app, float dt) {
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
-        script->lateupdate(app, dt);
+        if (script->enabled)
+          script->lateupdate(app, dt);
       });
     }
   }
@@ -103,7 +107,7 @@ public:
 DECLARE_SYSTEM(script_system)
 
 #define DECLARE_SCRIPT(class_name, category, ...)                              \
-  DECLARE_COMPONENT(class_name, category, __VA_ARGS__)                         \
+  DECLARE_COMPONENT(class_name, category, enabled __VA_OPT__(, ) __VA_ARGS__)  \
   inline void __on_construct_##class_name(entt::registry &registry,            \
                                           entt::entity entity) {               \
     auto &script = registry.get<class_name>(entity);                           \
