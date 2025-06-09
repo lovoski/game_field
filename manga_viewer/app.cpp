@@ -522,9 +522,6 @@ void manga_viewer::scene_logic() {
   mouseCurrentPos = toolkit::opengl::g_instance.get_mouse_position();
   bool mouseMidBtnPressed = toolkit::opengl::g_instance.is_mouse_button_pressed(
       GLFW_MOUSE_BUTTON_MIDDLE);
-  bool mouseLeftBtnPressed =
-      toolkit::opengl::g_instance.is_mouse_button_pressed(
-          GLFW_MOUSE_BUTTON_LEFT);
 
   // reset camera back to default
   if (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_R)) {
@@ -534,7 +531,7 @@ void manga_viewer::scene_logic() {
   }
 
   // handle page translation
-  if (mouseMidBtnPressed || mouseLeftBtnPressed) {
+  if (mouseMidBtnPressed) {
     // move around the camera
     if (mouseFirstMove) {
       mouseLastPos = mouseCurrentPos;
@@ -542,7 +539,7 @@ void manga_viewer::scene_logic() {
     }
 
     // mid button pressed, left button not pressed, move camera position
-    if (mouseMidBtnPressed && !mouseLeftBtnPressed) {
+    if (mouseMidBtnPressed) {
       // from screen space delta to camera space delta
       math::vector3 cameraSpaceDelta;
       cameraSpaceDelta << 2 * cameraHalfRangeY / wndSize.y() *
@@ -550,21 +547,6 @@ void manga_viewer::scene_logic() {
           0.0f;
       cameraSpaceDelta.x() *= -1;
       cameraPos += cameraSpaceDelta;
-    }
-
-    // mid button not pressed, left button pressed, flip page
-    if (!mouseMidBtnPressed && mouseLeftBtnPressed) {
-      math::vector2 mouseMoveDelta = mouseCurrentPos - mouseLastPos;
-      math::vector2 mouseMoveDir = mouseMoveDelta.normalized();
-      math::vector2 perpDir{mouseMoveDir.y(), -mouseMoveDir.x()};
-      perpDir.normalize();
-      float mouseMoveLength = mouseMoveDir.norm();
-      // project the world position for cursor
-      float convertRatio = 2 * cameraHalfRangeY / wndSize.y();
-      float cursorX = cameraPos.x() +
-                      (mouseCurrentPos.x() - 0.5 * wndSize.x()) * convertRatio;
-      float cursorY = cameraPos.y() -
-                      (mouseCurrentPos.y() - 0.5 * wndSize.y()) * convertRatio;
     }
 
     mouseLastPos = mouseCurrentPos;
@@ -585,7 +567,10 @@ void manga_viewer::scene_logic() {
   float pageWidth = first_page_width_div_height;
   if (!autoTurnPage && !(leadingPageIdx == -1 && pageFlowRTL) &&
       !(leadingPageIdx >= pageCount.load() - 1 && !pageFlowRTL) &&
-      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT))) {
+      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT) ||
+       (toolkit::opengl::g_instance.is_mouse_button_triggered(
+            GLFW_MOUSE_BUTTON_LEFT) &&
+        toolkit::opengl::g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL)))) {
     pageFromRightToLeft = false;
     autoTurnPage = true;
     foldB = -1;
@@ -594,7 +579,10 @@ void manga_viewer::scene_logic() {
   if (!autoTurnPage &&
       !(leadingPageIdx >= pageCount.load() - 1 && pageFlowRTL) &&
       !(leadingPageIdx == -1 && !pageFlowRTL) &&
-      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT))) {
+      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT) ||
+       (toolkit::opengl::g_instance.is_mouse_button_triggered(
+            GLFW_MOUSE_BUTTON_RIGHT) &&
+        toolkit::opengl::g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL)))) {
     pageFromRightToLeft = true;
     autoTurnPage = true;
     foldB = -1;
