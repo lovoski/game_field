@@ -53,13 +53,15 @@ public:
   bool should_draw_grid = true;
   int grid_spacing = 1;
 
+  int msaa_samples = 8;
+
   bool should_draw_debug = true;
 
 protected:
-  framebuffer gbuffer, cbuffer;
+  framebuffer gbuffer, cbuffer, msaa_buffer;
   shader gbuffer_geometry_pass, defered_phong_pass;
   texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex;
-  texture color_buffer_depth_tex;
+  unsigned int msaa_color_buffer, msaa_depth_buffer;
 
   // uniform buffer storing all active lights
   buffer light_data_buffer;

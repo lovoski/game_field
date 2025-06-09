@@ -54,7 +54,6 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   gbuffer_depth_tex.create(GL_TEXTURE_2D);
   color_tex.create(GL_TEXTURE_2D);
   mask_tex.create(GL_TEXTURE_2D);
-  color_buffer_depth_tex.create(GL_TEXTURE_2D);
 
   gbuffer_geometry_pass.compile_shader_from_source(gbuffer_geometry_pass_vs,
                                                    gbuffer_geometry_pass_fs);
@@ -78,6 +77,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
 
   gbuffer.create();
   cbuffer.create();
+  msaa_buffer.create();
   resize(g_instance.scene_width, g_instance.scene_height);
 
   light_data_buffer.create();
@@ -125,19 +125,31 @@ void defered_forward_mixed::resize(int width, int height) {
                             {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
                             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
-  color_buffer_depth_tex.set_data(width, height, GL_DEPTH_COMPONENT24,
-                                  GL_DEPTH_COMPONENT, GL_FLOAT);
-  color_buffer_depth_tex.set_parameters(
-      {{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-       {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-       {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-       {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
   cbuffer.attach_color_buffer(color_tex, GL_COLOR_ATTACHMENT0);
   cbuffer.end_draw_buffers();
-  cbuffer.attach_depth_buffer(color_buffer_depth_tex);
   if (!cbuffer.check_status())
     spdlog::error("cbuffer not complete!");
   cbuffer.unbind();
+
+  msaa_buffer.bind();
+  glGenRenderbuffers(1, &msaa_color_buffer);
+  glBindRenderbuffer(GL_RENDERBUFFER, msaa_color_buffer);
+  glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa_samples, GL_RGB, width,
+                                   height);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                            GL_RENDERBUFFER, msaa_color_buffer);
+
+  glGenRenderbuffers(1, &msaa_depth_buffer);
+  glBindRenderbuffer(GL_RENDERBUFFER, msaa_depth_buffer);
+  glRenderbufferStorageMultisample(GL_RENDERBUFFER, msaa_samples,
+                                   GL_DEPTH24_STENCIL8, width, height);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT,
+                            GL_RENDERBUFFER, msaa_depth_buffer);
+
+  if (!msaa_buffer.check_status()) {
+    spdlog::error("msaa buffer not complete!");
+  }
+  msaa_buffer.unbind();
 }
 
 void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
@@ -370,22 +382,55 @@ void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
   light_data_buffer.set_data_ssbo(lights);
 }
 
+std::string scene_vs = R"(
+#version 330 core
+layout (location = 0) in vec4 aPos;
+layout (location = 1) in vec4 aNormal;
+
+uniform mat4 gVP;
+uniform mat4 gModel;
+
+out vec3 worldPos;
+out vec3 worldNormal;
+
+void main() {
+  worldNormal = normalize(mat3(gModel)*aNormal.xyz);
+  worldPos = (gModel * aPos).xyz;
+
+  gl_Position = gVP * vec4(worldPos, 1.0);
+}
+)";
+std::string scene_fs = R"(
+#version 330 core
+in vec3 worldPos;
+in vec3 worldNormal;
+
+out vec4 FragColor;
+
+void main() {
+  FragColor = vec4(vec3(1.0), 1.0);
+}
+)";
 void defered_forward_mixed::render(entt::registry &registry) {
+  static shader scene_shader;
+  static bool scene_shader_initialized = false;
+  if (!scene_shader_initialized) {
+    scene_shader.compile_shader_from_source(scene_vs, scene_fs);
+    scene_shader_initialized = true;
+  }
   if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
     auto &cam_trans = registry.get<transform>(g_instance.active_camera);
     auto &cam_comp = *cam_ptr;
 
     update_scene_lights(registry);
 
+    // ------------------ render to geometry framebuffer ------------------
     gbuffer.bind();
     gbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
-
     glEnable(GL_DEPTH_TEST);
     glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
-
-    // render gbuffer
     if (scene_mesh_counter > 0) {
       scene_vao.bind();
       gbuffer_geometry_pass.use();
@@ -400,74 +445,76 @@ void defered_forward_mixed::render(entt::registry &registry) {
           });
       scene_vao.unbind();
     }
-
     gbuffer.unbind();
 
-    // render color buffer
-    cbuffer.bind();
-    cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
-
+    // ------------------- render to multisample framebuffer -------------------
+    msaa_buffer.bind();
+    msaa_buffer.set_viewport(0, 0, g_instance.scene_width,
+                             g_instance.scene_height);
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
+    // // iterate through all material types
+    // scene_vao.bind();
+    // for (auto &mat_shader_pair : material::__material_shaders__) {
+    //   auto mat_name = mat_shader_pair.first;
+    //   auto &mat_shader = mat_shader_pair.second;
+    //   mat_shader.use();
+    //   // bind common bindings
+    //   mat_shader.set_mat4("gViewMat", cam_comp.view);
+    //   mat_shader.set_mat4("gProjMat", cam_comp.proj);
+    //   mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
+    //   mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
+    //   mat_shader.set_buffer_ssbo(light_data_buffer, 0);
+    //   material::__material_view__[mat_name](registry, [&](entt::entity
+    //   entity,
+    //                                                       material *mat) {
+    //     if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
+    //       if (mesh_ptr->should_render_mesh) {
+    //         auto &trans = registry.get<transform>(entity);
+    //         mat_shader.set_int("gVertexOffset",
+    //         mesh_ptr->scene_vertex_offset);
+    //         mat_shader.set_mat4("gModelToWorldPoint",
+    //                             mesh_ptr->skinned ? math::matrix4::Identity()
+    //                                               : trans.matrix());
+    //         mat_shader.set_mat3(
+    //             "gModelToWorldDir",
+    //             mesh_ptr->skinned
+    //                 ? (math::matrix3)(math::matrix3::Identity())
+    //                 : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
+    //         glDrawElements(
+    //             GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
+    //             (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
+    //       }
+    //     }
+    //   });
+    // }
+    // scene_vao.unbind();
 
-    defered_phong_pass.use();
-    defered_phong_pass.set_vec3("gViewDir", -cam_trans.local_forward());
-    defered_phong_pass.set_texture2d("gPosTex", pos_tex.get_handle(), 0);
-    defered_phong_pass.set_texture2d("gNormalTex", normal_tex.get_handle(), 1);
-    defered_phong_pass.set_texture2d("gGbufferDepthTex",
-                                     gbuffer_depth_tex.get_handle(), 2);
-    defered_phong_pass.set_texture2d("gCbufferDepthTex",
-                                     color_buffer_depth_tex.get_handle(), 3);
-    defered_phong_pass.set_texture2d("gMaskTex", mask_tex.get_handle(), 4);
-    defered_phong_pass.set_buffer_ssbo(light_data_buffer, 0);
-    quad_draw_call();
-
-    // iterate through all material types
     scene_vao.bind();
-    for (auto &mat_shader_pair : material::__material_shaders__) {
-      auto mat_name = mat_shader_pair.first;
-      auto &mat_shader = mat_shader_pair.second;
-      mat_shader.use();
-      // bind common bindings
-      mat_shader.set_mat4("gViewMat", cam_comp.view);
-      mat_shader.set_mat4("gProjMat", cam_comp.proj);
-      mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
-      mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
-      mat_shader.set_buffer_ssbo(light_data_buffer, 0);
-      material::__material_view__[mat_name](registry, [&](entt::entity entity,
-                                                          material *mat) {
-        if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
-          if (mesh_ptr->should_render_mesh) {
-            auto &trans = registry.get<transform>(entity);
-            mat_shader.set_int("gVertexOffset", mesh_ptr->scene_vertex_offset);
-            mat_shader.set_mat4("gModelToWorldPoint",
-                                mesh_ptr->skinned ? math::matrix4::Identity()
-                                                  : trans.matrix());
-            mat_shader.set_mat3(
-                "gModelToWorldDir",
-                mesh_ptr->skinned
-                    ? (math::matrix3)(math::matrix3::Identity())
-                    : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
-            glDrawElements(
-                GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
-                (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
-          }
-        }
-      });
-    }
+    scene_shader.use();
+    scene_shader.set_mat4("gVP", cam_comp.vp);
+    registry.view<entt::entity, transform, mesh_data>().each(
+        [&](entt::entity entity, transform &trans, mesh_data &data) {
+          scene_shader.set_mat4("gModel", data.skinned
+                                              ? math::matrix4::Identity()
+                                              : trans.matrix());
+          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                         (void *)(data.scene_index_offset * sizeof(GLuint)));
+        });
     scene_vao.unbind();
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glBlendEquation(GL_FUNC_ADD);
-
-    if (should_draw_grid)
+    // render grids
+    if (should_draw_grid) {
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glBlendEquation(GL_FUNC_ADD);
       draw_infinite_grid(cam_comp.view, cam_comp.proj, cam_comp.z_near,
                          cam_comp.z_far, grid_spacing);
+      glDisable(GL_BLEND);
+    }
 
-    glDisable(GL_BLEND);
-
+    // render debug ui from scripts
     if (should_draw_debug) {
       glDisable(GL_DEPTH_TEST);
       // debug rendering
@@ -478,7 +525,15 @@ void defered_forward_mixed::render(entt::registry &registry) {
       glEnable(GL_DEPTH_TEST);
     }
 
-    cbuffer.unbind();
+    // copy color texture from multisample framebuffer to color framebuffer for
+    // presentation
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_buffer.get_handle());
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, cbuffer.get_handle());
+    glBlitFramebuffer(0, 0, g_instance.scene_width, g_instance.scene_height, 0,
+                      0, g_instance.scene_width, g_instance.scene_height,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    msaa_buffer.unbind();
   }
 }
 

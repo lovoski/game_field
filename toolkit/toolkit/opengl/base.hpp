@@ -1,8 +1,9 @@
 #pragma once
 
+#include "toolkit/assets/icons_lucide.h"
 #include "toolkit/opengl/imp.hpp"
 #include "toolkit/system.hpp"
-#include "toolkit/assets/icons_lucide.h"
+
 
 namespace toolkit::opengl {
 
@@ -480,6 +481,8 @@ public:
   void set_viewport(int x, int y, int w, int h) const {
     glViewport(x, y, w, h);
   }
+
+  unsigned int get_handle() { return m_fbo; }
 
 private:
   GLuint m_fbo = 0;

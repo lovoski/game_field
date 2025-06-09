@@ -5,8 +5,8 @@ project(vk_test)
 set(CMAKE_CXX_STANDARD 20)
 
 add_subdirectory("toolkit")
-add_subdirectory("network")
-add_subdirectory("manga_viewer")
+# add_subdirectory("network")
+# add_subdirectory("manga_viewer")
 
 file(GLOB_RECURSE "scripts/*.cpp" SCRIPTS_SRC)
 
