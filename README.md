@@ -2,18 +2,18 @@
 
 本项目主体包括下面的几个部分：
 
-1. `toolkit`: ecs 架构的精简游戏引擎框架，是其他项目的基础，同时也包含一个 editor 提供可视化编辑，editor 通过 opengl 4.6 可视化。实现了简易的编译期反射；包含序列化和 c++ 插件功能；同时提供了易于使用的材质系统和非常直接易于修改的渲染管线
-2. `manga_viewer`: 可以读入 **.pdf**,**.epub** 格式电子书的阅读器，基于 `toolkit` 封装的 opengl 命令，实现了仿真翻页功能，通过异步加载尽可能避免了加载电子书的时间
-3. `python`: 用于数据处理的 python 代码，包含了读入 bvh 文件的库，可能用到的 motion builder 和 blender 脚本
-5. `scripts`: 适用于 toolkit 中 editor 的 c++ 插件（一般用来可视化数据）
+1. `toolkit`: ecs 架构的精简游戏引擎框架，是其他项目的基础，需要指出这是一个游戏引擎框架而不是单纯的渲染框架。这里面也包含一个 editor 能够对场景提供可视化编辑，可以增改一个实体（entity）对应的组件（component），调整各个系统的设置并序列化到文件。场景和prefab的序列化是通过静态反射实现的；在这个框架中增加组件，材质，插件步骤非常简单，框架中本身也有很多例子。
+2. `manga_viewer`: 可以读入 **.pdf**,**.epub** 格式电子书的阅读器，利用了 `toolkit` 封装的 opengl 命令，通过 compute shader 实现了仿真翻页功能，对于文件的读入采用了 `mupdf` 库，编译出来的二进制文件有点大。
+3. `python`: 用于数据处理的 python 代码。包含了读入 bvh 文件，对于动作数据处理的库；可能用到的 motion builder 和 blender 脚本。
+5. `scripts`: 适用于 toolkit 中 editor 的 c++ 插件（一般用来可视化数据）。
 
 ## 功能介绍
 
 ### 首要说明
 
-工具包本身完全采用 c++20 编写，在 msvc 上编译，通过 cmake 构建，没有使用到编译器独有的特性，支持 window，linux，macos 平台。（macos 原生不支持 opengl 4.6，可能无法编译）。
+工具包本身完全采用 c++20 编写，在 msvc 上编译，通过 cmake 构建，没有使用到编译器独有的特性，支持 window，linux 平台。（macos 原生不支持 opengl 4.6，可能无法编译）。
 
-工具包中使用右手坐标系，以正 Y 为上方向，正 Z 为前方向（不同于 unity 中的左手系，正 Y 上方向，正 Z 前方向）。渲染时摄像机朝向负 Z 方向，遵循 opengl 的规范。采用 32 位浮点数。
+工具包中使用右手坐标系，以正 Y 为上方向，正 Z 为前方向（不同于 unity 中的左手系，正 Y 上方向，正 Z 前方向）；内部长度单位默认为1m；渲染时摄像机朝向负 Z 方向，遵循 opengl 的规范；采用 32 位浮点数。
 
 `toolkit` 完全 `self-contained`，可以直接复制到别的项目中，通过以下 cmake 命令链接使用：
 
@@ -22,6 +22,37 @@ add_subdirectory(toolkit)
 ...
 target_link_libraries(main PRIVATE toolkit)
 ```
+
+### 组件（component），插件（script）和材质（material）的编写
+
+需要注意，这里的组件（component）是指ecs架构中用于存储数据的类，可以适用于提供的editor以外的框架。但是插件（script）和材质（material）分别依赖于插件系统（scripting_system）和渲染系统（defered_forward_mixed）的实现，如果需要在别的框架中复用，需要参考对应系统中的初始化、注册，会比较麻烦。
+
+虽然这里列出了三个名词，其实后两者都属于组件（component），所以我们可以用entt提供的统一接口为一个实体（entity）挂载这三个类：
+
+```cpp
+// 获取组件/插件/材质
+auto &comp = registry.get<xxx>(xxx);
+// 添加组件/插件/材质
+auto &comp = registry.emplace<xxx>(xxx);
+// 删除组件/插件/材质
+registry.remove<xxx>(xxx);
+```
+
+如果要创建自定义的组件/插件/材质，需要继承自对应的类，并通过对应的宏声明：
+
+```cpp
+#include "toolkit/system.hpp"
+class custom_component : public toolkit::icomponent {};
+DECLARE_COMPONENT(custom_component, custom_category)
+#include "toolkit/scriptable.hpp"
+class custom_script : public toolkit::scriptable {};
+DECLARE_SCRIPT(custom_script, custom_category)
+#include "toolkit/opengl/components/material.hpp"
+class custom_material : public toolkit::opengl::material {};
+DECLARE_MATERIAL(custom_material)
+```
+
+需要注意的是，由于 `DECLARE_XXX` 宏中存在通过创建静态变量初始化的操作，我们最好确保最终编译的二进制文件链接到 `DECLARE_XXX` 宏所在文件，如果对应的文件没有链接到最终的二进制文件中，无法在 editor 内通过 gui 添加这个组件/插件/材质。不过这个问题完全不影响通过entt的接口使用这些类。
 
 ### 支持文件格式
 
@@ -88,7 +119,6 @@ struct test1 {
   float b = 100;
   std::vector<int> v = std::vector<int>(3);
   toolkit::math::matrix4 m;
-
   test0 t0; // this is legal since `test0` is reflected.
 };
 REFLECT(test1, a, b, v, m, t0)
