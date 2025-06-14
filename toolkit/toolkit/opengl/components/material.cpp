@@ -47,7 +47,23 @@ void material::draw_gui(iapp *app) {
     }
   }
 }
-void material::bind_uniforms() {}
+void material::bind_uniforms(shader &mat_shader) {
+  for (auto &field : material_fields) {
+    if (field.type == "float") {
+      mat_shader.set_float(field.name, field.value.get<float>());
+    } else if (field.type == "int") {
+      mat_shader.set_int(field.name, field.value.get<int>());
+    } else if (field.type == "bool") {
+      mat_shader.set_bool(field.name, field.value.get<bool>());
+    } else if (field.type == "vec2") {
+      mat_shader.set_vec2(field.name, field.value.get<math::vector2>());
+    } else if (field.type == "vec3") {
+      mat_shader.set_vec3(field.name, field.value.get<math::vector3>());
+    } else if (field.type == "vec4") {
+      mat_shader.set_vec4(field.name, field.value.get<math::vector4>());
+    }
+  }
+}
 
 std::vector<material_field>
 parse_glsl_uniforms(std::vector<std::string> sources) {
@@ -90,11 +106,11 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
     if (p.second == "vec2") {
       mf.value = (math::vector2)math::vector2::Zero();
     } else if (p.second == "vec3") {
-      mf.value = (math::vector3)math::vector3::Zero();
+      mf.value = (math::vector3)math::vector3::Ones();
     } else if (p.second == "vec4") {
-      mf.value = (math::vector4)math::vector4::Zero();
+      mf.value = (math::vector4)math::vector4::Ones();
     } else if (p.second == "mat2") {
-      mf.value = (math::matrix2)math::matrix2::Zero();
+      mf.value = (math::matrix2)math::matrix2::Identity();
     } else if (p.second == "mat3") {
       mf.value = (math::matrix3)math::matrix3::Identity();
     } else if (p.second == "mat4") {

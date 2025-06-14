@@ -90,8 +90,8 @@ void transform::set_world_pos(math::vector3 p) {
 }
 
 void transform::set_world_scale(math::vector3 s) {
+  m_scale = s;
   m_local_scale = s.array() / parent_scale().array();
-  set_local_scale(s);
   dirty = true;
 }
 

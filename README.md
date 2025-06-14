@@ -2,7 +2,7 @@
 
 本项目主体包括下面的几个部分：
 
-1. `toolkit`: ecs 架构的精简游戏引擎框架，是其他项目的基础，同时也包含一个 editor 提供可视化编辑，editor 通过 opengl 4.6 可视化，实现了简易但是易于使用的编译期反射，包含序列化和 c++ 插件功能
+1. `toolkit`: ecs 架构的精简游戏引擎框架，是其他项目的基础，同时也包含一个 editor 提供可视化编辑，editor 通过 opengl 4.6 可视化。实现了简易的编译期反射；包含序列化和 c++ 插件功能；同时提供了易于使用的材质系统和非常直接易于修改的渲染管线
 2. `manga_viewer`: 可以读入 **.pdf**,**.epub** 格式电子书的阅读器，基于 `toolkit` 封装的 opengl 命令，实现了仿真翻页功能，通过异步加载尽可能避免了加载电子书的时间
 3. `python`: 用于数据处理的 python 代码，包含了读入 bvh 文件的库，可能用到的 motion builder 和 blender 脚本
 5. `scripts`: 适用于 toolkit 中 editor 的 c++ 插件（一般用来可视化数据）
@@ -48,65 +48,9 @@ target_link_libraries(main PRIVATE toolkit)
 
 另外，**插件内部可以安全保存实体（`entt::entity`），但是不能保存任何的组件（`component`）**，任何需要组件的操作都应该在函数的内部通过 `registry.get<T>(e)` 经过 $O(1)$ 时间获得。对于插件内部直接保存的实体（`entt::entity`），不论是直接保存当前的场景，还是保存部分场景为 prefab，我都能够确保反序列化之后保存的实体变量值被映射回当前有效的值。需要额外注意的是，保存实体不能保存实体的引用或者指针（实际上`entt::entity`大小与 `uint32_t` 相同，不必在意开销）。
 
-为了确保插件和组件能够正确通过静态反射机制实现序列化，**所有插件和组件必须分别继承自 `scriptable` 和 `icomponent`，并分别通过宏 `DECLARE_SCRIPT` 和 `DECLARE_COMPONENT` 声明**：
-
-```cpp
-// Specifications for a script (插件)
-class editor_camera : public scriptable {
-public:
-  bool mouse_first_move = true;
-  math::vector2 mouse_last_pos;
-  math::vector3 camera_pivot{0.0, 0.0, 0.0};
-
-  // Some parameter related to camera control
-  float initial_factor = 0.6f;
-  float speed_pow = 1.5f;
-  float max_speed = 8e2f;
-  float fps_speed = 1.2;
-
-  bool vis_pivot = false;
-  float vis_pivot_size = 0.1f;
-
-  void preupdate(iapp *app, float dt) override;
-  void draw_to_scene(iapp *app) override;
-  void draw_gui(iapp *app) override;
-};
-DECLARE_SCRIPT(editor_camera, basic, mouse_first_move， mouse_last_pos,camera_pivot, initial_factor, speed_pow, max_speed, fps_speed, vis_pivot, vis_pivot_size)
-
-// Specifications for a component (组件)
-struct point_light : public icomponent {
-  math::vector3 color = White;
-
-  bool enabled = true;
-};
-DECLARE_COMPONENT(point_light, graphics, color, enabled)
-```
+为了确保插件和组件能够正确通过静态反射机制实现序列化，**所有插件和组件必须分别继承自 `scriptable` 和 `icomponent`，并分别通过宏 `DECLARE_SCRIPT` 和 `DECLARE_COMPONENT` 声明**（可以参考 `toolkit/opengl/scripts/camera.hpp` 的实现）。
 
 插件的功能类似于 unity 中的 c# 脚本，提供以下函数模板，需要注意的是，如果有一些初始化操作要做，不能在插件的构造函数中编写，此时插件内部的 `registry` 和 `entity` 都还未正确设置，初始化操作应当在 `start` 函数中执行。对于特殊成员的初始化，我们需要在 `init1` 函数中执行（这个函数仅在反序列化场景或者 prefab 中所有的实体和组件之后对于每个组件及其子类调用一次），这种特殊成员的初始化可以参考 `toolkit/opengl/components/mesh.hpp`。
-
-```cpp
-// toolkit/scriptable.hpp
-class scriptable : public icomponent {
-public:
-  scriptable() { __registered_scripts__.insert(this); }
-
-  virtual void start() {}
-  virtual void destroy() {}
-
-  virtual void draw_to_scene(iapp *app) {}
-
-  virtual void preupdate(iapp *app, float dt) {}
-  virtual void update(iapp *app, float dt) {}
-  virtual void lateupdate(iapp *app, float dt) {}
-
-  bool enabled = true;
-
-  entt::registry *registry = nullptr;
-  entt::entity entity = entt::null;
-
-  static inline std::set<scriptable *> __registered_scripts__;
-};
-```
 
 组件则是服务于 entt 实现的 ecs 结构，一般用来单纯保存数据，为了避免编写过于复杂，提供了下面的函数模板：
 

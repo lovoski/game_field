@@ -42,7 +42,7 @@ void defered_forward_mixed::draw_gui(entt::registry &registry,
   if (has_any_materials(registry, entity)) {
     if (ImGui::CollapsingHeader("Materials")) {
       for (auto &func : material::__material_draw_gui__) {
-        func(registry, entity);
+        func.second(registry, entity);
       }
     }
   }
@@ -81,6 +81,10 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   resize(g_instance.scene_width, g_instance.scene_height);
 
   light_data_buffer.create();
+
+  // initialize materials
+  for (auto &initialier : material::__material_constructors__)
+    initialier.second(registry);
 }
 
 void defered_forward_mixed::init1(entt::registry &registry) {}
@@ -382,42 +386,7 @@ void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
   light_data_buffer.set_data_ssbo(lights);
 }
 
-std::string scene_vs = R"(
-#version 330 core
-layout (location = 0) in vec4 aPos;
-layout (location = 1) in vec4 aNormal;
-
-uniform mat4 gVP;
-uniform mat4 gModel;
-
-out vec3 worldPos;
-out vec3 worldNormal;
-
-void main() {
-  worldNormal = normalize(mat3(gModel)*aNormal.xyz);
-  worldPos = (gModel * aPos).xyz;
-
-  gl_Position = gVP * vec4(worldPos, 1.0);
-}
-)";
-std::string scene_fs = R"(
-#version 330 core
-in vec3 worldPos;
-in vec3 worldNormal;
-
-out vec4 FragColor;
-
-void main() {
-  FragColor = vec4(vec3(1.0), 1.0);
-}
-)";
 void defered_forward_mixed::render(entt::registry &registry) {
-  static shader scene_shader;
-  static bool scene_shader_initialized = false;
-  if (!scene_shader_initialized) {
-    scene_shader.compile_shader_from_source(scene_vs, scene_fs);
-    scene_shader_initialized = true;
-  }
   if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
     auto &cam_trans = registry.get<transform>(g_instance.active_camera);
     auto &cam_comp = *cam_ptr;
@@ -454,54 +423,40 @@ void defered_forward_mixed::render(entt::registry &registry) {
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
-    // // iterate through all material types
-    // scene_vao.bind();
-    // for (auto &mat_shader_pair : material::__material_shaders__) {
-    //   auto mat_name = mat_shader_pair.first;
-    //   auto &mat_shader = mat_shader_pair.second;
-    //   mat_shader.use();
-    //   // bind common bindings
-    //   mat_shader.set_mat4("gViewMat", cam_comp.view);
-    //   mat_shader.set_mat4("gProjMat", cam_comp.proj);
-    //   mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
-    //   mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
-    //   mat_shader.set_buffer_ssbo(light_data_buffer, 0);
-    //   material::__material_view__[mat_name](registry, [&](entt::entity
-    //   entity,
-    //                                                       material *mat) {
-    //     if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
-    //       if (mesh_ptr->should_render_mesh) {
-    //         auto &trans = registry.get<transform>(entity);
-    //         mat_shader.set_int("gVertexOffset",
-    //         mesh_ptr->scene_vertex_offset);
-    //         mat_shader.set_mat4("gModelToWorldPoint",
-    //                             mesh_ptr->skinned ? math::matrix4::Identity()
-    //                                               : trans.matrix());
-    //         mat_shader.set_mat3(
-    //             "gModelToWorldDir",
-    //             mesh_ptr->skinned
-    //                 ? (math::matrix3)(math::matrix3::Identity())
-    //                 : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
-    //         glDrawElements(
-    //             GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
-    //             (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
-    //       }
-    //     }
-    //   });
-    // }
-    // scene_vao.unbind();
-
+    // iterate through all material types
     scene_vao.bind();
-    scene_shader.use();
-    scene_shader.set_mat4("gVP", cam_comp.vp);
-    registry.view<entt::entity, transform, mesh_data>().each(
-        [&](entt::entity entity, transform &trans, mesh_data &data) {
-          scene_shader.set_mat4("gModel", data.skinned
-                                              ? math::matrix4::Identity()
-                                              : trans.matrix());
-          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
-                         (void *)(data.scene_index_offset * sizeof(GLuint)));
-        });
+    for (auto &mat_shader_pair : material::__material_shaders__) {
+      auto mat_name = mat_shader_pair.first;
+      auto &mat_shader = mat_shader_pair.second;
+      mat_shader.use();
+      // bind common bindings
+      mat_shader.set_mat4("gViewMat", cam_comp.view);
+      mat_shader.set_mat4("gProjMat", cam_comp.proj);
+      mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
+      mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
+      mat_shader.set_buffer_ssbo(light_data_buffer, 0);
+      material::__material_view__[mat_name](registry, [&](entt::entity entity,
+                                                          material *mat) {
+        if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
+          if (mesh_ptr->should_render_mesh) {
+            auto &trans = registry.get<transform>(entity);
+            mat_shader.set_int("gVertexOffset", mesh_ptr->scene_vertex_offset);
+            mat_shader.set_mat4("gModelToWorldPoint",
+                                mesh_ptr->skinned ? math::matrix4::Identity()
+                                                  : trans.matrix());
+            mat_shader.set_mat3(
+                "gModelToWorldDir",
+                mesh_ptr->skinned
+                    ? (math::matrix3)(math::matrix3::Identity())
+                    : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
+            mat->bind_uniforms(mat_shader);
+            glDrawElements(
+                GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
+                (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
+          }
+        }
+      });
+    }
     scene_vao.unbind();
 
     // render grids

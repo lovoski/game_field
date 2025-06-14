@@ -21,10 +21,10 @@ uniform mat4 gViewMat;
 uniform mat4 gProjMat;
 void main() {
   vtexCoord = aTexCoord.xy;
-  vworldNormal = normalize(gModelToWorldDir * aNormal);
+  vworldNormal = normalize(gModelToWorldDir * aNormal.xyz);
   vworldPos = (gModelToWorldPoint * aPos).xyz;
 
-  gl_Position = gProjection * gView * vec4(vworldPos, 1.0);
+  gl_Position = gProjMat * gViewMat * vec4(vworldPos, 1.0);
 }
 )";
   std::string fragment_shader_source = R"(
@@ -37,8 +37,8 @@ struct light_data_package {
   vec4 fdata0;
   vec4 fdata1;
 };
-layout(std430, binding = 0) buffer Lights {
-  light_data_package lights[];
+layout(std430, binding = 0) buffer SceneLightBuffer {
+  light_data_package gLights[];
 };
 
 uniform vec3 Albedo;
@@ -59,35 +59,26 @@ in vec3 edgeDistance;
 
 out vec4 FragColor;
 
-vec3 BlinnPhong(light_data_package light, vec3 fragWorldPos, vec3 fragWorldNormal, vec3 viewDir) {
+vec3 BlinnPhong(int index, vec3 fragWorldPos, vec3 fragWorldNormal, vec3 viewDir) {
+  light_data_package lightData = gLights[index];
+  vec3 lightColor = lightData.color.xyz;
+  vec3 lightPos = lightData.pos.xyz;
   vec3 lightDir;
-  if (light.idata[0] == 0) {
-    // directional light
-    lightDir = -normalize(light.direction.xyz);
-  } else if (light.idata[0] == 1) {
-    // point light
-    lightDir = normalize(light.position.xyz-fragWorldPos);
-  } else return vec3(0.0);
-
-  float diff = 0.5 * (dot(fragWorldNormal, lightDir) + 1.0);
-  vec3 diffuse = diff * light.color.rgb * Albedo.rgb;
-
-  // vec3 halfwayDir = normalize(lightDir + normalize(viewDir));
-  // float spec = pow(max(dot(fragWorldNormal, halfwayDir), 0.0), 32.0); // Shininess factor
-  // vec3 specular = spec * light.color.rgb;
-
-  // return diffuse + specular;
-  return diffuse;
-  // return specular;
+  if (lightData.idata[0] == 0) {
+    lightDir = -normalize(lightData.fdata0.xyz);
+  } else if (lightData.idata[0] == 1) {
+    lightDir = normalize(lightPos-worldPos);
+  }
+  float diff = 0.5 * (dot(worldNormal, lightDir) + 1.0);
+  return diff * lightColor;
 }
 
 void main() {
   vec2 screenTexCoord = gl_FragCoord.xy / gViewport;
   vec3 shade = vec3(0.0);
-  for (int i = 0; i < lights.length(); i++)
-    shade += BlinnPhong(lights[i], worldPos, normalize(worldNormal), -ViewDir);
-  if (ViewNormal)
-    shade = normalize(worldNormal);
+  for (int i = 0; i < gLights.length(); i++)
+    shade += BlinnPhong(i, worldPos, normalize(worldNormal), -gViewDir);
+  shade *= Albedo;
 
   vec3 result;
   // wireframe related

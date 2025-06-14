@@ -1,10 +1,12 @@
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
+#include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/scripts/camera.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
+
 
 #include <ufbx.h>
 
@@ -794,6 +796,8 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     auto mesh_entity = registry.create();
     auto &mesh_trans = registry.emplace<transform>(mesh_entity);
     auto &mesh_comp = registry.emplace<opengl::mesh_data>(mesh_entity);
+    auto &material =
+        registry.emplace<opengl::blinn_phong_material>(mesh_entity);
     if (mesh->materials.count >= pi + 1) {
       auto material = mesh->materials[pi];
       mesh_trans.name =

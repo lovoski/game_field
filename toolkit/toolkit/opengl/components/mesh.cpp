@@ -3,6 +3,7 @@
 #include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/assets/primitives.hpp"
 #include "toolkit/transform.hpp"
+#include "toolkit/opengl/components/materials/all.hpp"
 
 namespace toolkit::opengl {
 
@@ -293,6 +294,7 @@ entt::entity create_cube(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
+  auto &mat = registry.emplace<blinn_phong_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Cube";
   mesh.indices.resize(cube_nindicies);
@@ -314,6 +316,7 @@ entt::entity create_plane(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
+  auto &mat = registry.emplace<blinn_phong_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Plane";
   mesh.indices.resize(plane_nindicies);
@@ -335,6 +338,7 @@ entt::entity create_sphere(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
+  auto &mat = registry.emplace<blinn_phong_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Sphere";
   mesh.indices.resize(sphere_nindicies);
@@ -356,6 +360,7 @@ entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
+  auto &mat = registry.emplace<blinn_phong_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Cylinder";
   mesh.indices.resize(cylinder_nindicies);
