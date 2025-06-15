@@ -143,6 +143,9 @@ class Motion:
         return bone_lengths
 
     def get_joint_orientation(self):
+        """
+        get quaternions for global rotation in xyzw order
+        """
         rotations = self.rotations.copy()
         rotations = rotations[..., [1, 2, 3, 0]] # wxyz -> xyzw
         
