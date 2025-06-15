@@ -428,6 +428,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
     for (auto &mat_shader_pair : material::__material_shaders__) {
       auto mat_name = mat_shader_pair.first;
       auto &mat_shader = mat_shader_pair.second;
+      material::__material_instance__[mat_name]->prepare0();
       mat_shader.use();
       // bind common bindings
       mat_shader.set_mat4("gViewMat", cam_comp.view);
@@ -456,6 +457,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
           }
         }
       });
+      material::__material_instance__[mat_name]->prepare1();
     }
     scene_vao.unbind();
 

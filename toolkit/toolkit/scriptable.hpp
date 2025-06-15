@@ -11,6 +11,12 @@ namespace toolkit {
  * initialization and cleanup properly, please do initialization inside `start`
  * and cleanup inside `destroy`.
  *
+ * `start` function would gets executed at the start of the next main loop when
+ * one script is created and added to a valid entity. So deserializing scripts
+ * from scenes and prefabs would still gets correct `start` functions since the
+ * member variables are already properly deserialized when the next main loop
+ * starts.
+ *
  * To write scripts for opengl::editor, you can access the editor's member
  * variable by `dynamic_cast<opengl::editor*>(app)`, some global variables like
  * dimension of the window, the scene, input signals, active camera etc. are
@@ -35,6 +41,14 @@ public:
   entt::entity entity = entt::null;
 };
 
+/**
+ * !!!REMINDER!!!
+ *
+ * The preupdate, update and lateupdate in `script_system` are not the same ones
+ * as the templates in `isystem` since we need to handle properties related to
+ * the application, don't forget the call these functions manually in the custom
+ * main loop.
+ */
 class script_system : public isystem {
 public:
   static inline std::map<
@@ -45,7 +59,10 @@ public:
   static inline std::map<std::string, std::function<void(entt::registry &)>>
       __construct_destroy_registry__;
 
+  std::vector<scriptable *> scripts_wait_to_start;
+
   void init0(entt::registry &registry) override {
+    scripts_wait_to_start.clear();
     for (auto &f : __construct_destroy_registry__)
       f.second(registry);
   }
@@ -80,6 +97,11 @@ public:
   }
 
   void preupdate(iapp *app, float dt) {
+    if (scripts_wait_to_start.size() > 0) {
+      for (auto script : scripts_wait_to_start)
+        script->start();
+      scripts_wait_to_start.clear();
+    }
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
         if (script->enabled)
@@ -113,7 +135,10 @@ DECLARE_SYSTEM(script_system)
     auto &script = registry.get<class_name>(entity);                           \
     script.registry = &registry;                                               \
     script.entity = entity;                                                    \
-    script.start();                                                            \
+    registry.ctx()                                                             \
+        .get<toolkit::iapp *>()                                                \
+        ->get_sys<toolkit::script_system>()                                    \
+        ->scripts_wait_to_start.push_back(&script);                            \
   }                                                                            \
   inline void __on_destroy_##class_name(entt::registry &registry,              \
                                         entt::entity entity) {                 \

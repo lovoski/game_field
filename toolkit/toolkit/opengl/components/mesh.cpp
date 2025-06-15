@@ -2,8 +2,9 @@
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/assets/primitives.hpp"
-#include "toolkit/transform.hpp"
 #include "toolkit/opengl/components/materials/all.hpp"
+#include "toolkit/transform.hpp"
+
 
 namespace toolkit::opengl {
 
@@ -158,7 +159,7 @@ void mesh_data::draw_gui(iapp *app) {
 
 void mesh_data::init1() {
   std::string base_path = join_path(
-      ".", "mesh_assets", replace(replace(model_name, " ", ""), ":", ""));
+      ".", "assets", "meshes", replace(replace(model_name, " ", ""), ":", ""));
   std::string asset_path =
       join_path(base_path, str_format("%s.mesh", mesh_name.c_str()));
   asset_path = replace(replace(asset_path, ":", ""), " ", "");
@@ -260,7 +261,7 @@ void init_opengl_buffers_internal(mesh_data &data,
   if (save_asset) {
     // save data into text file relative to binary file
     std::string base_path =
-        join_path(".", "mesh_assets",
+        join_path(".", "assets", "meshes",
                   replace(replace(data.model_name, " ", ""), ":", ""));
     mkdir(base_path);
     std::string asset_path =

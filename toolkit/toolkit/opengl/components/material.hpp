@@ -26,6 +26,9 @@ struct material : public icomponent {
   void draw_gui(iapp *app) override;
   void bind_uniforms(shader &mat_shader);
 
+  void prepare0() {}
+  void prepare1() {}
+
   std::string vertex_shader_source = "";
   std::string fragment_shader_source = "";
   std::string geometry_shader_source = "none";
@@ -44,6 +47,8 @@ struct material : public icomponent {
       __material_draw_gui__;
   static inline std::vector<std::function<bool(entt::registry &, entt::entity)>>
       __material_exists__;
+  static inline std::map<std::string, std::unique_ptr<material>>
+      __material_instance__;
 
   std::vector<material_field> material_fields;
 };
@@ -105,6 +110,8 @@ bool has_any_materials(entt::registry &registry, entt::entity entity);
           __material_draw_gui_##class_name;                                    \
       toolkit::opengl::material::__material_exists__.push_back(                \
           __material_exists_##class_name);                                     \
+      toolkit::opengl::material::__material_instance__[#class_name] =          \
+          std::make_unique<class_name>();                                      \
     }                                                                          \
   };                                                                           \
   static __register_material_##class_name                                      \
