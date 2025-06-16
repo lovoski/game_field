@@ -27,6 +27,16 @@ void editor_camera::preupdate(iapp *app, float dt) {
   if (auto editor_ptr = dynamic_cast<editor *>(app)) {
     if (auto cam_trans =
             editor_ptr->registry.try_get<transform>(g_instance.active_camera)) {
+      // focus on selected entity if `F` is triggered
+      if (editor_ptr->selected_entity != entt::null &&
+          g_instance.is_key_triggered(GLFW_KEY_F)) {
+        spdlog::info(
+            "Focus camera \"{0}\" to selected entity \"{1}\"",
+            registry->get<transform>(entity).name,
+            registry->get<transform>(editor_ptr->selected_entity).name);
+        camera_pivot =
+            registry->get<transform>(editor_ptr->selected_entity).position();
+      }
       auto cam_comp =
           editor_ptr->registry.get<camera>(g_instance.active_camera);
       auto cam_pos = cam_trans->position();
@@ -43,18 +53,17 @@ void editor_camera::preupdate(iapp *app, float dt) {
         // check action queue for mouse scroll event
         math::vector2 scrollOffset = g_instance.get_scroll_offsets();
         cam_trans->set_world_pos(cam_trans->position() -
-                                       cam_trans->local_forward() *
-                                           scrollOffset.y() * movement_delta);
+                                 cam_trans->local_forward() * scrollOffset.y() *
+                                     movement_delta);
       }
       bool press_mouse_mid_btn =
           g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_MIDDLE);
       bool press_mouse_right_btn =
           g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_RIGHT);
-      if (press_mouse_mid_btn || press_mouse_right_btn) {
-        if (g_instance.loop_cursor_in_window())
-          mouse_first_move = true;
-        math::vector2 mouse_current_pos = g_instance.get_mouse_position();
-        // loop the camera if the camera is locked
+      math::vector2 mouse_current_pos = g_instance.get_mouse_position();
+      // only handle mouse input when cursor in scene window
+      if ((press_mouse_mid_btn || press_mouse_right_btn) &&
+          g_instance.cursor_in_scene_window()) {
         if (mouse_first_move) {
           mouse_last_pos = mouse_current_pos;
           mouse_first_move = false;

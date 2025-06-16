@@ -131,8 +131,8 @@ bool context::is_mouse_button_pressed(int button) const {
 }
 
 bool context::cursor_in_scene_window() {
-  return mouse_x >= scene_pos_x && mouse_x <= scene_pos_x + scene_width &&
-         mouse_y >= scene_pos_y && mouse_y <= scene_pos_y + scene_height;
+  return (mouse_x >= scene_pos_x) && (mouse_x <= scene_pos_x + scene_width) &&
+         (mouse_y >= scene_pos_y) && (mouse_y <= scene_pos_y + scene_height);
 }
 
 bool context::loop_cursor_in_window() {

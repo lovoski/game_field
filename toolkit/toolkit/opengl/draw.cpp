@@ -1010,5 +1010,81 @@ void draw_arrows(
   vao.unbind();
   vbo.unbind_as(GL_ARRAY_BUFFER);
 }
+const std::string solid_sphere_vs = R"(
+#version 330 core
+layout (location = 0) in vec3 pos;
+void main() {
+  gl_Position = vec4(pos, 1.0);
+}
+)";
+std::string solid_sphere_gs = R"(
+#version 330 core
+#define S0 8
+#define S1 4
+#define PI 3.14159265
+layout(points) in;
+layout(triangle_strip, max_vertices=144) out;
+
+uniform mat4 vp;
+uniform float radius;
+
+const vec3 x_axis = vec3(1.0,0,0);
+const vec3 y_axis = vec3(0,0,1.0);
+const vec3 z_axis = vec3(0,1.0,0);
+
+void main() {
+  vec3 center = gl_in[0].gl_Position.xyz;
+
+  for (int i = 0; i < S0; i++) {
+    float angle0 = 2.0 * PI * float(i) / float(S0);
+    float angle1 = 2.0 * PI * float(i+1) / float(S0);
+    vec3 offset0 = radius * (cos(angle0) * x_axis + sin(angle0) * y_axis);
+    vec3 offset1 = radius * (cos(angle1) * x_axis + sin(angle1) * y_axis);
+
+    gl_Position = vp * vec4(center-radius*z_axis, 1.0);
+    EmitVertex();
+    for (int j = 0; j < S1; j++) {
+      float step_angle = float(j+1)/float(S1)*PI*0.5;
+      gl_Position = vp*vec4(center-radius*cos(step_angle)*z_axis+(sin(step_angle))*offset0,1.0);
+      EmitVertex();
+      gl_Position = vp*vec4(center-radius*cos(step_angle)*z_axis+(sin(step_angle))*offset1,1.0);
+      EmitVertex();
+    }
+    for (int j = 0; j < S1; j++) {
+      float step_angle = float(S1-j)/float(S1)*PI*0.5;
+      gl_Position = vp*vec4(center+radius*cos(step_angle)*z_axis+(sin(step_angle))*offset0,1.0);
+      EmitVertex();
+      gl_Position = vp*vec4(center+radius*cos(step_angle)*z_axis+(sin(step_angle))*offset1,1.0);
+      EmitVertex();
+    }
+    gl_Position = vp * vec4(center+radius*z_axis, 1.0);
+    EmitVertex();
+    EndPrimitive();
+  }
+}
+)";
+void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
+                  float radius, math::vector3 color) {
+  static bool initialized = false;
+  static shader shader;
+  static vao vao;
+  static buffer vbo;
+  if (!initialized) {
+    vao.create();
+    vbo.create();
+    shader.compile_shader_from_source(solid_sphere_vs, line_fs, solid_sphere_gs);
+    initialized = true;
+  }
+  vao.bind();
+  vbo.set_data_as(GL_ARRAY_BUFFER, positions);
+  vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
+  shader.use();
+  shader.set_mat4("vp", vp);
+  shader.set_vec3("color", color);
+  shader.set_float("radius", radius);
+  glDrawArrays(GL_POINTS, 0, positions.size());
+  vbo.unbind_as(GL_ARRAY_BUFFER);
+  vao.unbind();
+}
 
 }; // namespace toolkit::opengl

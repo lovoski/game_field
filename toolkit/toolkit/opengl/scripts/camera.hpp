@@ -24,8 +24,8 @@ public:
   void draw_to_scene(iapp *app) override;
   void draw_gui(iapp *app) override;
 };
-DECLARE_SCRIPT(editor_camera, basic, mouse_first_move, mouse_last_pos,
-               camera_pivot, initial_factor, speed_pow, max_speed, fps_speed,
-               vis_pivot, vis_pivot_size)
+DECLARE_SCRIPT(editor_camera, basic, mouse_last_pos, camera_pivot,
+               initial_factor, speed_pow, max_speed, fps_speed, vis_pivot,
+               vis_pivot_size)
 
 }; // namespace toolkit::opengl

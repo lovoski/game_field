@@ -1,6 +1,7 @@
-#include "toolkit/opengl/editor.hpp"
-#include "scripts/persona_compare.hpp"
 #include "scripts/mixamo_manipulate.hpp"
+#include "scripts/persona_compare.hpp"
+#include "scripts/spring_damper.hpp"
+#include "toolkit/opengl/editor.hpp"
 
 using namespace toolkit;
 

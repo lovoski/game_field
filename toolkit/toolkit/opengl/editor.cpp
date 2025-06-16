@@ -7,7 +7,6 @@
 #include "toolkit/opengl/scripts/camera.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
 
-
 #include <ufbx.h>
 
 namespace toolkit::opengl {
@@ -114,6 +113,7 @@ void editor::run() {
     draw_main_menubar();
     draw_entity_hierarchy();
     draw_entity_components();
+    editor_shortkeys();
 
     instance.end_imgui();
 
@@ -141,35 +141,137 @@ void editor::add_default_objects() {
   auto &editor_cam = registry.emplace<editor_camera>(ent);
 }
 
-void editor::draw_gizmos(bool enable) {
-  // only change the gizmo operation mode
-  // if the cursor is inside scene window
-  auto &instance = context::get_instance();
-  if (instance.cursor_in_scene_window()) {
-    if (instance.is_key_pressed(GLFW_KEY_G)) {
+void editor::editor_shortkeys() {
+  if (g_instance.cursor_in_scene_window()) {
+    // only change the gizmo operation mode
+    // if the cursor is inside scene window
+    if (g_instance.is_key_pressed(GLFW_KEY_G)) {
       with_translate = true;
       with_rotate = false;
       with_scale = false;
     }
-    if (instance.is_key_pressed(GLFW_KEY_R)) {
+    if (g_instance.is_key_pressed(GLFW_KEY_R)) {
       with_translate = false;
       with_rotate = true;
       with_scale = false;
     }
-    if (instance.is_key_pressed(GLFW_KEY_S)) {
+    if (g_instance.is_key_pressed(GLFW_KEY_S)) {
       with_translate = false;
       with_rotate = false;
       with_scale = true;
     }
-  }
 
-  if (enable && registry.valid(instance.active_camera)) {
+    // detect mouse click selection
+    if (g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL) &&
+        g_instance.is_mouse_button_triggered(GLFW_MOUSE_BUTTON_LEFT)) {
+      math::vector3 ray_o, ray_d;
+      if (mouse_query_ray(ray_o, ray_d)) {
+        std::priority_queue<ray_query_data, std::vector<ray_query_data>,
+                            compare_ray_query_data>
+            q;
+        registry.view<entt::entity, transform>().each(
+            [&](entt::entity entity, transform &trans) {
+              if (entity == g_instance.active_camera)
+                return;
+              ray_query_data data;
+              data.entity = entity;
+              data.dist = (trans.position() - ray_o).norm();
+              auto h = (trans.position() - ray_o).dot(ray_d) * ray_d;
+              data.pdist = ((trans.position() - ray_o) - h).norm();
+              q.emplace(data);
+            });
+        if (!q.empty()) {
+          auto selection = q.top();
+          spdlog::info("Click selection nearest, "
+                       "name:\"{0}\",pdist:{1},dist:{2},sin:{3}",
+                       registry.get<transform>(selection.entity).name,
+                       selection.pdist, selection.dist,
+                       selection.pdist / selection.dist);
+          if (selection.pdist / selection.dist <= click_selection_max_sin) {
+            q.pop();
+            selection_candidates.clear();
+            selection_candidates.push_back(selection);
+            int counter = 0;
+            while (!q.empty() && counter < 3) {
+              auto cand = q.top();
+              q.pop();
+              if (cand.pdist / cand.dist <= click_selection_max_sin)
+                selection_candidates.push_back(cand);
+              counter++;
+            }
+
+            if (selection_candidates.size() <= 1) {
+              selected_entity = selection.entity;
+            } else {
+              // open a popup to select all potential candidates
+              ImGui::OpenPopup("clickselectioncandidates");
+            }
+          } else {
+            spdlog::info("Nearest selection too far, set selection to null");
+            selected_entity = entt::null;
+          }
+        }
+      }
+    }
+  }
+  if (selection_candidates.size() > 0 &&
+      ImGui::BeginPopup("clickselectioncandidates")) {
+    ImGui::MenuItem("Selection candidates", nullptr, nullptr, false);
+    ImGui::Separator();
+    for (int i = 0; i < selection_candidates.size(); i++) {
+      if (ImGui::Selectable(
+              registry.get<transform>(selection_candidates[i].entity)
+                  .name.c_str())) {
+        selected_entity = selection_candidates[i].entity;
+        ImGui::CloseCurrentPopup();
+      }
+    }
+    ImGui::EndPopup();
+  }
+}
+
+bool editor::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
+  if (!g_instance.cursor_in_scene_window()) {
+    spdlog::warn(
+        "Cursor outside of scene window, mouse_query_ray could be unintended.");
+  }
+  if (!registry.valid(g_instance.active_camera)) {
+    spdlog::error(
+        "Scene active camera invalid, failed to call mouse_query_ray");
+    return false;
+  }
+  if (auto cam_comp = registry.try_get<camera>(g_instance.active_camera)) {
+    auto scrn_pos = g_instance.get_mouse_position();
+    scrn_pos.x() -= g_instance.scene_pos_x;
+    scrn_pos.y() =
+        g_instance.scene_height - scrn_pos.y() + g_instance.scene_pos_y;
+    scrn_pos.x() /= g_instance.scene_width;
+    scrn_pos.y() /= g_instance.scene_height;
+    math::vector4 ndc_pos = math::vector4(
+        scrn_pos.x() * 2.0f - 1.0f, scrn_pos.y() * 2.0f - 1.0f, 0.0f, 1.0f);
+    auto &cam_trans = registry.get<transform>(g_instance.active_camera);
+    math::vector4 p0 = cam_comp->vp.inverse() * ndc_pos;
+    math::vector3 world_pos =
+        math::vector3(p0.x() / p0.w(), p0.y() / p0.w(), p0.z() / p0.w());
+    o = cam_trans.position();
+    d = (world_pos - o).normalized();
+
+    return true;
+  } else {
+    spdlog::error("Scene active camera don't possess a camera component, "
+                  "failed to call mouse_query_ray");
+    return false;
+  }
+}
+
+void editor::draw_gizmos(bool enable) {
+  if (enable && registry.valid(g_instance.active_camera)) {
     ImGuizmo::AllowAxisFlip(false);
     ImGuizmo::SetDrawlist();
-    ImGuizmo::SetRect(instance.scene_pos_x, instance.scene_pos_y,
-                      instance.scene_width, instance.scene_height);
-    auto &camTrans = registry.get<transform>(instance.active_camera);
-    auto &camComp = registry.get<camera>(instance.active_camera);
+    ImGuizmo::SetRect(g_instance.scene_pos_x, g_instance.scene_pos_y,
+                      g_instance.scene_width, g_instance.scene_height);
+    auto &camTrans = registry.get<transform>(g_instance.active_camera);
+    auto &camComp = registry.get<camera>(g_instance.active_camera);
     if (registry.valid(selected_entity)) {
       auto &selTrans = registry.get<transform>(selected_entity);
       math::matrix4 transform = selTrans.matrix();
@@ -382,8 +484,8 @@ void draw_entity_hierarchy_recursive(
   bool nodeOpen =
       ImGui::TreeNodeEx((void *)(intptr_t)entt::to_integral(current), finalFlag,
                         entity_name.c_str());
-  if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-    selected = current;
+  // if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+  //   selected = current;
 
   // Drag & Drop
   if (ImGui::BeginDragDropSource()) {
@@ -400,8 +502,7 @@ void draw_entity_hierarchy_recursive(
   }
 
   // Right click context menu
-  if (currentSelected &&
-      ImGui::BeginPopupContextItem(
+  if (ImGui::BeginPopupContextItem(
           (current_transform.name + std::to_string(entt::to_integral(current)))
               .c_str(),
           ImGuiPopupFlags_MouseButtonRight)) {
@@ -474,6 +575,9 @@ void editor::draw_entity_hierarchy() {
   };
   auto right_click_entity = [&](entt::entity entity) {
     ImGui::SeparatorText("Operation");
+    if (ImGui::MenuItem("Select")) {
+      selected_entity = entity;
+    }
     if (ImGui::MenuItem("Make Prefab")) {
       std::string filepath;
       if (save_file_dialog("Save entity hierarchy as prefab", {"*.prefab"},
@@ -503,9 +607,9 @@ void editor::draw_entity_hierarchy() {
     // open the window context menu
     if (ImGui::IsMouseClicked(ImGuiMouseButton_Right))
       ImGui::OpenPopup("DrawEntityHierarchy_rightclickblank");
-    // unselect entities
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
-      selected_entity = entt::null;
+    // // unselect entities
+    // if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+    //   selected_entity = entt::null;
   }
   // ---------------------- Right click menu ----------------------
   if (ImGui::BeginPopup("DrawEntityHierarchy_rightclickblank")) {

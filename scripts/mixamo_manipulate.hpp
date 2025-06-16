@@ -77,8 +77,8 @@ public:
             vis_pos.push_back(tp0);
             vis_pos.push_back(tp1);
             vis_pos.push_back(tp2);
-            toolkit::opengl::draw_wire_spheres(vis_pos, cam_comp.vp, 0.1f,
-                                               toolkit::opengl::Purple);
+            toolkit::opengl::draw_spheres(vis_pos, cam_comp.vp, 0.06f,
+                                          toolkit::opengl::Purple);
           }
         });
   }
