@@ -21,6 +21,24 @@ float critical_spring_damper(float x0, float v0, float xt, float t,
   return xt - x;
 }
 
+toolkit::math::vector3 quat_to_so3(toolkit::math::quat q) {
+  float half_theta = acos(q.w());
+  float sin_half_theta = sin(half_theta);
+  if (abs(sin_half_theta) < 1e-5f)
+    return toolkit::math::vector3::Zero();
+  return half_theta * 2 / sin_half_theta *
+         toolkit::math::vector3(q.x(), q.y(), q.z());
+}
+toolkit::math::quat so3_to_quat(toolkit::math::vector3 a) {
+  float theta = a.norm();
+  if (abs(theta) < 1e-5f)
+    return toolkit::math::quat::Identity();
+  float sin_half_theta = sin(theta / 2);
+  return toolkit::math::quat(cos(theta / 2), sin_half_theta / theta * a.x(),
+                             sin_half_theta / theta * a.y(),
+                             sin_half_theta / theta * a.z());
+}
+
 class spring_damper : public toolkit::scriptable {
 public:
   void start() override {
@@ -39,15 +57,26 @@ public:
     auto &target_trans = registry->get<toolkit::transform>(target);
     const float e = 2.71828f;
     float lambda = log(2) / (damper_half_life * log(e));
-    toolkit::math::vector3 x0 = self_trans.position(), xt = target_trans.position();
-    for (int i = 0; i < 3; i++) {
-      float x = x0(i)-xt(i);
-      float x_prev = x;
-      x = (x_prev + (velocity(i) + lambda * x_prev) * dt) * exp(-lambda * dt);
-      velocity(i) = (velocity(i) + lambda * x_prev) * exp(-lambda * dt) - lambda * x;
-      x0(i) = x + xt(i);
-    }
-    self_trans.set_world_pos(x0);
+    toolkit::math::vector3 x0 = self_trans.position(),
+                           xt = target_trans.position();
+    toolkit::math::vector3 x = x0 - xt;
+    auto x_prev = x;
+    x = (x_prev + (velocity + lambda * x_prev) * dt) * exp(-lambda * dt);
+    velocity = (velocity + lambda * x_prev) * exp(-lambda * dt) - lambda * x;
+    self_trans.set_world_pos(x + xt);
+
+    // update the rotation of attached entity given target rotation and dt
+    auto q0 = self_trans.rotation();
+    auto qt = target_trans.rotation();
+    if (q0.dot(qt) < 0.0f)
+      qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
+    toolkit::math::vector3 q = quat_to_so3(q0 * qt.inverse());
+    auto q_prev = q;
+    q = (q_prev + (angular_velocity + lambda * q_prev) * dt) *
+        exp(-lambda * dt);
+    angular_velocity =
+        (angular_velocity + lambda * q_prev) * exp(-lambda * dt) - lambda * q;
+    self_trans.set_world_rot(so3_to_quat(q) * qt);
   }
 
   void draw_to_scene(toolkit::iapp *app) override {
@@ -62,10 +91,13 @@ public:
   void draw_gui(toolkit::iapp *app) override {
     ImGui::Text("Velocity x=%.2f,y=%.2f,z=%.2f", velocity.x(), velocity.y(),
                 velocity.z());
+    ImGui::Text("Angular Velocity x=%.2f,y=%.2f,z=%.2f", angular_velocity.x(),
+                angular_velocity.y(), angular_velocity.z());
     ImGui::DragFloat("Half Life", &damper_half_life, 0.01f, 0.0f, 10.0f);
   }
 
-  toolkit::math::vector3 velocity = toolkit::math::vector3::Zero();
+  toolkit::math::vector3 velocity = toolkit::math::vector3::Zero(),
+                         angular_velocity = toolkit::math::vector3::Zero();
   float damper_half_life = 0.5f;
   entt::entity target = entt::null;
 };
