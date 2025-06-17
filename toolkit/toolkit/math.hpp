@@ -57,6 +57,9 @@ void decompose_transform(matrix4 transform, vector3 &translation,
 math::matrix4 compose_transform(vector3 &translation, quat &rotation,
                                 vector3 &scale);
 
+math::vector3 quat_to_so3(math::quat q);
+math::quat so3_to_quat(math::vector3 a);
+
 float rad_to_deg(const float rad);
 float deg_to_rad(const float deg);
 vector3 rad_to_deg(const vector3 &radVector);

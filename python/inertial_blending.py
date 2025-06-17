@@ -98,8 +98,8 @@ def cross_fade_blending(motion_a: Motion, motion_b: Motion, blending_frames = 20
 
 def critical_spring_damper(x0, v0, xt, t, half_life=1.0):
   decay_rate = np.log(2) / half_life
-  x = xt - x0
-  v = -v0
+  x = x0-xt
+  v = v0
   step = 1e-3
   time = 0.0
 
@@ -109,16 +109,16 @@ def critical_spring_damper(x0, v0, xt, t, half_life=1.0):
     v = (v + decay_rate * x_prev) * np.exp(-decay_rate * step) - decay_rate * x
     time += step
 
-  return xt - x
+  return xt + x
 
 
 if __name__ == '__main__':
-  a = Motion.load_bvh('run_0.bvh')
-  b = Motion.load_bvh('run_1.bvh')
-  motion = inertial_blending(a, b)
-  motion.export('result_inertial.bvh')
-  motion = cross_fade_blending(a, b)
-  motion.export('result_cross_fade.bvh')
+  # a = Motion.load_bvh('run_0.bvh')
+  # b = Motion.load_bvh('run_1.bvh')
+  # motion = inertial_blending(a, b)
+  # motion.export('result_inertial.bvh')
+  # motion = cross_fade_blending(a, b)
+  # motion.export('result_cross_fade.bvh')
 
   # motion = Motion.load_bvh('Swimming_FW.bvh')
   # for i in range(4):
@@ -129,17 +129,44 @@ if __name__ == '__main__':
   #   motion_clip.positions = motion.positions[start:end]
   #   motion_clip.rotations = motion.rotations[start:end]
   #   motion_clip.export(f'run_{i}.bvh')
-  
-  # import matplotlib.pyplot as plt
-  # plt.figure()
-  
-  # t = np.arange(100)*0.03
-  # x0 = 1
-  # v0 = 1
-  # xt = 0
+
+  import matplotlib.pyplot as plt
+  plt.figure()
+
+  # t = np.arange(100)*0.01
   # y = np.zeros_like(t)
-  # for i in range(100):
-  #   y[i] = critical_spring_damper(x0,v0,xt,t[i], 0.2)
-  # plt.plot(t,y)
+  # y[50:] = 1
+  # y[80:90] = 0.5
+  # y[85] = 0.7
+  # y[10:20] = 0.2
+  # ys = y.copy()
+
+  # x = 0
+  # v = 0
+  # step = 1e-3
+  # half_life = 0.03
+  # decay_rate = np.log(1e12)/(np.log(np.e))
+  # for i in range(1,100):
+  #   time = 0
+  #   if y[i] != y[i-1]:
+  #     x = ys[i-1]-y[i]
+  #   while time < 1e-2:
+  #     x_prev = x 
+  #     x = (x_prev + (v + decay_rate * x_prev) * step) * np.exp(-decay_rate * step)
+  #     v = (v + decay_rate * x_prev) * np.exp(-decay_rate * step) - decay_rate * x
+  #     time += step
+  #   ys[i] = x+y[i]
   
-  # plt.show()
+  # plt.plot(t,y,label='raw')
+  # plt.plot(t,ys,label='smooth')
+
+  x0 = 1
+  v0 = 0
+  t = np.arange(100)*0.05
+  y = np.zeros_like(t)
+  for i in range(100):
+    y[i] = critical_spring_damper(x0,v0,0,t[i],0.5)
+  plt.plot(t,y,label='critical damped')
+
+  plt.legend()
+  plt.show()

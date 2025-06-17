@@ -21,29 +21,6 @@ float critical_spring_damper(float x0, float v0, float xt, float t,
   return xt - x;
 }
 
-toolkit::math::vector3 quat_to_so3(toolkit::math::quat q) {
-  float half_theta = std::atan2(q.vec().norm(), q.w());
-  float sin_half_theta = sin(half_theta);
-  if (abs(sin_half_theta) < 1e-5f)
-    return toolkit::math::vector3::Zero();
-  return half_theta * 2 / sin_half_theta *
-         toolkit::math::vector3(q.x(), q.y(), q.z());
-}
-toolkit::math::quat so3_to_quat(toolkit::math::vector3 a) {
-  float theta = a.norm();
-  if (abs(theta) < 1e-5f)
-    return toolkit::math::quat::Identity();
-  float sin_half_theta = sin(theta / 2);
-  float cos_half_theta = cos(theta / 2);
-  if (cos_half_theta < 0) {
-    cos_half_theta = -cos_half_theta;
-    sin_half_theta = -sin_half_theta;
-  }
-  return toolkit::math::quat(cos(theta / 2), sin_half_theta / theta * a.x(),
-                             sin_half_theta / theta * a.y(),
-                             sin_half_theta / theta * a.z());
-}
-
 class spring_damper : public toolkit::scriptable {
 public:
   void start() override {
@@ -75,13 +52,13 @@ public:
     auto qt = target_trans.rotation();
     if (q0.dot(qt) < 0.0f)
       qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
-    toolkit::math::vector3 q = quat_to_so3(q0 * qt.inverse());
+    toolkit::math::vector3 q = toolkit::math::quat_to_so3(q0 * qt.inverse());
     auto q_prev = q;
     q = (q_prev + (angular_velocity + lambda * q_prev) * dt) *
         exp(-lambda * dt);
     angular_velocity =
         (angular_velocity + lambda * q_prev) * exp(-lambda * dt) - lambda * q;
-    self_trans.set_world_rot(so3_to_quat(q) * qt);
+    self_trans.set_world_rot(toolkit::math::so3_to_quat(q) * qt);
   }
 
   void draw_to_scene(toolkit::iapp *app) override {

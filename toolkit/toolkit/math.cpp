@@ -135,4 +135,26 @@ math::matrix4 compose_transform(vector3 &translation, quat &rotation,
   return transform.matrix();
 }
 
+math::vector3 quat_to_so3(math::quat q) {
+  float half_theta = std::atan2(q.vec().norm(), q.w());
+  float sin_half_theta = sin(half_theta);
+  if (abs(sin_half_theta) < 1e-5f)
+    return math::vector3::Zero();
+  return half_theta * 2 / sin_half_theta * math::vector3(q.x(), q.y(), q.z());
+}
+math::quat so3_to_quat(math::vector3 a) {
+  float theta = a.norm();
+  if (abs(theta) < 1e-5f)
+    return math::quat::Identity();
+  float sin_half_theta = sin(theta / 2);
+  float cos_half_theta = cos(theta / 2);
+  if (cos_half_theta < 0) {
+    cos_half_theta = -cos_half_theta;
+    sin_half_theta = -sin_half_theta;
+  }
+  return math::quat(cos(theta / 2), sin_half_theta / theta * a.x(),
+                    sin_half_theta / theta * a.y(),
+                    sin_half_theta / theta * a.z());
+}
+
 }; // namespace toolkit::math
