@@ -57,11 +57,19 @@ public:
 
   bool should_draw_debug = true;
 
+  bool enable_ao_pass = false;
+  int ao_filter_size = 9;
+  float ao_filter_sigma = 6.0f;
+  float ssao_noise_scale = 64.0f, ssao_radius = 0.2f;
+
 protected:
   framebuffer gbuffer, cbuffer, msaa_buffer;
   shader gbuffer_geometry_pass, defered_phong_pass;
   texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex;
   unsigned int msaa_color_buffer, msaa_depth_buffer;
+
+  framebuffer ao_buffer;
+  texture ao_color;
 
   // uniform buffer storing all active lights
   buffer light_data_buffer;

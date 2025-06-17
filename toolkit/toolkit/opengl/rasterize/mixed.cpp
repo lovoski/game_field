@@ -1,6 +1,7 @@
 #include "toolkit/opengl/rasterize/mixed.hpp"
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/opengl/components/materials/all.hpp"
+#include "toolkit/opengl/effects/ambient_occlusion.hpp"
 #include "toolkit/opengl/rasterize/kernal.hpp"
 #include "toolkit/opengl/rasterize/shaders.hpp"
 #include "toolkit/scriptable.hpp"
@@ -26,6 +27,14 @@ void defered_forward_mixed::draw_menu_gui() {
 
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
+  ImGui::Separator();
+
+  ImGui::MenuItem("Ambient Occlusion", nullptr, nullptr, false);
+  ImGui::Checkbox("Enable AO", &enable_ao_pass);
+  ImGui::InputInt("Filter Size", &ao_filter_size);
+  ImGui::DragFloat("Filter Sigma", &ao_filter_sigma, 0.01f, 0.0f, 10.0f);
+  ImGui::DragFloat("SSAO Radius", &ssao_radius, 0.01f, 0.0f, 10.0f);
+  ImGui::DragFloat("SSAO Noise Scale", &ssao_noise_scale, 0.01f, 0.0f, 1000.0f);
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -54,6 +63,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   gbuffer_depth_tex.create(GL_TEXTURE_2D);
   color_tex.create(GL_TEXTURE_2D);
   mask_tex.create(GL_TEXTURE_2D);
+  ao_color.create(GL_TEXTURE_2D);
 
   gbuffer_geometry_pass.compile_shader_from_source(gbuffer_geometry_pass_vs,
                                                    gbuffer_geometry_pass_fs);
@@ -78,6 +88,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   gbuffer.create();
   cbuffer.create();
   msaa_buffer.create();
+  ao_buffer.create();
   resize(g_instance.scene_width, g_instance.scene_height);
 
   light_data_buffer.create();
@@ -102,7 +113,7 @@ void defered_forward_mixed::resize(int width, int height) {
                              {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                              {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                              {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
-  mask_tex.set_data(width, height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+  mask_tex.set_data(width, height, GL_RGBA32F, GL_RGBA, GL_FLOAT);
   mask_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
                            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
@@ -134,6 +145,19 @@ void defered_forward_mixed::resize(int width, int height) {
   if (!cbuffer.check_status())
     spdlog::error("cbuffer not complete!");
   cbuffer.unbind();
+
+  ao_buffer.bind();
+  ao_buffer.begin_draw_buffers();
+  ao_color.set_data(width, height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+  ao_color.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                           {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                           {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                           {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+  ao_buffer.attach_color_buffer(ao_color, GL_COLOR_ATTACHMENT0);
+  ao_buffer.end_draw_buffers();
+  if (!ao_buffer.check_status())
+    spdlog::error("ao buffer not complete!");
+  ao_buffer.unbind();
 
   msaa_buffer.bind();
   glGenRenderbuffers(1, &msaa_color_buffer);
@@ -404,6 +428,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
       scene_vao.bind();
       gbuffer_geometry_pass.use();
       gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
+      gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
       registry.view<entt::entity, transform, mesh_data>().each(
           [&](entt::entity entity, transform &trans, mesh_data &data) {
             gbuffer_geometry_pass.set_mat4(
@@ -415,6 +440,18 @@ void defered_forward_mixed::render(entt::registry &registry) {
       scene_vao.unbind();
     }
     gbuffer.unbind();
+
+    // render ao buffer if needed
+    if (enable_ao_pass) {
+      ao_buffer.bind();
+      ao_buffer.set_viewport(0, 0, g_instance.scene_width,
+                             g_instance.scene_height);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glClearColor(0, 0, 0, 1);
+      ssao(pos_tex, normal_tex, mask_tex, cam_comp.view, cam_comp.proj,
+           ssao_noise_scale, ssao_radius);
+      ao_buffer.unbind();
+    }
 
     // ------------------- render to multisample framebuffer -------------------
     msaa_buffer.bind();
@@ -491,6 +528,21 @@ void defered_forward_mixed::render(entt::registry &registry) {
                       GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
     msaa_buffer.unbind();
+
+    // apply post processing with alpha blending
+    cbuffer.bind();
+    cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendEquation(GL_FUNC_ADD);
+
+    // ambient occlusion
+    if (enable_ao_pass) {
+      ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
+    }
+
+    glDisable(GL_BLEND);
+    cbuffer.unbind();
   }
 }
 

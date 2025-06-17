@@ -32,11 +32,19 @@ layout (location = 2) out vec4 gMask;
 in vec3 worldPos;
 in vec3 worldNormal;
 
+uniform mat4 gproj;
+
+float linearize_depth(float depth) {
+  vec4 ndc = vec4(gl_FragCoord.x*2-1,gl_FragCoord.y*2-1, depth * 2.0 - 1.0, 1.0);
+  vec4 view = inverse(gproj) * ndc;
+  return view.z / view.w;
+}
+
 void main() {
   gPosition = vec4(worldPos, 1.0);
   // map normal to range [0, 1]
   gNormal = vec4(normalize(worldNormal) * 0.5 + 0.5, 1.0);
-  gMask = vec4(1,0,0,0);
+  gMask = vec4(1,linearize_depth(gl_FragCoord.z),0,0);
 }
 )";
 
