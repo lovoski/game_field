@@ -570,7 +570,7 @@ void manga_viewer::scene_logic() {
       (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT) ||
        (toolkit::opengl::g_instance.is_mouse_button_triggered(
             GLFW_MOUSE_BUTTON_LEFT) &&
-        toolkit::opengl::g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL)))) {
+        toolkit::opengl::g_instance.caps_lock_on))) {
     pageFromRightToLeft = false;
     autoTurnPage = true;
     foldB = -1;
@@ -582,7 +582,7 @@ void manga_viewer::scene_logic() {
       (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT) ||
        (toolkit::opengl::g_instance.is_mouse_button_triggered(
             GLFW_MOUSE_BUTTON_RIGHT) &&
-        toolkit::opengl::g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL)))) {
+        toolkit::opengl::g_instance.caps_lock_on))) {
     pageFromRightToLeft = true;
     autoTurnPage = true;
     foldB = -1;

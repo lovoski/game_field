@@ -1072,7 +1072,8 @@ void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
   if (!initialized) {
     vao.create();
     vbo.create();
-    shader.compile_shader_from_source(solid_sphere_vs, line_fs, solid_sphere_gs);
+    shader.compile_shader_from_source(solid_sphere_vs, line_fs,
+                                      solid_sphere_gs);
     initialized = true;
   }
   vao.bind();

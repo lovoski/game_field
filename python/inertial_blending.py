@@ -145,7 +145,7 @@ if __name__ == '__main__':
   # v = 0
   # step = 1e-3
   # half_life = 0.03
-  # decay_rate = np.log(1e12)/(np.log(np.e))
+  decay_rate = np.log(2)/(0.5*np.log(np.e))
   # for i in range(1,100):
   #   time = 0
   #   if y[i] != y[i-1]:
@@ -163,10 +163,14 @@ if __name__ == '__main__':
   x0 = 1
   v0 = 0
   t = np.arange(100)*0.05
-  y = np.zeros_like(t)
-  for i in range(100):
-    y[i] = critical_spring_damper(x0,v0,0,t[i],0.5)
-  plt.plot(t,y,label='critical damped')
+  x = (x0+(v0+decay_rate*x0)*t)*np.exp(-decay_rate*t)
+  v = (v0+decay_rate*x0)*np.exp(-decay_rate*t)-decay_rate*x
+  plt.plot(t,x,label='x')
+  plt.plot(t,v,label='v')
+  # y = np.zeros_like(t)
+  # for i in range(100):
+  #   y[i] = critical_spring_damper(x0,v0,0,t[i],0.5)
+  # plt.plot(t,y,label='critical damped')
 
   plt.legend()
   plt.show()

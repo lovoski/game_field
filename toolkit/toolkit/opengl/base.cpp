@@ -31,7 +31,7 @@ void context::init(unsigned int width, unsigned int height, const char *title,
   }
 
   glfwMakeContextCurrent(window);
-
+  glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
   glfwSetCursorPosCallback(window, context::cursor_pos_callback);
   glfwSetScrollCallback(window, context::scroll_callback);
   glfwSetMouseButtonCallback(window, context::mouse_button_callback);

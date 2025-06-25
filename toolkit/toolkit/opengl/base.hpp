@@ -59,6 +59,7 @@ public:
     if (prevState && !curState)
       context.untriggered_keys.insert(key);
     context.key_states[key] = curState;
+    context.caps_lock_on = (mods & GLFW_MOD_CAPS_LOCK);
   }
 
   static void mouse_button_callback(GLFWwindow *window, int button, int action,
@@ -124,6 +125,8 @@ public:
   GLFWwindow *window = nullptr;
   uint32_t wnd_width = 0, wnd_height = 0, scene_width = 0, scene_height = 0,
            scene_pos_x = 0, scene_pos_y = 0;
+
+  bool caps_lock_on = false;
 
   entt::entity active_camera = entt::null;
 

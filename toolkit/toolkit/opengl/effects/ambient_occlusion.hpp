@@ -20,4 +20,12 @@ void ssao(texture &gbuffer_pos, texture &gbuffer_normal, texture &gbuffer_mask,
           math::matrix4 &view, math::matrix4 &proj, float noise_scale,
           float radius);
 
+// /**
+//  * Practical Realtime Strategies for Accurate Indirect Occlusion, GTAO
+//  * 
+//  * Reference:
+//  * https://github.com/GameTechDev/XeGTAO
+//  */
+// void gtao();
+
 }; // namespace toolkit::opengl
