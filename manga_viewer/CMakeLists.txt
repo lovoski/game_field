@@ -10,7 +10,7 @@ if (WIN32)
 endif()
 
 include_directories("D:\\repo\\mupdf\\include")
-link_directories("D:\\repo\\mupdf\\platform\\win32\\x64\\Release")
+link_directories("D:\\repo\\mupdf\\platform\\win32\\x64\\Debug")
 
 file(GLOB MANGA_VIEWER_SRC_FILES *.cpp)
 add_executable(${PROJECT_NAME} ${MANGA_VIEWER_SRC_FILES})
