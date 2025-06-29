@@ -76,6 +76,11 @@ public:
     ImGui::Text("Angular Velocity x=%.2f,y=%.2f,z=%.2f", angular_velocity.x(),
                 angular_velocity.y(), angular_velocity.z());
     ImGui::DragFloat("Half Life", &damper_half_life, 0.01f, 0.0f, 10.0f);
+    if (ImGui::Button("Random target transform", {-1, 30})) {
+      auto &target_trans = registry->get<toolkit::transform>(target);
+      target_trans.set_world_pos(toolkit::math::vector3::Random()*10.0f);
+      target_trans.set_world_rot(toolkit::math::quat::UnitRandom());
+    }
   }
 
   toolkit::math::vector3 velocity = toolkit::math::vector3::Zero(),
