@@ -191,16 +191,26 @@ void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
 void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
   auto mesh_data_entities = registry.view<entt::entity, transform, mesh_data>();
 
+  bool any_force_update_flag = false;
   int64_t current_scene_vertex_counter = 0, current_scene_index_counter = 0;
   mesh_data_entities.each(
       [&](entt::entity entity, transform &trans, mesh_data &data) {
+        any_force_update_flag |= data.force_update_flag;
+        data.force_update_flag = false;
         current_scene_vertex_counter += data.vertices.size();
         current_scene_index_counter += data.indices.size();
       });
 
-  if ((current_scene_vertex_counter != scene_vertex_counter) ||
-      (scene_mesh_counter != mesh_data_entities.size_hint())) {
-    spdlog::info("Detect change in scnene vertex count or scene mesh count, "
+  bool scene_vtx_count_mismatch =
+      (current_scene_vertex_counter != scene_vertex_counter);
+  bool scene_idx_count_mismatch =
+      (current_scene_index_counter != scene_index_counter);
+  bool scene_mesh_mismatch =
+      scene_mesh_counter != mesh_data_entities.size_hint();
+  if (scene_vtx_count_mismatch || scene_idx_count_mismatch ||
+      scene_mesh_mismatch || any_force_update_flag) {
+    spdlog::info("Detect change in scnene vertex count, scene index count, "
+                 "scene mesh count or force update flag, "
                  "resize scene vertex buffer and scene index buffer.");
     scene_mesh_counter = mesh_data_entities.size_hint();
     scene_vertex_counter = current_scene_vertex_counter;

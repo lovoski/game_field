@@ -28,6 +28,9 @@ struct mesh_data : public icomponent {
   void draw(GLenum mode = GL_TRIANGLES);
 
   void init1() override;
+
+  bool force_update_flag = false;
+  void update_buffers(bool save_assets = false);
 };
 DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh)
 

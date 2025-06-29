@@ -5,7 +5,6 @@
 #include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/transform.hpp"
 
-
 namespace toolkit::opengl {
 
 struct _render_vertex {
@@ -220,6 +219,11 @@ void draw_mesh_data(mesh_data &data, GLenum mode) {
   data.vertex_array.bind();
   glDrawElements(mode, data.indices.size(), GL_UNSIGNED_INT, 0);
   data.vertex_array.unbind();
+}
+
+void mesh_data::update_buffers(bool save_assets) {
+  force_update_flag = true;
+  init_opengl_buffers(*this, save_assets);
 }
 
 void init_opengl_buffers_internal(mesh_data &data,

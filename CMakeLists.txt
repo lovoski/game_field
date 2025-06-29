@@ -9,7 +9,7 @@ add_subdirectory("toolkit")
 # add_subdirectory("manga_viewer")
 add_subdirectory("examples")
 
-file(GLOB_RECURSE "scripts/*.cpp" SCRIPTS_SRC)
+file(GLOB_RECURSE SCRIPTS_SRC "scripts/*.cpp")
 
 add_executable(test_tk test_tk.cpp)
 target_link_libraries(test_tk PRIVATE toolkit)
