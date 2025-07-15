@@ -15,7 +15,10 @@ public:
   float initial_factor = 0.6f;
   float speed_pow = 1.5f;
   float max_speed = 8e2f;
-  float fps_speed = 1.2;
+
+  // fps-style camera parameters
+  float fps_speed = 4;
+  float fps_camera_speed = 3.0f;
 
   bool vis_pivot = false;
   float vis_pivot_size = 0.1f;
@@ -26,6 +29,6 @@ public:
 };
 DECLARE_SCRIPT(editor_camera, basic, mouse_last_pos, camera_pivot,
                initial_factor, speed_pow, max_speed, fps_speed, vis_pivot,
-               vis_pivot_size)
+               vis_pivot_size, fps_camera_speed)
 
 }; // namespace toolkit::opengl

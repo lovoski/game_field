@@ -8,8 +8,7 @@
 
 namespace toolkit::opengl {
 
-struct dir_light : public scriptable {
-  math::vector3 dir = math::world_forward;
+struct point_light : public scriptable {
   math::vector3 color = White;
 
   void draw_gui(iapp *app) override {
@@ -22,22 +21,6 @@ struct dir_light : public scriptable {
   }
 
   void draw_to_scene(iapp *app) override;
-
-  bool enabled = true;
-};
-DECLARE_SCRIPT(dir_light, graphics, dir, color, enabled)
-
-struct point_light : public scriptable {
-  math::vector3 color = White;
-
-  void draw_gui(iapp *app) override {
-    ImGui::Checkbox("Enable", &enabled);
-    if (!enabled)
-      ImGui::BeginDisabled();
-    gui::color_edit_3("Color", color);
-    if (!enabled)
-      ImGui::EndDisabled();
-  }
 
   bool enabled = true;
 };

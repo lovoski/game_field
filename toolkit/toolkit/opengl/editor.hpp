@@ -84,6 +84,10 @@ public:
    * `d` for direction. Returns whether the ray generation succeeded or not.
    */
   bool mouse_query_ray(math::vector3 &o, math::vector3 &d);
+  /**
+   * Screen pos ranges [0.0, 1.0]
+   */
+  bool screen_query_ray(math::vector2 screen_pos, math::vector3 &o, math::vector3 &d);
 
 private:
   int gizmo_mode_idx = 0;

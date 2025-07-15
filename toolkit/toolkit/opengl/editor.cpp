@@ -231,23 +231,13 @@ void editor::editor_shortkeys() {
   }
 }
 
-bool editor::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
-  if (!g_instance.cursor_in_scene_window()) {
-    spdlog::warn(
-        "Cursor outside of scene window, mouse_query_ray could be unintended.");
-  }
+bool editor::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o, math::vector3 &d) {
   if (!registry.valid(g_instance.active_camera)) {
     spdlog::error(
         "Scene active camera invalid, failed to call mouse_query_ray");
     return false;
   }
   if (auto cam_comp = registry.try_get<camera>(g_instance.active_camera)) {
-    auto scrn_pos = g_instance.get_mouse_position();
-    scrn_pos.x() -= g_instance.scene_pos_x;
-    scrn_pos.y() =
-        g_instance.scene_height - scrn_pos.y() + g_instance.scene_pos_y;
-    scrn_pos.x() /= g_instance.scene_width;
-    scrn_pos.y() /= g_instance.scene_height;
     math::vector4 ndc_pos = math::vector4(
         scrn_pos.x() * 2.0f - 1.0f, scrn_pos.y() * 2.0f - 1.0f, 0.0f, 1.0f);
     auto &cam_trans = registry.get<transform>(g_instance.active_camera);
@@ -263,6 +253,16 @@ bool editor::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
                   "failed to call mouse_query_ray");
     return false;
   }
+}
+
+bool editor::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
+  auto scrn_pos = g_instance.get_mouse_position();
+  scrn_pos.x() -= g_instance.scene_pos_x;
+  scrn_pos.y() =
+      g_instance.scene_height - scrn_pos.y() + g_instance.scene_pos_y;
+  scrn_pos.x() /= g_instance.scene_width;
+  scrn_pos.y() /= g_instance.scene_height;
+  return screen_query_ray(scrn_pos, o, d);
 }
 
 void editor::draw_gizmos(bool enable) {
@@ -473,8 +473,6 @@ void draw_entity_hierarchy_recursive(
     entity_name = str_format("%s %s", ICON_LC_BONE, entity_name.c_str());
   } else if (registry.try_get<camera>(current)) {
     entity_name = str_format("%s %s", ICON_LC_CAMERA, entity_name.c_str());
-  } else if (registry.try_get<dir_light>(current)) {
-    entity_name = str_format("%s %s", ICON_LC_SUN, entity_name.c_str());
   } else if (registry.try_get<point_light>(current)) {
     entity_name = str_format("%s %s", ICON_LC_LIGHTBULB, entity_name.c_str());
   } else if (registry.try_get<mesh_data>(current)) {
@@ -555,13 +553,6 @@ void editor::draw_entity_hierarchy() {
         create_plane(registry);
 
       ImGui::Separator();
-      if (ImGui::MenuItem("New Dir Light")) {
-        auto ent = registry.create();
-        auto &trans = registry.emplace<transform>(ent);
-        auto number = registry.view<dir_light>().size();
-        trans.name = str_format("Dir Light (%d)", number);
-        auto &light = registry.emplace<dir_light>(ent);
-      }
       if (ImGui::MenuItem("New Point Light")) {
         auto ent = registry.create();
         auto &trans = registry.emplace<transform>(ent);

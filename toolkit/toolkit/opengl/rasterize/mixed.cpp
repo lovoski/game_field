@@ -35,6 +35,12 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::DragFloat("Filter Sigma", &ao_filter_sigma, 0.01f, 0.0f, 10.0f);
   ImGui::DragFloat("SSAO Radius", &ssao_radius, 0.01f, 0.0f, 10.0f);
   ImGui::DragFloat("SSAO Noise Scale", &ssao_noise_scale, 0.01f, 0.0f, 1000.0f);
+  ImGui::Separator();
+
+  ImGui::MenuItem("Sun Light Settings");
+  ImGui::Checkbox("Enable", &enable_sun);
+  gui::color_edit_3("Light Color", sun_color);
+  ImGui::DragFloat3("Light Direction", sun_direction.data(), 0.1f, -1.0f, 1.0f, "%.1f");
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -400,15 +406,13 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
 
 void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
   std::vector<light_data_pacakge> lights;
-  registry.view<dir_light, transform>().each(
-      [&](entt::entity entity, dir_light &light, transform &trans) {
-        light_data_pacakge package;
-        package.idata[0] = 0;
-        package.pos << trans.position(), 1.0f;
-        package.color << light.color, 1.0f;
-        package.fdata0 << trans.local_forward(), 0.0f;
-        lights.emplace_back(package);
-      });
+  if (enable_sun) {
+    light_data_pacakge package;
+    package.idata[0] = 0;
+    package.color << sun_color, 1.0f;
+    package.fdata0 << sun_direction, 0.0f;
+    lights.emplace_back(package);
+  }
   registry.view<point_light, transform>().each(
       [&](entt::entity entity, point_light &light, transform &trans) {
         light_data_pacakge package;

@@ -61,6 +61,10 @@ public:
   float ao_filter_sigma = 6.0f;
   float ssao_noise_scale = 64.0f, ssao_radius = 0.2f;
 
+  bool enable_sun = true;
+  math::vector3 sun_direction = -math::vector3::Ones(),
+                sun_color = math::vector3(0.9, 0.9, 0.9);
+
 protected:
   framebuffer gbuffer, cbuffer, msaa_buffer;
   shader gbuffer_geometry_pass, defered_phong_pass;
@@ -90,6 +94,7 @@ protected:
 };
 DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
-               ao_filter_sigma, ssao_noise_scale, ssao_radius)
+               ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
+               sun_direction, sun_color)
 
 }; // namespace toolkit::opengl
