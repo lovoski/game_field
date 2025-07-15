@@ -14,6 +14,13 @@ add_subdirectory(toolkit)
 target_link_libraries(main PRIVATE toolkit)
 ```
 
+## TODO List
+
+- 实现基于物理的天空盒光照，并给天空盒添加一个 directional light，采用 cascaded shadow map 实现阴影
+- 完善贴图和材质系统，为后续屏幕空间光追做准备
+- 迁移构建 bvh 的代码
+- 参考 raw-physics 实现碰撞检测和 xpbd 物理模拟
+
 ## 修复日志
 
 这里会记录一些花了比较长时间修复的 bug，并详细记录问题出现的原因和解决方法。
