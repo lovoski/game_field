@@ -129,6 +129,7 @@ void editor::reset() {
   render_sys = add_sys<defered_forward_mixed>();
   script_sys = add_sys<script_system>();
   anim_sys = add_sys<anim::anim_system>();
+  phy_sys = add_sys<physics::physics_system>();
 }
 
 void editor::add_default_objects() {
@@ -418,7 +419,6 @@ void editor::draw_main_menubar() {
                              g_instance.active_camera = valid_cameras[current];
                          });
 
-      int gizmo_mode_idx = 0;
       gui::combo("gizmo mode", gizmo_mode_idx, {"world", "local"},
                  [&](int current) {
                    if (current == 1)

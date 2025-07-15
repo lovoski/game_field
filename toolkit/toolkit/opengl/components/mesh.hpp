@@ -52,4 +52,15 @@ entt::entity create_sphere(entt::registry &registry,
 entt::entity create_cylinder(entt::registry &registry,
                              math::matrix4 t = math::matrix4::Identity());
 
+/**
+ * Get convex hull of given mesh as triangulated mesh.
+ */
+void convex_hull(mesh_data &data, std::vector<assets::mesh_vertex> &vertices,
+                 std::vector<uint32_t> &indices);
+
+/**
+ * Recompute smoothed normal given mesh data.
+ */
+void smooth_normal(toolkit::opengl::mesh_data &data);
+
 }; // namespace toolkit::opengl

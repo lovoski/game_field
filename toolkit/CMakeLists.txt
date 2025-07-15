@@ -17,7 +17,7 @@ if(MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zc:preprocessor /bigobj /utf-8" CACHE STRING "" FORCE)
 endif()
 
-set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/assets")
+set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/physics" "toolkit/assets")
 set(LIB_LIST )
 file(GLOB SRC_FILES "toolkit/*.cpp")
 foreach(DIR ${SRC_DIR_LIST})

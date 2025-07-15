@@ -5,8 +5,6 @@
 #include "toolkit/scriptable.hpp"
 #include "toolkit/system.hpp"
 
-void compute_normal(toolkit::opengl::mesh_data &data);
-
 class mesh_modify : public toolkit::scriptable {
 public:
   void draw_gui(toolkit::iapp *app) override;
