@@ -12,7 +12,6 @@
 #include "toolkit/opengl/rasterize/mixed.hpp"
 #include "toolkit/physics/system.hpp"
 
-
 namespace toolkit::assets {
 
 void open_model(entt::registry &registry, std::string filepath);
@@ -33,6 +32,20 @@ struct compare_ray_query_data {
     return a.weighted_dist() > b.weighted_dist();
   }
 };
+struct active_camera_manipulate_data {
+  bool mouse_first_move = true;
+  math::vector2 mouse_last_pos;
+  math::vector3 camera_pivot{0.0, 0.0, 0.0};
+  // Some parameter related to camera control
+  float initial_factor = 0.6f;
+  float speed_pow = 1.5f;
+  float max_speed = 8e2f;
+  // fps-style camera parameters
+  float fps_speed = 4;
+  float fps_camera_speed = 3.0f;
+};
+REFLECT(active_camera_manipulate_data, camera_pivot, initial_factor, speed_pow,
+        max_speed, fps_speed, fps_camera_speed)
 
 class editor : public iapp {
 public:
@@ -87,10 +100,15 @@ public:
   /**
    * Screen pos ranges [0.0, 1.0]
    */
-  bool screen_query_ray(math::vector2 screen_pos, math::vector3 &o, math::vector3 &d);
+  bool screen_query_ray(math::vector2 screen_pos, math::vector3 &o,
+                        math::vector3 &d);
+
+  void active_camera_manipulate(float dt);
 
 private:
   int gizmo_mode_idx = 0;
+
+  active_camera_manipulate_data cam_manip_data;
 };
 
 inline void script_draw_to_scene_proxy(

@@ -36,24 +36,6 @@ void compute_vp_matrix(entt::registry &registry, entt::entity entity,
   }
 }
 
-bool frustom_check(entt::registry &registry, entt::entity entity,
-                   math::vector3 boxMin, math::vector3 boxMax) {
-  // Check if bounding box is outside any plane
-  auto &cam = registry.get<camera>(entity);
-  for (const auto &plane : cam.planes) {
-    math::vector3 positiveVertex(plane.x() >= 0 ? boxMax.x() : boxMin.x(),
-                                 plane.y() >= 0 ? boxMax.y() : boxMin.y(),
-                                 plane.z() >= 0 ? boxMax.z() : boxMin.z());
-
-    // Compute distance from plane
-    float distance = plane.head<3>().dot(positiveVertex) + plane.w();
-    if (distance < 0) {
-      return false; // Outside the frustum
-    }
-  }
-  return true; // Inside or intersects the frustum
-}
-
 void point_light::draw_to_scene(iapp *app) {
   script_draw_to_scene_proxy(
       app, [&](editor *editor, transform &cam_trans, camera &cam_comp) {

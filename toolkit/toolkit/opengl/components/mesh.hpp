@@ -19,6 +19,8 @@ struct mesh_data : public icomponent {
 
   bool should_render_mesh = true;
   int64_t scene_vertex_offset = 0, scene_index_offset = 0;
+
+  // axis aligned bounding box with identity transform
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
 
   bool skinned = false;

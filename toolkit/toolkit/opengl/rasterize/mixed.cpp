@@ -27,6 +27,7 @@ void defered_forward_mixed::draw_menu_gui() {
 
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
+  ImGui::Checkbox("Draw Bounding Boxes", &draw_bounding_boxes);
   ImGui::Separator();
 
   ImGui::MenuItem("Ambient Occlusion", nullptr, nullptr, false);
@@ -40,7 +41,8 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::MenuItem("Sun Light Settings");
   ImGui::Checkbox("Enable", &enable_sun);
   gui::color_edit_3("Light Color", sun_color);
-  ImGui::DragFloat3("Light Direction", sun_direction.data(), 0.1f, -1.0f, 1.0f, "%.1f");
+  ImGui::DragFloat3("Light Direction", sun_direction.data(), 0.1f, -1.0f, 1.0f,
+                    "%.1f");
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -431,6 +433,13 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     update_scene_lights(registry);
 
+    // update visible cache for main camera only
+    auto trans_mesh_view = registry.view<entt::entity, transform, mesh_data>();
+    trans_mesh_view.each(
+        [&](entt::entity entity, transform &trans, mesh_data &data) {
+
+        });
+
     // ------------------ render to geometry framebuffer ------------------
     gbuffer.bind();
     gbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
@@ -443,14 +452,14 @@ void defered_forward_mixed::render(entt::registry &registry) {
       gbuffer_geometry_pass.use();
       gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
       gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
-      registry.view<entt::entity, transform, mesh_data>().each(
-          [&](entt::entity entity, transform &trans, mesh_data &data) {
-            gbuffer_geometry_pass.set_mat4(
-                "gModel",
-                data.skinned ? math::matrix4::Identity() : trans.matrix());
-            glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
-                           (void *)(data.scene_index_offset * sizeof(GLuint)));
-          });
+      trans_mesh_view.each([&](entt::entity entity, transform &trans,
+                               mesh_data &data) {
+        gbuffer_geometry_pass.set_mat4("gModel", data.skinned
+                                                     ? math::matrix4::Identity()
+                                                     : trans.matrix());
+        glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                       (void *)(data.scene_index_offset * sizeof(GLuint)));
+      });
       scene_vao.unbind();
     }
     gbuffer.unbind();

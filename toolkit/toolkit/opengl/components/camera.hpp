@@ -24,14 +24,13 @@ struct camera : public icomponent {
       ImGui::Text("Orthogonal Camera");
     }
   }
+
+  bool visibility_check(math::vector3 &box_min, math::vector3 &box_max, math::matrix4 &trans);
 };
 DECLARE_COMPONENT(camera, graphics, fovy_degree, z_near, z_far, perspective,
                   h_size, v_size)
 
 void compute_vp_matrix(entt::registry &registry, entt::entity entity,
                        float width, float height);
-
-bool frustom_check(entt::registry &registry, entt::entity entity,
-                   math::vector3 boxMin, math::vector3 boxMax);
 
 }; // namespace toolkit::opengl

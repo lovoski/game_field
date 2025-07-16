@@ -31,16 +31,7 @@ public:
   void preupdate(entt::registry &registry, float dt) override;
   void render(entt::registry &registry);
 
-  /**
-   * Apply mesh blendshape and skinning if neccessary. Update the variable
-   * `scene_vertex_buffer` and `scene_index_buffer`. The bounding boxes for all
-   * meshes will also gets computed in this function. Mind that the bounding
-   * boxes need to apply the transform matrices to correctly represent its true
-   * position. (except from skinned mesh, skinned mesh bounding boxes always
-   * represents itself.)
-   */
   void update_scene_buffers(entt::registry &registry);
-
   void update_scene_lights(entt::registry &registry);
 
   texture get_target_texture() const { return color_tex; }
@@ -61,12 +52,15 @@ public:
   float ao_filter_sigma = 6.0f;
   float ssao_noise_scale = 64.0f, ssao_radius = 0.2f;
 
+  std::vector<std::pair<math::vector3, math::vector3>> bounding_box_lines;
+  bool draw_bounding_boxes = false;
+
   bool enable_sun = true;
   math::vector3 sun_direction = -math::vector3::Ones(),
                 sun_color = math::vector3(0.9, 0.9, 0.9);
 
 protected:
-  framebuffer gbuffer, cbuffer, msaa_buffer;
+  framebuffer gbuffer, cbuffer, msaa_buffer, csm_buffer;
   shader gbuffer_geometry_pass, defered_phong_pass;
   texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex;
   unsigned int msaa_color_buffer, msaa_depth_buffer;
@@ -91,6 +85,8 @@ protected:
   buffer skeleton_matrices_buffer;
 
   int64_t scene_vertex_counter = 0, scene_index_counter = 0;
+
+  std::map<entt::entity, bool> main_cam_visible_cache;
 };
 DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,

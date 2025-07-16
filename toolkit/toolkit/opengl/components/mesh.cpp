@@ -230,6 +230,12 @@ void init_opengl_buffers_internal(mesh_data &data,
                                   std::vector<_render_vertex> &vertices,
                                   std::vector<_blendshape_data> &blendshapes,
                                   bool save_asset) {
+  // prepare default bounding box
+  for (int i = 0; i < data.vertices.size(); i++) {
+    data.bb_max = math::max3(data.bb_max, data.vertices[i].position.head<3>());
+    data.bb_min = math::min3(data.bb_min, data.vertices[i].position.head<3>());
+  }
+
   data.vertex_array.create();
   data.vertex_array.bind();
   data.vertex_buffer.create();

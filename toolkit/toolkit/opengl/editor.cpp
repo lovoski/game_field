@@ -4,7 +4,6 @@
 #include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
-#include "toolkit/opengl/scripts/camera.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
 
 #include <ufbx.h>
@@ -26,17 +25,16 @@ void editor::shutdown() { g_instance.shutdown(); }
 
 void editor::late_serialize(nlohmann::json &j) {
   nlohmann::json editor_settings;
-  editor_settings["active_camera"] =
-      std::to_string(entt::to_integral(g_instance.active_camera));
+  editor_settings["active_camera"] = g_instance.active_camera;
+  editor_settings["camera_manipulate_data"] = cam_manip_data;
   j["editor"] = editor_settings;
 }
 
 void editor::late_deserialize(nlohmann::json &j) {
   if (j.contains("editor")) {
-    std::string active_camera_str =
-        j["editor"]["active_camera"].get<std::string>();
-    g_instance.active_camera =
-        entt::entity{static_cast<std::uint32_t>(std::stoul(active_camera_str))};
+    g_instance.active_camera = j["editor"]["active_camera"].get<entt::entity>();
+    cam_manip_data = j["editor"]["camera_manipulate_data"]
+                         .get<active_camera_manipulate_data>();
   } else {
     // use the first camera as active camera, otherwise no active camera
     auto cam_view = registry.view<camera>();
@@ -64,6 +62,7 @@ void editor::run() {
 
     transform_sys->update_transform(registry);
     render_sys->update_scene_buffers(registry);
+    active_camera_manipulate(dt);
 
     for (auto sys : systems)
       if (sys->active)
@@ -139,7 +138,6 @@ void editor::add_default_objects() {
   trans.set_world_pos(math::vector3(0, 0, 5));
   auto &cam_comp = registry.emplace<camera>(ent);
   g_instance.active_camera = ent;
-  auto &editor_cam = registry.emplace<editor_camera>(ent);
 }
 
 void editor::editor_shortkeys() {
@@ -231,7 +229,8 @@ void editor::editor_shortkeys() {
   }
 }
 
-bool editor::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o, math::vector3 &d) {
+bool editor::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o,
+                              math::vector3 &d) {
   if (!registry.valid(g_instance.active_camera)) {
     spdlog::error(
         "Scene active camera invalid, failed to call mouse_query_ray");
@@ -263,6 +262,141 @@ bool editor::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
   scrn_pos.x() /= g_instance.scene_width;
   scrn_pos.y() /= g_instance.scene_height;
   return screen_query_ray(scrn_pos, o, d);
+}
+
+void editor::active_camera_manipulate(float dt) {
+  if (auto cam_trans = registry.try_get<transform>(g_instance.active_camera)) {
+    // focus on selected entity if `F` is triggered
+    if (selected_entity != entt::null &&
+        g_instance.is_key_triggered(GLFW_KEY_F)) {
+      spdlog::info("Focus camera \"{0}\" to selected entity \"{1}\"",
+                   registry.get<transform>(g_instance.active_camera).name,
+                   registry.get<transform>(selected_entity).name);
+      cam_manip_data.camera_pivot =
+          registry.get<transform>(selected_entity).position();
+    }
+    auto cam_comp = registry.get<camera>(g_instance.active_camera);
+    auto cam_pos = cam_trans->position();
+    if ((cam_pos - cam_manip_data.camera_pivot).norm() < 1e-9f) {
+      cam_manip_data.camera_pivot = cam_pos - cam_trans->local_forward();
+      spdlog::info("push pivot away from camera");
+    }
+    // scroll movement delta, scale with the distance to pivot
+    float movement_delta =
+        cam_manip_data.initial_factor * dt *
+        std::min(std::pow((cam_pos - cam_manip_data.camera_pivot).norm(),
+                          cam_manip_data.speed_pow),
+                 cam_manip_data.max_speed);
+    if (g_instance.cursor_in_scene_window()) {
+      // check action queue for mouse scroll event
+      math::vector2 scrollOffset = g_instance.get_scroll_offsets();
+      cam_trans->set_world_pos(cam_trans->position() -
+                               cam_trans->local_forward() * scrollOffset.y() *
+                                   movement_delta);
+    }
+    bool press_mouse_mid_btn =
+        g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_MIDDLE);
+    bool press_mouse_right_btn =
+        g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_RIGHT);
+    math::vector2 mouse_current_pos = g_instance.get_mouse_position();
+    // only handle mouse input when cursor in scene window
+    if ((press_mouse_mid_btn || press_mouse_right_btn) &&
+        g_instance.cursor_in_scene_window()) {
+      if (cam_manip_data.mouse_first_move) {
+        cam_manip_data.mouse_last_pos = mouse_current_pos;
+        cam_manip_data.mouse_first_move = false;
+      }
+      math::vector2 mouse_offset =
+          mouse_current_pos - cam_manip_data.mouse_last_pos;
+      // free fps-style camera
+      if (press_mouse_right_btn) {
+        // modify the cameraPivot position to suite cursor movement
+        if (mouse_offset.norm() > 1e-2f) {
+          math::vector3 ray_o, ray_d;
+          math::vector2 screen_pos =
+              math::vector2(g_instance.scene_width / 2.0f +
+                                mouse_offset.x() * cam_manip_data.fps_speed,
+                            g_instance.scene_height / 2.0f -
+                                mouse_offset.y() * cam_manip_data.fps_speed);
+          screen_pos.x() /= g_instance.scene_width;
+          screen_pos.y() /= g_instance.scene_height;
+          if (screen_query_ray(screen_pos, ray_o, ray_d)) {
+            cam_manip_data.camera_pivot =
+                ray_o +
+                ray_d * (cam_manip_data.camera_pivot - cam_trans->position())
+                            .norm();
+          }
+        }
+        // move camera position with wasd key board
+        math::vector3 camera_movement = math::vector3::Zero();
+        math::vector3 cam_vec =
+            (cam_trans->position() - cam_manip_data.camera_pivot).normalized();
+        if (g_instance.is_key_pressed(GLFW_KEY_W))
+          camera_movement -= cam_trans->local_forward();
+        if (g_instance.is_key_pressed(GLFW_KEY_S))
+          camera_movement += cam_trans->local_forward();
+        if (g_instance.is_key_pressed(GLFW_KEY_A))
+          camera_movement -= cam_trans->local_left();
+        if (g_instance.is_key_pressed(GLFW_KEY_D))
+          camera_movement += cam_trans->local_left();
+        camera_movement *= (cam_manip_data.fps_camera_speed * dt);
+        cam_manip_data.camera_pivot += camera_movement;
+        cam_trans->set_world_pos(cam_trans->position() + camera_movement);
+      } else if (press_mouse_mid_btn) {
+        // rotate the camera around the pivot, or translate the camera
+        if (g_instance.is_key_pressed(GLFW_KEY_LEFT_SHIFT)) {
+          // translate the camera according to nfc offset
+          if (mouse_offset.norm() > 1e-2f) {
+            math::vector2 scene_size = g_instance.get_scene_size();
+            math::vector4 nfcPos = {-mouse_offset.x() / scene_size.x(),
+                                    mouse_offset.y() / scene_size.y(), 1.0f,
+                                    1.0f};
+            math::vector4 worldRayPos =
+                cam_comp.view.inverse() * cam_comp.proj.inverse() * nfcPos;
+            worldRayPos /= worldRayPos.w();
+            math::vector3 worldRayDir =
+                (worldRayPos.head<3>() - cam_pos).normalized();
+            worldRayDir =
+                worldRayDir.dot(cam_manip_data.camera_pivot - cam_pos) *
+                worldRayDir;
+            auto deltaPos =
+                worldRayDir.dot(cam_trans->local_left()) *
+                    cam_trans->local_left() +
+                worldRayDir.dot(cam_trans->local_up()) * cam_trans->local_up();
+            cam_manip_data.camera_pivot += deltaPos;
+            cam_trans->set_world_pos(cam_trans->position() + deltaPos);
+          }
+        } else {
+          // repose the camera
+          auto rotateOffset = mouse_offset * 0.1f;
+          math::vector3 posVector = cam_trans->position();
+          math::vector3 newPos =
+              math::angle_axis(math::deg_to_rad(-rotateOffset.x()),
+                               math::world_up) *
+                  math::angle_axis(math::deg_to_rad(-rotateOffset.y()),
+                                   cam_trans->local_left()) *
+                  (posVector - cam_manip_data.camera_pivot) +
+              cam_manip_data.camera_pivot;
+          cam_trans->set_world_pos(newPos);
+        }
+      }
+      cam_manip_data.mouse_last_pos = mouse_current_pos;
+    } else
+      cam_manip_data.mouse_first_move = true;
+
+    math::vector3 lastLeft = cam_trans->local_left();
+    math::vector3 forward =
+        (cam_trans->position() - cam_manip_data.camera_pivot).normalized();
+    math::vector3 up = math::world_up;
+    math::vector3 left = up.cross(forward).normalized();
+    // flip left if non-consistent
+    if (lastLeft.dot(left) < 0.0f)
+      left *= -1;
+    up = (forward.cross(left)).normalized();
+    math::matrix3 rot;
+    rot << left, up, forward;
+    cam_trans->set_world_rot(math::quat(rot));
+  }
 }
 
 void editor::draw_gizmos(bool enable) {
