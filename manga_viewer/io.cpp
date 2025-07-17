@@ -259,6 +259,23 @@ void manga_viewer::loadHighResPage(int pageIdx) {
   }
   // fz_drop_context(tmp_ctx);
 
+  // check for page widht height ratio
+  float ref_ratio = first_page_width_div_height.load();
+  float wh_ratio = pageCache.width / (float)pageCache.height,
+        hw_ratio = pageCache.height / (float)pageCache.width;
+  if (abs(wh_ratio-ref_ratio) >= abs(hw_ratio-ref_ratio)) {
+    logger->info("try rotate page {0} to fit width/height ratio", pageIdx);
+    // try rotate the page
+    toolkit::assets::image img;
+    img.resize(pageCache.height, pageCache.width, pageCache.nchannels);
+    for (int x = 0; x < pageCache.width; x++)
+      for (int y = 0; y < pageCache.height; y++)
+        for (int c = 0; c < pageCache.nchannels; c++)
+          img.pixel(pageCache.height-y-1,x,c) = pageCache.pixel(x,y,c);
+    img.filepath = pageCache.filepath;
+    pageCache = img;
+  }
+
   logger->info("load high-res page {0}, ({1},{2},{3}), {4} MB", pageIdx,
                pageCache.width, pageCache.height, pageCache.nchannels,
                pageCache.width * pageCache.height * pageCache.nchannels /
