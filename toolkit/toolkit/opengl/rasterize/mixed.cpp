@@ -523,6 +523,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
       mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
       mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
       mat_shader.set_buffer_ssbo(light_data_buffer, 0);
+      ss_model.setup_uniforms(mat_shader);
       material::__material_view__[mat_name](registry, [&](entt::entity entity,
                                                           material *mat) {
         if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {

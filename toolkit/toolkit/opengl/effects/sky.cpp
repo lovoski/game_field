@@ -238,18 +238,12 @@ uniform float mPerez_Y[5];
 
 uniform float sun_gamma;
 
-void main() {
-  vec4 ndc_pos = vec4(2.0*texcoord.x-1.0, 2.0*texcoord.y-1.0, 0.0, 1.0);
-  vec4 p0 = inverse(vp) * ndc_pos;
-  vec3 p1 = vec3(p0.x/p0.w,p0.y/p0.w,p0.z/p0.w);
-  vec3 v = normalize(p1-view_pos);
-  // axes conversion
-  v = vec3(v.z,v.x,v.y);
-
+vec3 sun_sky_color(vec3 v) {
   float cosTheta = v.z;
   float cosGamma = dot(mToSun,v);
   float gamma = acos(cosGamma);
 
+  float alpha = smoothstep(-0.02,0.0,cosTheta);
   if (cosTheta < 0.0)
     cosTheta = 0.0;
 
@@ -261,6 +255,22 @@ void main() {
   vec3 rgb = xyYToRGB(xyY);
   // linear rgb to non-linear rgb (srgb)
   rgb = 5e-5 * rgb;
+  // gamma correction
+  rgb.x = pow(rgb.x, 1.0 / sun_gamma);
+  rgb.y = pow(rgb.y, 1.0 / sun_gamma);
+  rgb.z = pow(rgb.z, 1.0 / sun_gamma);
+  return rgb*alpha;
+}
+
+void main() {
+  vec4 ndc_pos = vec4(2.0*texcoord.x-1.0, 2.0*texcoord.y-1.0, 0.0, 1.0);
+  vec4 p0 = inverse(vp) * ndc_pos;
+  vec3 p1 = vec3(p0.x/p0.w,p0.y/p0.w,p0.z/p0.w);
+  vec3 v = normalize(p1-view_pos);
+  // axes conversion
+  v = vec3(v.z,v.x,v.y);
+
+  vec3 rgb = sun_sky_color(v);
   // gamma correction
   rgb.x = clamp(pow(rgb.x, 1.0 / sun_gamma),0.0,1.0);
   rgb.y = clamp(pow(rgb.y, 1.0 / sun_gamma),0.0,1.0);
@@ -281,6 +291,11 @@ void preetham_sun_sky::render(math::matrix4 &vp, math::vector3 view_pos) {
   program.use();
   program.set_mat4("vp", vp);
   program.set_vec3("view_pos", view_pos);
+  setup_uniforms(program);
+  quad_draw_call();
+}
+
+void preetham_sun_sky::setup_uniforms(shader &program) {
   program.set_vec3("mToSun", mToSun);
   program.set_vec3("mPerezInvDen", mPerezInvDen);
   program.set_float("sun_gamma", sun_gamma);
@@ -290,7 +305,6 @@ void preetham_sun_sky::render(math::matrix4 &vp, math::vector3 view_pos) {
                mPerez_y);
   glUniform1fv(glGetUniformLocation(program.gl_handle, "mPerez_Y"), 5,
                mPerez_Y);
-  quad_draw_call();
 }
 
 }; // namespace toolkit::opengl

@@ -15,6 +15,8 @@ public:
   // render sun sky as background on a screen size quad
   void render(math::matrix4 &vp, math::vector3 view_pos);
 
+  void setup_uniforms(shader &program);
+
   // rgb color ranges [0.0,1.0+]
   math::vector3 sky_rgb(const math::vector3 &v) const;
   math::vector3 sky_xyY(const math::vector3 &v) const;
