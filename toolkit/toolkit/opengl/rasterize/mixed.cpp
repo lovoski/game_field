@@ -40,9 +40,21 @@ void defered_forward_mixed::draw_menu_gui() {
 
   ImGui::MenuItem("Sun Light Settings");
   ImGui::Checkbox("Enable", &enable_sun);
+  bool sun_parameter_modified = false;
+  sun_parameter_modified |=
+      ImGui::DragFloat("Sun Turbidity", &sun_turbidity, 0.1f, 0.0f, 100.0f);
   gui::color_edit_3("Light Color", sun_color);
-  ImGui::DragFloat3("Light Direction", sun_direction.data(), 0.1f, -1.0f, 1.0f,
-                    "%.1f");
+  sun_parameter_modified |= ImGui::DragFloat(
+      "Sun Horizontal Angle", &sun_h, 0.1f, -180.0f, 180.0f, "%.3f");
+  sun_parameter_modified |= ImGui::DragFloat(
+      "Sun Vertical Angle", &sun_v, 0.1f, 0.0f, 90, "%.3f");
+  if (sun_parameter_modified) {
+    float sun_v_rad = sun_v / 180 * 3.1415927f;
+    float sun_h_rad = sun_h / 180 * 3.1415927f;
+    math::vector3 sun_dir(cos(sun_v_rad) * cos(sun_h_rad),
+                          cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
+    ss_model.update(sun_dir, sun_turbidity);
+  }
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -100,6 +112,12 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   resize(g_instance.scene_width, g_instance.scene_height);
 
   light_data_buffer.create();
+
+  float sun_v_rad = sun_v / 180 * 3.1415927f;
+  float sun_h_rad = sun_h / 180 * 3.1415927f;
+  math::vector3 sun_dir(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
+                        cos(sun_v_rad) * cos(sun_h_rad));
+  ss_model.update(sun_dir, sun_turbidity);
 
   // initialize materials
   for (auto &initialier : material::__material_constructors__)
@@ -412,7 +430,11 @@ void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
     light_data_pacakge package;
     package.idata[0] = 0;
     package.color << sun_color, 1.0f;
-    package.fdata0 << sun_direction, 0.0f;
+    float sun_v_rad = sun_v / 180 * 3.1415927f;
+    float sun_h_rad = sun_h / 180 * 3.1415927f;
+    math::vector3 sun_dir(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
+                          cos(sun_v_rad) * cos(sun_h_rad));
+    package.fdata0 << -sun_dir, 0.0f;
     lights.emplace_back(package);
   }
   registry.view<point_light, transform>().each(
@@ -480,9 +502,13 @@ void defered_forward_mixed::render(entt::registry &registry) {
     msaa_buffer.bind();
     msaa_buffer.set_viewport(0, 0, g_instance.scene_width,
                              g_instance.scene_height);
-    glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0, 0, 0, 1);
+
+    glDisable(GL_DEPTH_TEST);
+    ss_model.render(cam_comp.vp, cam_trans.position());
+    glEnable(GL_DEPTH_TEST);
+
     // iterate through all material types
     scene_vao.bind();
     for (auto &mat_shader_pair : material::__material_shaders__) {

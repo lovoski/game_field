@@ -8,6 +8,8 @@
 #include "toolkit/opengl/components/lights.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 
+#include "toolkit/opengl/effects/sky.hpp"
+
 namespace toolkit::opengl {
 
 struct light_data_pacakge {
@@ -56,8 +58,9 @@ public:
   bool draw_bounding_boxes = false;
 
   bool enable_sun = true;
-  math::vector3 sun_direction = -math::vector3::Ones(),
-                sun_color = math::vector3(0.9, 0.9, 0.9);
+  float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 90.0f;
+  math::vector3 sun_color = math::vector3(0.9, 0.9, 0.9);
+  preetham_sun_sky ss_model;
 
 protected:
   framebuffer gbuffer, cbuffer, msaa_buffer, csm_buffer;
@@ -91,6 +94,6 @@ protected:
 DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
-               sun_direction, sun_color)
+               sun_v, sun_h, sun_turbidity, sun_color)
 
 }; // namespace toolkit::opengl
