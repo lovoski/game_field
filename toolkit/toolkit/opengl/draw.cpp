@@ -805,7 +805,7 @@ void main() {
   float depth = compute_depth(worldPos);
   gl_FragDepth = depth;
   vec4 color = grid_color(worldPos);
-  color.a *= pow(1.0-linearizeDepth(depth), 2);
+  color.a *= pow(1.0-linearizeDepth(depth), 6);
   FragColor = color;
 }
 )";

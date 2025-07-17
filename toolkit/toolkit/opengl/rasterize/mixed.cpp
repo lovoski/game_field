@@ -44,10 +44,11 @@ void defered_forward_mixed::draw_menu_gui() {
   sun_parameter_modified |=
       ImGui::DragFloat("Sun Turbidity", &sun_turbidity, 0.1f, 0.0f, 100.0f);
   gui::color_edit_3("Light Color", sun_color);
-  sun_parameter_modified |= ImGui::DragFloat(
-      "Sun Horizontal Angle", &sun_h, 0.1f, -180.0f, 180.0f, "%.3f");
-  sun_parameter_modified |= ImGui::DragFloat(
-      "Sun Vertical Angle", &sun_v, 0.1f, 0.0f, 90, "%.3f");
+  sun_parameter_modified |= ImGui::DragFloat("Sun Horizontal Angle", &sun_h,
+                                             0.1f, -180.0f, 180.0f, "%.3f");
+  sun_parameter_modified |=
+      ImGui::DragFloat("Sun Vertical Angle", &sun_v, 0.1f, 0.0f, 90, "%.3f");
+  ImGui::DragFloat("Sun Gamma", &ss_model.sun_gamma, 0.01f, 1.0f, 10.0f);
   if (sun_parameter_modified) {
     float sun_v_rad = sun_v / 180 * 3.1415927f;
     float sun_h_rad = sun_h / 180 * 3.1415927f;
@@ -115,8 +116,8 @@ void defered_forward_mixed::init0(entt::registry &registry) {
 
   float sun_v_rad = sun_v / 180 * 3.1415927f;
   float sun_h_rad = sun_h / 180 * 3.1415927f;
-  math::vector3 sun_dir(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
-                        cos(sun_v_rad) * cos(sun_h_rad));
+  math::vector3 sun_dir(cos(sun_v_rad) * cos(sun_h_rad),
+                        cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
   ss_model.update(sun_dir, sun_turbidity);
 
   // initialize materials

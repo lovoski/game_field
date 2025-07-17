@@ -19,6 +19,8 @@ public:
   math::vector3 sky_rgb(const math::vector3 &v) const;
   math::vector3 sky_xyY(const math::vector3 &v) const;
 
+  float sun_gamma = 2.2f;
+
   float mPerez_x[5];
   float mPerez_y[5];
   float mPerez_Y[5];

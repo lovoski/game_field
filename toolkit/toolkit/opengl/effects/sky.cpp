@@ -236,8 +236,10 @@ uniform float mPerez_x[5];
 uniform float mPerez_y[5];
 uniform float mPerez_Y[5];
 
+uniform float sun_gamma;
+
 void main() {
-  vec4 ndc_pos = vec4(texcoord.x, 1.0-texcoord.y, 0.0, 1.0);
+  vec4 ndc_pos = vec4(2.0*texcoord.x-1.0, 2.0*texcoord.y-1.0, 0.0, 1.0);
   vec4 p0 = inverse(vp) * ndc_pos;
   vec3 p1 = vec3(p0.x/p0.w,p0.y/p0.w,p0.z/p0.w);
   vec3 v = normalize(p1-view_pos);
@@ -260,10 +262,11 @@ void main() {
   // linear rgb to non-linear rgb (srgb)
   rgb = 5e-5 * rgb;
   // gamma correction
-  rgb.x = clamp(pow(rgb.x, 1.0 / 2.2),0.0,1.0);
-  rgb.y = clamp(pow(rgb.y, 1.0 / 2.2),0.0,1.0);
-  rgb.z = clamp(pow(rgb.z, 1.0 / 2.2),0.0,1.0);
+  rgb.x = clamp(pow(rgb.x, 1.0 / sun_gamma),0.0,1.0);
+  rgb.y = clamp(pow(rgb.y, 1.0 / sun_gamma),0.0,1.0);
+  rgb.z = clamp(pow(rgb.z, 1.0 / sun_gamma),0.0,1.0);
 
+  // fragcolor = vec4(normalize(p1-view_pos), 1.0);
   // fragcolor = vec4(texcoord.x, texcoord.y, 0.0, 1.0);
   fragcolor = vec4(rgb,1.0);
 }
@@ -280,6 +283,7 @@ void preetham_sun_sky::render(math::matrix4 &vp, math::vector3 view_pos) {
   program.set_vec3("view_pos", view_pos);
   program.set_vec3("mToSun", mToSun);
   program.set_vec3("mPerezInvDen", mPerezInvDen);
+  program.set_float("sun_gamma", sun_gamma);
   glUniform1fv(glGetUniformLocation(program.gl_handle, "mPerez_x"), 5,
                mPerez_x);
   glUniform1fv(glGetUniformLocation(program.gl_handle, "mPerez_y"), 5,
