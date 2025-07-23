@@ -426,16 +426,17 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
 }
 
 void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
+  float sun_v_rad = sun_v / 180 * 3.1415927f;
+  float sun_h_rad = sun_h / 180 * 3.1415927f;
+  sun_direction =
+      -math::vector3(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
+                     cos(sun_v_rad) * cos(sun_h_rad));
   std::vector<light_data_pacakge> lights;
   if (enable_sun) {
     light_data_pacakge package;
     package.idata[0] = 0;
     package.color << sun_color, 1.0f;
-    float sun_v_rad = sun_v / 180 * 3.1415927f;
-    float sun_h_rad = sun_h / 180 * 3.1415927f;
-    math::vector3 sun_dir(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
-                          cos(sun_v_rad) * cos(sun_h_rad));
-    package.fdata0 << -sun_dir, 0.0f;
+    package.fdata0 << sun_direction, 0.0f;
     lights.emplace_back(package);
   }
   registry.view<point_light, transform>().each(
@@ -477,6 +478,12 @@ void defered_forward_mixed::render(entt::registry &registry) {
       gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
       trans_mesh_view.each([&](entt::entity entity, transform &trans,
                                mesh_data &data) {
+        if (!data.skinned && !cam_comp.visibility_check(
+                                 data.bb_min, data.bb_max, trans.matrix())) {
+          // spdlog::info("skip mesh {0} as its not visible to main camera",
+          //              trans.name);
+          return; // break if not visible
+        }
         gbuffer_geometry_pass.set_mat4("gModel", data.skinned
                                                      ? math::matrix4::Identity()
                                                      : trans.matrix());

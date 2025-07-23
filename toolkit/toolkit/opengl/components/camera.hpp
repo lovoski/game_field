@@ -25,7 +25,8 @@ struct camera : public icomponent {
     }
   }
 
-  bool visibility_check(math::vector3 &box_min, math::vector3 &box_max, math::matrix4 &trans);
+  bool visibility_check(math::vector3 &box_min, math::vector3 &box_max,
+                        const math::matrix4 &trans);
 };
 DECLARE_COMPONENT(camera, graphics, fovy_degree, z_near, z_far, perspective,
                   h_size, v_size)

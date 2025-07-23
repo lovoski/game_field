@@ -60,6 +60,8 @@ public:
   bool enable_sun = true;
   float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 90.0f;
   math::vector3 sun_color = math::vector3(0.9, 0.9, 0.9);
+  // direction point away from the sun
+  math::vector3 sun_direction;
   preetham_sun_sky ss_model;
 
 protected:

@@ -43,4 +43,64 @@ void point_light::draw_to_scene(iapp *app) {
       });
 }
 
+math::vector3 get_positive_vertex(const math::vector3 &box_min,
+                                  const math::vector3 &box_max,
+                                  const math::vector3 &normal) {
+  math::vector3 p_vertex = box_min;
+  if (normal.x() >= 0)
+    p_vertex.x() = box_max.x();
+  if (normal.y() >= 0)
+    p_vertex.y() = box_max.y();
+  if (normal.z() >= 0)
+    p_vertex.z() = box_max.z();
+  return p_vertex;
+}
+
+bool camera::visibility_check(math::vector3 &box_min, math::vector3 &box_max,
+                              const math::matrix4 &trans) {
+  std::array<math::vector3, 8> corners_local = {
+      box_min,
+      math::vector3(box_max.x(), box_min.y(), box_min.z()),
+      math::vector3(box_min.x(), box_max.y(), box_min.z()),
+      math::vector3(box_min.x(), box_min.y(), box_max.z()),
+      math::vector3(box_max.x(), box_max.y(), box_min.z()),
+      math::vector3(box_max.x(), box_min.y(), box_max.z()),
+      math::vector3(box_min.x(), box_max.y(), box_max.z()),
+      box_max};
+  math::vector3 world_box_min = {std::numeric_limits<float>::max(),
+                                 std::numeric_limits<float>::max(),
+                                 std::numeric_limits<float>::max()};
+  math::vector3 world_box_max = {std::numeric_limits<float>::lowest(),
+                                 std::numeric_limits<float>::lowest(),
+                                 std::numeric_limits<float>::lowest()};
+  math::vector4 tmp_point;
+  for (const auto &corner_local : corners_local) {
+    tmp_point << corner_local, 1.0f;
+    math::vector3 corner_world = (trans * tmp_point).head<3>();
+
+    world_box_min.x() = std::min(world_box_min.x(), corner_world.x());
+    world_box_min.y() = std::min(world_box_min.y(), corner_world.y());
+    world_box_min.z() = std::min(world_box_min.z(), corner_world.z());
+
+    world_box_max.x() = std::max(world_box_max.x(), corner_world.x());
+    world_box_max.y() = std::max(world_box_max.y(), corner_world.y());
+    world_box_max.z() = std::max(world_box_max.z(), corner_world.z());
+  }
+  for (int i = 0; i < 6; ++i) {
+    const math::vector4 &plane = planes[i];
+    math::vector3 normal = {plane.x(), plane.y(), plane.z()};
+    float distance = plane.w();
+
+    math::vector3 p_vertex =
+        get_positive_vertex(world_box_min, world_box_max, normal);
+
+    float dist_p = normal.dot(p_vertex) + distance;
+
+    if (dist_p < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }; // namespace toolkit::opengl
