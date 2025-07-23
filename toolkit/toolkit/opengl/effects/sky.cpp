@@ -243,7 +243,7 @@ vec3 sun_sky_color(vec3 v) {
   float cosGamma = dot(mToSun,v);
   float gamma = acos(cosGamma);
 
-  float alpha = smoothstep(-0.02,0.0,cosTheta);
+  // float alpha = smoothstep(-0.1,0.0,cosTheta);
   if (cosTheta < 0.0)
     cosTheta = 0.0;
 
@@ -259,7 +259,8 @@ vec3 sun_sky_color(vec3 v) {
   rgb.x = pow(rgb.x, 1.0 / sun_gamma);
   rgb.y = pow(rgb.y, 1.0 / sun_gamma);
   rgb.z = pow(rgb.z, 1.0 / sun_gamma);
-  return rgb*alpha;
+  // return rgb*alpha+vec3(0.3)*(1-alpha);
+  return rgb;
 }
 
 void main() {
