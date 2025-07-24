@@ -37,7 +37,7 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::DragFloat("SSAO Noise Scale", &ssao_noise_scale, 0.01f, 0.0f, 1000.0f);
   ImGui::Separator();
 
-  ImGui::MenuItem("Sun Light Settings");
+  ImGui::MenuItem("Sun Light Settings", nullptr, nullptr, false);
   ImGui::Checkbox("Enable", &enable_sun);
   bool sun_parameter_modified = false;
   sun_parameter_modified |=
@@ -55,6 +55,20 @@ void defered_forward_mixed::draw_menu_gui() {
                           cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
     ss_model.update(sun_dir, sun_turbidity);
   }
+
+  ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
+  bool csm_modified = false;
+  csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
+  csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
+  ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
+  std::string csm_depth_text = "CSM Split Depth: ";
+  for (int i = 0; i < num_cascades; i++) {
+    csm_depth_text += str_format("%.2f <-> ", csm_cascades[i]);
+  }
+  csm_depth_text += "z far";
+  ImGui::Text(csm_depth_text.c_str());
+  if (csm_modified)
+    resize_csm_buffer();
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -84,6 +98,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   color_tex.create(GL_TEXTURE_2D);
   mask_tex.create(GL_TEXTURE_2D);
   ao_color.create(GL_TEXTURE_2D);
+  csm_depth_atlas.create(GL_TEXTURE_2D);
 
   gbuffer_geometry_pass.compile_shader_from_source(gbuffer_geometry_pass_vs,
                                                    gbuffer_geometry_pass_fs);
@@ -109,7 +124,12 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   cbuffer.create();
   msaa_buffer.create();
   ao_buffer.create();
-  resize(g_instance.scene_width, g_instance.scene_height);
+  csm_buffer.create();
+  csm_v_matrix_buffer.create();
+  csm_p_matrix_buffer.create();
+  csm_depth_program.compile_shader_from_source(csm_vs, csm_fs);
+  csm_selection_mask_program.compile_shader_from_source(quad_vs,
+                                                        csm_selection_mask_fs);
 
   light_data_buffer.create();
 
@@ -119,7 +139,9 @@ void defered_forward_mixed::init0(entt::registry &registry) {
                         cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
   ss_model.update(sun_dir, sun_turbidity);
 
-  csm_buffer.create();
+  // ---------------- call resize after all initialzation finishes
+  // ----------------
+  resize(g_instance.scene_width, g_instance.scene_height);
 
   // initialize materials
   for (auto &initialier : material::__material_constructors__)
@@ -455,17 +477,45 @@ void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
 
 void defered_forward_mixed::resize_csm_buffer() {
   csm_buffer.bind();
-  csm_depth_atlas.set_data(num_csm_cascades * csm_depth_dim, csm_depth_dim,
+  csm_depth_atlas.set_data(num_cascades * csm_depth_dim, csm_depth_dim,
                            GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_FLOAT);
   csm_depth_atlas.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
                                   {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                                   {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                                   {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
   csm_buffer.attach_depth_buffer(csm_depth_atlas);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+  if (!csm_buffer.check_status())
+    spdlog::error("csm buffer not complete!");
   csm_buffer.unbind();
 }
 
-void defered_forward_mixed::csm_selection_masking() {}
+void defered_forward_mixed::csm_selection_masking(math::matrix4 &scene_p_mat,
+                                                  math::matrix4 &scene_v_mat) {
+  csm_v_matrix_buffer.set_data_ssbo(csm_v_matrix, GL_DYNAMIC_DRAW);
+  csm_p_matrix_buffer.set_data_ssbo(csm_p_matrix, GL_DYNAMIC_DRAW);
+  csm_selection_mask_program.use();
+  csm_selection_mask_program.set_buffer_ssbo(csm_v_matrix_buffer, 0);
+  csm_selection_mask_program.set_buffer_ssbo(csm_p_matrix_buffer, 1);
+  csm_selection_mask_program.set_int("num_cascades", num_cascades);
+  csm_selection_mask_program.set_int("csm_depth_dim", csm_depth_dim);
+  csm_selection_mask_program.set_vec3("light_dir", sun_direction);
+  csm_selection_mask_program.set_mat4("scene_p_mat", scene_p_mat);
+  csm_selection_mask_program.set_mat4("scene_v_mat", scene_v_mat);
+  csm_selection_mask_program.set_texture2d("scene_pos", pos_tex.get_handle(),
+                                           0);
+  csm_selection_mask_program.set_texture2d("scene_normal",
+                                           normal_tex.get_handle(), 1);
+  csm_selection_mask_program.set_texture2d("scene_depth",
+                                           gbuffer_depth_tex.get_handle(), 2);
+  csm_selection_mask_program.set_texture2d("cascade_depth",
+                                           csm_depth_atlas.get_handle(), 3);
+  glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
+                                    "csm_cascades"),
+               10, csm_cascades);
+  quad_draw_call();
+}
 
 void defered_forward_mixed::render(entt::registry &registry) {
   if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
@@ -478,28 +528,59 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     // ---------------- render csm if sun is enabled ----------------
     if (enable_sun) {
-      // csm_buffer.bind();
-      // glClear(GL_DEPTH_BUFFER_BIT);
-      // csm_split_depth.resize(num_csm_cascades + 1);
-      // csm_split_depth[0] = cam_comp.z_near;
-      // for (int i = 0; i < num_csm_cascades; i++) {
-      //   // render to atlas by setting up viewports
-      //   csm_buffer.set_viewport(i * csm_depth_dim, 0, csm_depth_dim,
-      //                           csm_depth_dim);
-      //   // compute depth for view frustom split
-      //   csm_split_depth[i + 1] =
-      //       csm_split_lambda *
-      //           (cam_comp.z_near * pow(cam_comp.z_far / cam_comp.z_near,
-      //                                  (float)(i + 1) / num_csm_cascades)) +
-      //       (1.0f - csm_split_lambda) *
-      //           (cam_comp.z_near + (i + 1) *
-      //                                  (cam_comp.z_far - cam_comp.z_near) /
-      //                                  num_csm_cascades);
-      //   auto [bb_sphere_center, bb_sphere_radius] = frustom_bounding_sphere(
-      //       csm_split_depth[i], csm_split_depth[i + 1], cam_comp.fovy_degree,
-      //       g_instance.scene_width, g_instance.scene_height);
-      // }
-      // csm_buffer.unbind();
+      csm_buffer.bind();
+      glClear(GL_DEPTH_BUFFER_BIT);
+      glClearColor(0, 0, 0, 1);
+      csm_cascades[0] = cam_comp.z_near;
+      math::vector3 csm_side_dir = math::world_up;
+      if (abs(csm_side_dir.dot(sun_direction)) < 1e-3f)
+        csm_side_dir = (csm_side_dir + 0.1f * math::world_forward).normalized();
+      csm_depth_program.use();
+      scene_vao.bind();
+      csm_v_matrix.resize(num_cascades);
+      csm_p_matrix.resize(num_cascades);
+      csm_vp_matrix.resize(num_cascades);
+      for (int i = 0; i < num_cascades; i++) {
+        // render to atlas by setting up viewports
+        csm_buffer.set_viewport(i * csm_depth_dim, 0, csm_depth_dim,
+                                csm_depth_dim);
+        // compute depth for view frustom split
+        csm_cascades[i + 1] =
+            csm_split_lambda *
+                (cam_comp.z_near * pow(cam_comp.z_far / cam_comp.z_near,
+                                       (float)(i + 1) / num_cascades)) +
+            (1.0f - csm_split_lambda) *
+                (cam_comp.z_near +
+                 (i + 1) * (cam_comp.z_far - cam_comp.z_near) / num_cascades);
+        auto [bb_sphere_center, bb_sphere_radius] = frustom_bounding_sphere(
+            csm_cascades[i], csm_cascades[i + 1], cam_comp.fovy_degree,
+            g_instance.scene_width, g_instance.scene_height);
+        math::vector4 tmp_point;
+        tmp_point << bb_sphere_center, 1.0f;
+        tmp_point = cam_trans.matrix() * tmp_point;
+        csm_v_matrix[i] = math::lookat(
+            tmp_point.head<3>(),
+            tmp_point.head<3>() + sun_direction.normalized(), csm_side_dir);
+        csm_p_matrix[i] =
+            math::ortho(-bb_sphere_radius, bb_sphere_radius, bb_sphere_radius,
+                        -bb_sphere_radius, -bb_sphere_radius, bb_sphere_radius);
+        csm_vp_matrix[i] = csm_p_matrix[i] * csm_v_matrix[i];
+        update_bounding_planes(csm_frustom_planes, csm_vp_matrix[i]);
+        csm_depth_program.set_mat4("gVP", csm_vp_matrix[i]);
+        trans_mesh_view.each([&](entt::entity entity, transform &trans,
+                                 mesh_data &data) {
+          if (!visibility_check(csm_frustom_planes, data.bb_min, data.bb_max,
+                                trans.matrix()))
+            return;
+          csm_depth_program.set_mat4("gModel", data.skinned
+                                                   ? math::matrix4::Identity()
+                                                   : trans.matrix());
+          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                         (void *)(data.scene_index_offset * sizeof(GLuint)));
+        });
+      }
+      scene_vao.unbind();
+      csm_buffer.unbind();
     }
 
     // ------------------ render to geometry framebuffer ------------------
@@ -518,8 +599,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
                                mesh_data &data) {
         if (!data.skinned && !visibility_check(cam_comp.planes, data.bb_min,
                                                data.bb_max, trans.matrix())) {
-          // spdlog::info("skip mesh {0} as its not visible to main camera",
-          //              trans.name);
           return; // break if not visible
         }
         gbuffer_geometry_pass.set_mat4("gModel", data.skinned
@@ -574,6 +653,11 @@ void defered_forward_mixed::render(entt::registry &registry) {
         if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
           if (mesh_ptr->should_render_mesh) {
             auto &trans = registry.get<transform>(entity);
+            if (!mesh_ptr->skinned &&
+                !visibility_check(cam_comp.planes, mesh_ptr->bb_min,
+                                  mesh_ptr->bb_max, trans.matrix())) {
+              return;
+            }
             mat_shader.set_int("gVertexOffset", mesh_ptr->scene_vertex_offset);
             mat_shader.set_mat4("gModelToWorldPoint",
                                 mesh_ptr->skinned ? math::matrix4::Identity()
@@ -629,7 +713,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     // 2. cascaded shadow maps
     if (enable_sun) {
-      csm_selection_masking();
+      csm_selection_masking(cam_comp.proj, cam_comp.view);
     }
 
     glDisable(GL_BLEND);

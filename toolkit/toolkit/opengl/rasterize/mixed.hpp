@@ -78,13 +78,15 @@ protected:
   // csm related
   framebuffer csm_buffer;
   texture csm_depth_atlas;
-  unsigned int num_csm_cascades = 3, csm_depth_dim = 2048;
+  shader csm_depth_program, csm_selection_mask_program;
+  int num_cascades = 3, csm_depth_dim = 4096;
   float csm_split_lambda = 0.7f;
+  float csm_cascades[10];
   void resize_csm_buffer();
-  void csm_selection_masking();
+  void csm_selection_masking(math::matrix4 &scene_p_mat, math::matrix4 &scene_v_mat);
   // csm cache
-  std::vector<float> csm_split_depth;
-  math::matrix4 csm_vp_matrix;
+  buffer csm_v_matrix_buffer, csm_p_matrix_buffer;
+  std::vector<math::matrix4> csm_vp_matrix, csm_v_matrix, csm_p_matrix;
   std::array<math::vector4, 6> csm_frustom_planes;
 
   // scene unique buffer
