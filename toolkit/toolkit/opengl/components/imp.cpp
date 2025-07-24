@@ -22,18 +22,7 @@ void compute_vp_matrix(entt::registry &registry, entt::entity entity,
 
   cam.vp = cam.proj * cam.view;
 
-  cam.planes[0] = cam.vp.row(3) + cam.vp.row(0); // Left
-  cam.planes[1] = cam.vp.row(3) - cam.vp.row(0); // Right
-  cam.planes[2] = cam.vp.row(3) + cam.vp.row(1); // Bottom
-  cam.planes[3] = cam.vp.row(3) - cam.vp.row(1); // Top
-  cam.planes[4] = cam.vp.row(3) + cam.vp.row(2); // Near
-  cam.planes[5] = cam.vp.row(3) - cam.vp.row(2); // Far
-
-  // Normalize planes
-  for (auto &plane : cam.planes) {
-    float length = plane.head<3>().norm();
-    plane /= length;
-  }
+  update_bounding_planes(cam.planes, cam.vp);
 }
 
 void point_light::draw_to_scene(iapp *app) {
@@ -56,8 +45,25 @@ math::vector3 get_positive_vertex(const math::vector3 &box_min,
   return p_vertex;
 }
 
-bool camera::visibility_check(math::vector3 &box_min, math::vector3 &box_max,
-                              const math::matrix4 &trans) {
+void update_bounding_planes(std::array<math::vector4, 6> &planes,
+                            const math::matrix4 &vp) {
+  planes[0] = vp.row(3) + vp.row(0); // Left
+  planes[1] = vp.row(3) - vp.row(0); // Right
+  planes[2] = vp.row(3) + vp.row(1); // Bottom
+  planes[3] = vp.row(3) - vp.row(1); // Top
+  planes[4] = vp.row(3) + vp.row(2); // Near
+  planes[5] = vp.row(3) - vp.row(2); // Far
+
+  // Normalize planes
+  for (auto &plane : planes) {
+    float length = plane.head<3>().norm();
+    plane /= length;
+  }
+}
+
+bool visibility_check(std::array<math::vector4, 6> &planes,
+                      math::vector3 &box_min, math::vector3 &box_max,
+                      const math::matrix4 &trans) {
   std::array<math::vector3, 8> corners_local = {
       box_min,
       math::vector3(box_max.x(), box_min.y(), box_min.z()),
@@ -101,6 +107,19 @@ bool camera::visibility_check(math::vector3 &box_min, math::vector3 &box_max,
     }
   }
   return true;
+}
+
+std::tuple<math::vector3, float>
+frustom_bounding_sphere(float znear, float zfar, float fovy_deg, float width,
+                        float height) {
+  float alpha = fovy_deg / 360.0f * 3.1415927f;
+  float a = width / height, z0 = znear, z1 = zfar;
+  float m = std::min(0.5f * ((a * a + 1.0f) * tan(alpha) * tan(alpha) + 1) *
+                    (znear + zfar),
+                zfar);
+  float r = sqrt((zfar - m) * (zfar - m) +
+                 (a * a + 1.0f) * tan(alpha) * tan(alpha) * zfar * zfar);
+  return {math::vector3(0.0f, 0.0f, -m), r};
 }
 
 }; // namespace toolkit::opengl

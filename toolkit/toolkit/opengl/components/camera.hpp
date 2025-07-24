@@ -20,18 +20,32 @@ struct camera : public icomponent {
     ImGui::Checkbox("Perspective", &perspective);
     if (perspective) {
       ImGui::Text("Perspective Camera");
+      ImGui::DragFloat("FOV Y", &fovy_degree, 0.1f, 0.0f, 90.0f);
+      ImGui::DragFloat("Z Near", &z_near, 0.01f, 0.001f, 100.0f);
+      ImGui::DragFloat("Z Far", &z_far, 0.01f, z_near + 1e-3f, 1e9f);
     } else {
       ImGui::Text("Orthogonal Camera");
     }
   }
-
-  bool visibility_check(math::vector3 &box_min, math::vector3 &box_max,
-                        const math::matrix4 &trans);
 };
 DECLARE_COMPONENT(camera, graphics, fovy_degree, z_near, z_far, perspective,
                   h_size, v_size)
 
 void compute_vp_matrix(entt::registry &registry, entt::entity entity,
                        float width, float height);
+
+void update_bounding_planes(std::array<math::vector4, 6> &planes,
+                            const math::matrix4 &vp);
+
+bool visibility_check(std::array<math::vector4, 6> &planes,
+                      math::vector3 &box_min, math::vector3 &box_max,
+                      const math::matrix4 &trans);
+
+/**
+ * By default the camera views -z world space axis
+ */
+std::tuple<math::vector3, float>
+frustom_bounding_sphere(float znear, float zfar, float fovy_deg, float width,
+                        float height);
 
 }; // namespace toolkit::opengl

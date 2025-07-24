@@ -1,6 +1,7 @@
 #include "scripts/mesh_modify.hpp"
 #include "scripts/mixamo_manipulate.hpp"
 #include "scripts/spring_damper.hpp"
+#include "scripts/vis_frustom_bbs.hpp"
 #include "toolkit/opengl/editor.hpp"
 
 using namespace toolkit;

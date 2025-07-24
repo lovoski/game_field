@@ -54,9 +54,6 @@ public:
   float ao_filter_sigma = 6.0f;
   float ssao_noise_scale = 64.0f, ssao_radius = 0.2f;
 
-  std::vector<std::pair<math::vector3, math::vector3>> bounding_box_lines;
-  bool draw_bounding_boxes = false;
-
   bool enable_sun = true;
   float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 90.0f;
   math::vector3 sun_color = math::vector3(0.9, 0.9, 0.9);
@@ -65,7 +62,7 @@ public:
   preetham_sun_sky ss_model;
 
 protected:
-  framebuffer gbuffer, cbuffer, msaa_buffer, csm_buffer;
+  framebuffer gbuffer, cbuffer, msaa_buffer;
   shader gbuffer_geometry_pass, defered_phong_pass;
   texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex;
   unsigned int msaa_color_buffer, msaa_depth_buffer;
@@ -77,6 +74,18 @@ protected:
   buffer light_data_buffer;
 
   texture color_tex;
+
+  // csm related
+  framebuffer csm_buffer;
+  texture csm_depth_atlas;
+  unsigned int num_csm_cascades = 3, csm_depth_dim = 2048;
+  float csm_split_lambda = 0.7f;
+  void resize_csm_buffer();
+  void csm_selection_masking();
+  // csm cache
+  std::vector<float> csm_split_depth;
+  math::matrix4 csm_vp_matrix;
+  std::array<math::vector4, 6> csm_frustom_planes;
 
   // scene unique buffer
   vao scene_vao;

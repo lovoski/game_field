@@ -27,7 +27,6 @@ void defered_forward_mixed::draw_menu_gui() {
 
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
-  ImGui::Checkbox("Draw Bounding Boxes", &draw_bounding_boxes);
   ImGui::Separator();
 
   ImGui::MenuItem("Ambient Occlusion", nullptr, nullptr, false);
@@ -120,6 +119,8 @@ void defered_forward_mixed::init0(entt::registry &registry) {
                         cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
   ss_model.update(sun_dir, sun_turbidity);
 
+  csm_buffer.create();
+
   // initialize materials
   for (auto &initialier : material::__material_constructors__)
     initialier.second(registry);
@@ -205,6 +206,8 @@ void defered_forward_mixed::resize(int width, int height) {
     spdlog::error("msaa buffer not complete!");
   }
   msaa_buffer.unbind();
+
+  resize_csm_buffer();
 }
 
 void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
@@ -450,6 +453,20 @@ void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
   light_data_buffer.set_data_ssbo(lights);
 }
 
+void defered_forward_mixed::resize_csm_buffer() {
+  csm_buffer.bind();
+  csm_depth_atlas.set_data(num_csm_cascades * csm_depth_dim, csm_depth_dim,
+                           GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_FLOAT);
+  csm_depth_atlas.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                                  {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                                  {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                                  {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+  csm_buffer.attach_depth_buffer(csm_depth_atlas);
+  csm_buffer.unbind();
+}
+
+void defered_forward_mixed::csm_selection_masking() {}
+
 void defered_forward_mixed::render(entt::registry &registry) {
   if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
     auto &cam_trans = registry.get<transform>(g_instance.active_camera);
@@ -457,12 +474,33 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     update_scene_lights(registry);
 
-    // update visible cache for main camera only
     auto trans_mesh_view = registry.view<entt::entity, transform, mesh_data>();
-    trans_mesh_view.each(
-        [&](entt::entity entity, transform &trans, mesh_data &data) {
 
-        });
+    // ---------------- render csm if sun is enabled ----------------
+    if (enable_sun) {
+      // csm_buffer.bind();
+      // glClear(GL_DEPTH_BUFFER_BIT);
+      // csm_split_depth.resize(num_csm_cascades + 1);
+      // csm_split_depth[0] = cam_comp.z_near;
+      // for (int i = 0; i < num_csm_cascades; i++) {
+      //   // render to atlas by setting up viewports
+      //   csm_buffer.set_viewport(i * csm_depth_dim, 0, csm_depth_dim,
+      //                           csm_depth_dim);
+      //   // compute depth for view frustom split
+      //   csm_split_depth[i + 1] =
+      //       csm_split_lambda *
+      //           (cam_comp.z_near * pow(cam_comp.z_far / cam_comp.z_near,
+      //                                  (float)(i + 1) / num_csm_cascades)) +
+      //       (1.0f - csm_split_lambda) *
+      //           (cam_comp.z_near + (i + 1) *
+      //                                  (cam_comp.z_far - cam_comp.z_near) /
+      //                                  num_csm_cascades);
+      //   auto [bb_sphere_center, bb_sphere_radius] = frustom_bounding_sphere(
+      //       csm_split_depth[i], csm_split_depth[i + 1], cam_comp.fovy_degree,
+      //       g_instance.scene_width, g_instance.scene_height);
+      // }
+      // csm_buffer.unbind();
+    }
 
     // ------------------ render to geometry framebuffer ------------------
     gbuffer.bind();
@@ -478,8 +516,8 @@ void defered_forward_mixed::render(entt::registry &registry) {
       gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
       trans_mesh_view.each([&](entt::entity entity, transform &trans,
                                mesh_data &data) {
-        if (!data.skinned && !cam_comp.visibility_check(
-                                 data.bb_min, data.bb_max, trans.matrix())) {
+        if (!data.skinned && !visibility_check(cam_comp.planes, data.bb_min,
+                                               data.bb_max, trans.matrix())) {
           // spdlog::info("skip mesh {0} as its not visible to main camera",
           //              trans.name);
           return; // break if not visible
@@ -556,6 +594,8 @@ void defered_forward_mixed::render(entt::registry &registry) {
     }
     scene_vao.unbind();
 
+    // ------------------- debug rendering -------------------
+
     // render grids
     if (should_draw_grid) {
       glEnable(GL_BLEND);
@@ -577,6 +617,24 @@ void defered_forward_mixed::render(entt::registry &registry) {
       glEnable(GL_DEPTH_TEST);
     }
 
+    // ------------------- apply post processing -------------------
+    glEnable(GL_BLEND);
+
+    // 1. ambient occlusion
+    if (enable_ao_pass) {
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glBlendEquation(GL_FUNC_ADD);
+      ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
+    }
+
+    // 2. cascaded shadow maps
+    if (enable_sun) {
+      csm_selection_masking();
+    }
+
+    glDisable(GL_BLEND);
+
+    // ------------------- final presentation -------------------
     // copy color texture from multisample framebuffer to color framebuffer for
     // presentation
     glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_buffer.get_handle());
@@ -586,21 +644,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
                       GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
     msaa_buffer.unbind();
-
-    // apply post processing with alpha blending
-    cbuffer.bind();
-    cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glBlendEquation(GL_FUNC_ADD);
-
-    // ambient occlusion
-    if (enable_ao_pass) {
-      ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
-    }
-
-    glDisable(GL_BLEND);
-    cbuffer.unbind();
   }
 }
 
