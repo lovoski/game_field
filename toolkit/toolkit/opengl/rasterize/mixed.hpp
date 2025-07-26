@@ -55,7 +55,7 @@ public:
   float ssao_noise_scale = 64.0f, ssao_radius = 0.2f;
 
   bool enable_sun = true;
-  float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 90.0f;
+  float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 89.0f;
   math::vector3 sun_color = math::vector3(0.9, 0.9, 0.9);
   // direction point away from the sun
   math::vector3 sun_direction;
@@ -79,11 +79,11 @@ protected:
   framebuffer csm_buffer;
   texture csm_depth_atlas;
   shader csm_depth_program, csm_selection_mask_program;
-  int num_cascades = 3, csm_depth_dim = 4096;
-  float csm_split_lambda = 0.7f;
-  float csm_cascades[10];
+  int num_cascades = 3, csm_depth_dim = 2048;
+  float csm_split_lambda = 0.93f, csm_bias_term = 1.0f;
+  float csm_min_bias = 0.0001f, csm_max_bias = 0.0008f;
+  float csm_cascades[10], csm_frustom_dim[10];
   void resize_csm_buffer();
-  void csm_selection_masking(math::matrix4 &scene_p_mat, math::matrix4 &scene_v_mat);
   // csm cache
   buffer csm_v_matrix_buffer, csm_p_matrix_buffer;
   std::vector<math::matrix4> csm_vp_matrix, csm_v_matrix, csm_p_matrix;
