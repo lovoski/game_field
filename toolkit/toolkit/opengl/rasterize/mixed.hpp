@@ -79,14 +79,13 @@ protected:
   framebuffer csm_buffer;
   texture csm_depth_atlas;
   shader csm_depth_program, csm_selection_mask_program;
-  int num_cascades = 3, csm_depth_dim = 2048;
-  float csm_split_lambda = 0.93f, csm_bias_term = 1.0f;
-  float csm_min_bias = 0.0001f, csm_max_bias = 0.0008f;
-  float csm_cascades[10], csm_frustom_dim[10];
+  int num_cascades = 3, csm_depth_dim = 2048, pcf_kernal_size = 1;
+  float csm_split_lambda = 0.93f, csm_bias_scale = 1.0f, csm_max_bias = 0.0008f,
+        csm_cascades[10];
   void resize_csm_buffer();
   // csm cache
-  buffer csm_v_matrix_buffer, csm_p_matrix_buffer;
-  std::vector<math::matrix4> csm_vp_matrix, csm_v_matrix, csm_p_matrix;
+  buffer csm_vp_matrix_buffer;
+  std::vector<math::matrix4> csm_vp_matrix;
   std::array<math::vector4, 6> csm_frustom_planes;
 
   // scene unique buffer
@@ -103,10 +102,14 @@ protected:
   int64_t scene_vertex_counter = 0, scene_index_counter = 0;
 
   std::map<entt::entity, bool> main_cam_visible_cache;
+
+  REFLECT_PRIVATE(defered_forward_mixed)
 };
 DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
-               sun_v, sun_h, sun_turbidity, sun_color)
+               sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
+               csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_bias_scale,
+               csm_max_bias)
 
 }; // namespace toolkit::opengl

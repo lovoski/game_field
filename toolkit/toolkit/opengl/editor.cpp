@@ -144,17 +144,17 @@ void editor::editor_shortkeys() {
   if (g_instance.cursor_in_scene_window()) {
     // only change the gizmo operation mode
     // if the cursor is inside scene window
-    if (g_instance.is_key_pressed(GLFW_KEY_G)) {
+    if (g_instance.is_key_pressed(GLFW_KEY_1)) {
       with_translate = true;
       with_rotate = false;
       with_scale = false;
     }
-    if (g_instance.is_key_pressed(GLFW_KEY_R)) {
+    if (g_instance.is_key_pressed(GLFW_KEY_2)) {
       with_translate = false;
       with_rotate = true;
       with_scale = false;
     }
-    if (g_instance.is_key_pressed(GLFW_KEY_S)) {
+    if (g_instance.is_key_pressed(GLFW_KEY_3)) {
       with_translate = false;
       with_rotate = false;
       with_scale = true;

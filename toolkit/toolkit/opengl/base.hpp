@@ -4,7 +4,6 @@
 #include "toolkit/opengl/imp.hpp"
 #include "toolkit/system.hpp"
 
-
 namespace toolkit::opengl {
 
 extern math::vector3 White;
@@ -520,54 +519,75 @@ public:
                                 std::string gsp = "none");
 
   void use() { glUseProgram(gl_handle); }
-  void set_bool(const std::string &name, bool value) const {
+  shader &set_bool(const std::string &name, bool value) {
     glUniform1i(glGetUniformLocation(gl_handle, name.c_str()), (int)value);
+    return *this;
   }
-  void set_int(const std::string &name, int value) const {
+  shader &set_int(const std::string &name, int value) {
     glUniform1i(glGetUniformLocation(gl_handle, name.c_str()), value);
+    return *this;
   }
-  void set_float(const std::string &name, float value) const {
+  shader &set_float(const std::string &name, float value) {
     glUniform1f(glGetUniformLocation(gl_handle, name.c_str()), value);
+    return *this;
   }
-  void set_vec2(const std::string &name, const math::vector2 &value) const {
+  shader &set_vec2(const std::string &name,
+                         const math::vector2 &value) {
     glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
+    return *this;
   }
-  void set_vec2(const std::string &name, float x, float y) const {
+  shader &set_vec2(const std::string &name, float x, float y) {
     glUniform2f(glGetUniformLocation(gl_handle, name.c_str()), x, y);
+    return *this;
   }
-  void set_vec3(const std::string &name, const math::vector3 &value) const {
+  shader &set_vec3(const std::string &name,
+                         const math::vector3 &value) {
     glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
+    return *this;
   }
-  void set_vec3(const std::string &name, float x, float y, float z) const {
+  shader &set_vec3(const std::string &name, float x, float y,
+                         float z) {
     glUniform3f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z);
+    return *this;
   }
-  void set_vec4(const std::string &name, const math::vector4 &value) const {
+  shader &set_vec4(const std::string &name,
+                         const math::vector4 &value) {
     glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
+    return *this;
   }
-  void set_vec4(const std::string &name, float x, float y, float z, float w) {
+  shader &set_vec4(const std::string &name, float x, float y, float z,
+                         float w) {
     glUniform4f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z, w);
+    return *this;
   }
-  void set_mat2(const std::string &name, const math::matrix2 &mat) const {
+  shader &set_mat2(const std::string &name,
+                         const math::matrix2 &mat) {
     glUniformMatrix2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
+    return *this;
   }
-  void set_mat3(const std::string &name, const math::matrix3 &mat) const {
+  shader &set_mat3(const std::string &name,
+                         const math::matrix3 &mat) {
     glUniformMatrix3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
+    return *this;
   }
-  void set_mat4(const std::string &name, const math::matrix4 &mat) const {
+  shader &set_mat4(const std::string &name,
+                         const math::matrix4 &mat) {
     glUniformMatrix4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
+    return *this;
   }
 
   // Directly active a slot, set a texture by its integer handle
   bool set_texture2d(std::string name, unsigned int texture, int slot);
 
-  void set_buffer_ssbo(buffer &buf, int binding) {
+  shader &set_buffer_ssbo(buffer &buf, int binding) {
     buf.bind_to_point_as(GL_SHADER_STORAGE_BUFFER, binding);
+    return *this;
   }
 
   bool set_cubemap(std::string name, unsigned int cubemapID, int slot);
@@ -590,47 +610,68 @@ public:
 
   // Use the program
   void use() { glUseProgram(gl_handle); }
-  void set_bool(const std::string &name, bool value) const {
+  compute_shader &set_bool(const std::string &name, bool value) {
     glUniform1i(glGetUniformLocation(gl_handle, name.c_str()), (int)value);
+    return *this;
   }
-  void set_int(const std::string &name, int value) const {
+  compute_shader &set_int(const std::string &name, int value) {
     glUniform1i(glGetUniformLocation(gl_handle, name.c_str()), value);
+    return *this;
   }
-  void set_float(const std::string &name, float value) const {
+  compute_shader &set_float(const std::string &name, float value) {
     glUniform1f(glGetUniformLocation(gl_handle, name.c_str()), value);
+    return *this;
   }
-  void set_vec2(const std::string &name, const math::vector2 &value) const {
+  compute_shader &set_vec2(const std::string &name,
+                                 const math::vector2 &value) {
     glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
+    return *this;
   }
-  void set_vec2(const std::string &name, float x, float y) const {
+  compute_shader &set_vec2(const std::string &name, float x,
+                                 float y) {
     glUniform2f(glGetUniformLocation(gl_handle, name.c_str()), x, y);
+    return *this;
   }
-  void set_vec3(const std::string &name, const math::vector3 &value) const {
+  compute_shader &set_vec3(const std::string &name,
+                                 const math::vector3 &value) {
     glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
+    return *this;
   }
-  void set_vec3(const std::string &name, float x, float y, float z) const {
+  compute_shader &set_vec3(const std::string &name, float x, float y,
+                                 float z) {
     glUniform3f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z);
+    return *this;
   }
-  void set_vec4(const std::string &name, const math::vector4 &value) const {
+  compute_shader &set_vec4(const std::string &name,
+                                 const math::vector4 &value) {
     glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
+    return *this;
   }
-  void set_vec4(const std::string &name, float x, float y, float z, float w) {
+  compute_shader &set_vec4(const std::string &name, float x, float y,
+                                 float z, float w) {
     glUniform4f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z, w);
+    return *this;
   }
-  void set_mat2(const std::string &name, const math::matrix2 &mat) const {
+  compute_shader &set_mat2(const std::string &name,
+                                 const math::matrix2 &mat) {
     glUniformMatrix2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
+    return *this;
   }
-  void set_mat3(const std::string &name, const math::matrix3 &mat) const {
+  compute_shader &set_mat3(const std::string &name,
+                                 const math::matrix3 &mat) {
     glUniformMatrix3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
+    return *this;
   }
-  void set_mat4(const std::string &name, const math::matrix4 &mat) const {
+  compute_shader &set_mat4(const std::string &name,
+                                 const math::matrix4 &mat) {
     glUniformMatrix4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
+    return *this;
   }
 
   compute_shader &bind_buffer(buffer &buffer, int binding) {

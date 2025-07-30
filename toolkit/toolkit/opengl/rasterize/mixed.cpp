@@ -61,8 +61,8 @@ void defered_forward_mixed::draw_menu_gui() {
   csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
   csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
   ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
-  ImGui::DragFloat("Bias Term", &csm_bias_term, 0.001f, 0.0f, 10.0f);
-  ImGui::DragFloat("Min Bias", &csm_min_bias, 0.0001f, 0.0f, 10.0f, "%.4f");
+  ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
+  ImGui::DragFloat("Bias Scale Term", &csm_bias_scale, 0.001f, 0.0f, 10.0f);
   ImGui::DragFloat("Max Bias", &csm_max_bias, 0.0001f, 0.0f, 10.0f, "%.4f");
   std::string csm_depth_text = "CSM Split Depth: ";
   for (int i = 0; i < num_cascades + 1; i++) {
@@ -127,8 +127,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   msaa_buffer.create();
   ao_buffer.create();
   csm_buffer.create();
-  csm_v_matrix_buffer.create();
-  csm_p_matrix_buffer.create();
+  csm_vp_matrix_buffer.create();
   csm_depth_program.compile_shader_from_source(csm_vs, csm_fs);
   csm_selection_mask_program.compile_shader_from_source(quad_vs,
                                                         csm_selection_mask_fs);
@@ -513,8 +512,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
         csm_side_dir = (csm_side_dir + 0.1f * math::world_forward).normalized();
       csm_depth_program.use();
       scene_vao.bind();
-      csm_v_matrix.resize(num_cascades);
-      csm_p_matrix.resize(num_cascades);
       csm_vp_matrix.resize(num_cascades);
       for (int i = 0; i < num_cascades; i++) {
         // render to atlas by setting up viewports
@@ -534,15 +531,13 @@ void defered_forward_mixed::render(entt::registry &registry) {
         math::vector4 tmp_point;
         tmp_point << bb_sphere_center, 1.0f;
         tmp_point = cam_trans.matrix() * tmp_point;
-        csm_v_matrix[i] = math::lookat(
-            tmp_point.head<3>(),
-            tmp_point.head<3>() + sun_direction.normalized(), csm_side_dir);
-        csm_p_matrix[i] =
+        csm_vp_matrix[i] =
             math::ortho(-bb_sphere_radius, bb_sphere_radius, bb_sphere_radius,
                         -bb_sphere_radius, std::min(-bb_sphere_radius, -300.0f),
-                        bb_sphere_radius);
-        csm_vp_matrix[i] = csm_p_matrix[i] * csm_v_matrix[i];
-        csm_frustom_dim[i] = 2 * bb_sphere_radius;
+                        bb_sphere_radius) *
+            math::lookat(tmp_point.head<3>(),
+                         tmp_point.head<3>() + sun_direction.normalized(),
+                         csm_side_dir);
         update_bounding_planes(csm_frustom_planes, csm_vp_matrix[i]);
         csm_depth_program.set_mat4("gVP", csm_vp_matrix[i]);
         trans_mesh_view.each([&](entt::entity entity, transform &trans,
@@ -689,19 +684,66 @@ void defered_forward_mixed::render(entt::registry &registry) {
       ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
     }
 
+    // // 2. cascaded shadow maps
+    // if (enable_sun) {
+    //   // glBlendFunc(GL_DST_COLOR, GL_ZERO);
+    //   // glBlendEquation(GL_FUNC_ADD);
+    //   csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
+    //   csm_selection_mask_program.use();
+    //   csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
+    //       .set_int("num_cascades", num_cascades)
+    //       .set_int("csm_depth_dim", csm_depth_dim)
+    //       .set_float("bias_scale", csm_bias_scale)
+    //       .set_float("max_bias", csm_max_bias)
+    //       .set_vec3("light_dir", sun_direction)
+    //       .set_int("pcf_kernal_size", pcf_kernal_size)
+    //       .set_vec2("viewport_size", g_instance.get_scene_size());
+
+    //   csm_selection_mask_program.set_texture2d("scene_pos",
+    //                                            pos_tex.get_handle(), 0);
+    //   csm_selection_mask_program.set_texture2d("scene_normal",
+    //                                            normal_tex.get_handle(), 1);
+    //   csm_selection_mask_program.set_texture2d("scene_mask",
+    //                                            mask_tex.get_handle(), 2);
+    //   csm_selection_mask_program.set_texture2d("cascade_depth",
+    //                                            csm_depth_atlas.get_handle(), 3);
+    //   glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
+    //                                     "csm_cascades"),
+    //                10, csm_cascades);
+    //   quad_draw_call();
+    // }
+
+    glDisable(GL_BLEND);
+
+    // ------------------- final presentation -------------------
+    // copy color texture from multisample framebuffer to color framebuffer for
+    // presentation
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_buffer.get_handle());
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, cbuffer.get_handle());
+    glBlitFramebuffer(0, 0, g_instance.scene_width, g_instance.scene_height, 0,
+                      0, g_instance.scene_width, g_instance.scene_height,
+                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    msaa_buffer.unbind();
+
+    cbuffer.bind();
+    cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
+
     // 2. cascaded shadow maps
+    // TODO: you can't place this inside msaa buffer
     if (enable_sun) {
-      csm_v_matrix_buffer.set_data_ssbo(csm_v_matrix, GL_DYNAMIC_DRAW);
-      csm_p_matrix_buffer.set_data_ssbo(csm_p_matrix, GL_DYNAMIC_DRAW);
+      // glBlendFunc(GL_DST_COLOR, GL_ZERO);
+      // glBlendEquation(GL_FUNC_ADD);
+      csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
       csm_selection_mask_program.use();
-      csm_selection_mask_program.set_buffer_ssbo(csm_v_matrix_buffer, 0);
-      csm_selection_mask_program.set_buffer_ssbo(csm_p_matrix_buffer, 1);
-      csm_selection_mask_program.set_int("num_cascades", num_cascades);
-      csm_selection_mask_program.set_int("csm_depth_dim", csm_depth_dim);
-      csm_selection_mask_program.set_float("bias_term", csm_bias_term);
-      csm_selection_mask_program.set_float("min_bias", csm_min_bias);
-      csm_selection_mask_program.set_float("max_bias", csm_max_bias);
-      csm_selection_mask_program.set_vec3("light_dir", sun_direction);
+      csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
+          .set_int("num_cascades", num_cascades)
+          .set_int("csm_depth_dim", csm_depth_dim)
+          .set_float("bias_scale", csm_bias_scale)
+          .set_float("max_bias", csm_max_bias)
+          .set_vec3("light_dir", sun_direction)
+          .set_int("pcf_kernal_size", pcf_kernal_size)
+          .set_vec2("viewport_size", g_instance.get_scene_size());
 
       csm_selection_mask_program.set_texture2d("scene_pos",
                                                pos_tex.get_handle(), 0);
@@ -717,18 +759,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
       quad_draw_call();
     }
 
-    glDisable(GL_BLEND);
-
-    // ------------------- final presentation -------------------
-    // copy color texture from multisample framebuffer to color framebuffer for
-    // presentation
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_buffer.get_handle());
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, cbuffer.get_handle());
-    glBlitFramebuffer(0, 0, g_instance.scene_width, g_instance.scene_height, 0,
-                      0, g_instance.scene_width, g_instance.scene_height,
-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-    msaa_buffer.unbind();
+    cbuffer.unbind();
   }
 }
 

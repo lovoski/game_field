@@ -154,17 +154,17 @@ void main() {
 )";
 std::string csm_selection_mask_fs = R"(
 #version 430 core
-layout(std430, binding = 0) buffer CascadeVMatrices {
-  mat4 csm_v_mat[];
-};
-layout(std430, binding = 1) buffer CascadePMatrices {
-  mat4 csm_p_mat[];
+layout(std430, binding = 0) buffer CascadeVPMatrices {
+  mat4 csm_vp_mat[];
 };
 uniform int num_cascades;
 uniform int csm_depth_dim;
-uniform float bias_term;
+uniform float bias_scale;
 uniform float max_bias;
-uniform float min_bias;
+
+uniform vec2 viewport_size;
+
+uniform int pcf_kernal_size;
 
 uniform vec3 light_dir;
 
@@ -181,9 +181,8 @@ in vec2 texcoord;
 out vec4 frag_color;
 
 void main() {
-  vec3 world_pos = texture(scene_pos, texcoord).xyz;
-  vec3 N = normalize(texture(scene_normal, texcoord).xyz * 2 - 1);
   vec3 L = -normalize(light_dir);
+  vec2 viewport_texel = vec2(1.0)/viewport_size;
 
   vec4 mask_value = texture(scene_mask, texcoord);
   float scene_depth = mask_value.r == 1.0 ? -mask_value.g : -1.0;
@@ -198,27 +197,44 @@ void main() {
   if (match_cascade < 0)
     return;
 
-  float cos_alpha = dot(N, L);
-  float shadow = 0.0;
-  if (cos_alpha < 0.01) {
+  float shadow = 0.0, cos_alpha, bias, sampled_csm_depth, scene_light_depth, shadow0 = 0.0;
+  vec4 point;
+  vec3 N=normalize(texture(scene_normal, texcoord).xyz * 2 - 1), world_pos;
+  vec2 csm_texcoord;
+  cos_alpha = dot(N, L);
+  if (cos_alpha < 0.05) {
     shadow = 1.0;
   } else {
-    cos_alpha = max(0.01, cos_alpha);
-    vec4 point = vec4(world_pos, 1.0);
-    point = csm_p_mat[match_cascade]*csm_v_mat[match_cascade]*point;
-    point.xyz = point.xyz/point.w;
-    vec2 csm_texcoord = vec2(match_cascade/float(num_cascades)+0.5*(point.x+1.0)/num_cascades,0.5*(point.y+1.0));
-    float sampled_light_depth = texture(cascade_depth, csm_texcoord).r, scene_light_depth = 0.5*(point.z+1.0);
-    float bias = max(min(bias_term*0.5/csm_depth_dim*sqrt(1.0-cos_alpha*cos_alpha)/cos_alpha, max_bias), min_bias);
-
-    if (sampled_light_depth + bias < scene_light_depth) {
-      shadow = 1.0;
-    } else {
-      shadow = 0.0;
+    for (int i = -pcf_kernal_size; i <= pcf_kernal_size; i++) {
+      for (int j = -pcf_kernal_size; j <= pcf_kernal_size; j++) {
+        vec2 pcf_texcoord = texcoord + vec2(i*viewport_texel.x,j*viewport_texel.y);
+        if (texture(scene_mask, pcf_texcoord).r != 1.0)
+          continue;
+        N = normalize(texture(scene_normal, pcf_texcoord).xyz * 2 - 1);
+        cos_alpha = dot(N, L);
+        if (cos_alpha >= 0.05) {
+          world_pos = texture(scene_pos, pcf_texcoord).xyz;
+          cos_alpha = max(0.01, cos_alpha);
+          point = vec4(world_pos, 1.0);
+          point = csm_vp_mat[match_cascade]*point;
+          point.xyz = point.xyz/point.w;
+          vec2 csm_texcoord = vec2(match_cascade/float(num_cascades)+0.5*(point.x+1.0)/num_cascades,0.5*(point.y+1.0));
+          sampled_csm_depth = texture(cascade_depth, csm_texcoord).r;
+          scene_light_depth = 0.5*(point.z+1.0);
+          bias = min(bias_scale*0.5/csm_depth_dim*sqrt(1.0-cos_alpha*cos_alpha)/cos_alpha, max_bias);
+  
+          if (sampled_csm_depth + bias < scene_light_depth) {
+            shadow += 1.0;
+          }
+        } else {
+          shadow += 1.0;
+        }
+      }
     }
+    shadow /= (2*pcf_kernal_size+1)*(2*pcf_kernal_size+1);
   }
 
-  frag_color = vec4(vec3(1.0-shadow),1.0);
+  frag_color = vec4(vec3(mix(0.5, 1.0, clamp(1.0-shadow, 0.0, 1.0))),1.0);
   // if (match_cascade == 0)
   //   frag_color = vec4(1.0,0.0,0.0,1.0);
   // else if (match_cascade == 1)
