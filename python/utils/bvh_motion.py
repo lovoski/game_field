@@ -144,7 +144,7 @@ class Motion:
 
     def get_joint_orientation(self):
         """
-        get quaternions for global rotation in xyzw order
+        get quaternions for global rotation in wxyz order
         """
         rotations = self.rotations.copy()
         rotations = rotations[..., [1, 2, 3, 0]] # wxyz -> xyzw
@@ -156,7 +156,7 @@ class Motion:
             parent_orientation = R.from_quat(global_joint_orientations[:, parent_idx, :])
             global_joint_orientations[:, joint_idx, :] = (parent_orientation * R.from_quat(rotations[:, joint_idx, :])).as_quat()
         
-        return global_joint_orientations
+        return global_joint_orientations[...,[3,0,1,2]]
 
     def get_joint_positions(self, no_root_motion=False):
         rotations = self.rotations.copy()
