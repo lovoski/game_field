@@ -9,29 +9,6 @@
 
 namespace toolkit::assets {
 
-#ifdef _WIN32
-#include <Windows.h>
-std::string wstring_to_string(const std::wstring &wstr) {
-  int buffer_size = WideCharToMultiByte(
-      CP_UTF8,         // UTF-8 encoding for Chinese support
-      0,               // No flags
-      wstr.c_str(),    // Input wide string
-      -1,              // Auto-detect length
-      nullptr, 0,      // Null to calculate required buffer size
-      nullptr, nullptr // Optional parameters (not needed here)
-  );
-
-  if (buffer_size == 0)
-    return ""; // Handle error if needed
-
-  std::string str(buffer_size, 0);
-  WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], buffer_size,
-                      nullptr, nullptr);
-  str.pop_back(); // Remove null terminator added by -1
-  return str;
-}
-#endif
-
 math::vector2 ufbx_to_vec2(ufbx_vec2 v) {
   return math::vector2((float)v.x, (float)v.y);
 }

@@ -7,31 +7,32 @@
 #include "toolkit/opengl/scripts/test_draw.hpp"
 
 #include <assimp/Importer.hpp>
-#include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 namespace toolkit::assets {
 
-// === Data container per mesh ===
-struct MeshData {
-  std::string mesh_name;
-  std::string model_name;
-  std::vector<mesh_vertex> vertices;
-  std::vector<uint32_t> indices;
-  std::vector<blend_shape> blend_shapes;
-};
+math::matrix4 convert_assimp_mat4(const aiMatrix4x4 &assimp_mat4) {
+  Eigen::Matrix4f eigen_mat;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      // Access Assimp elements row-wise, copy to Eigen
+      eigen_mat(i, j) = assimp_mat4[i][j];
+    }
+  }
+  return eigen_mat; // Convert row-major→column-major
+}
 
-// A map from aiBone name to bone index
-using BoneMap = std::unordered_map<std::string, int>;
-
-// === Function to process one mesh ===
-MeshData ProcessMesh(aiMesh *mesh, const aiScene *scene,
-                     const std::string &model_name, BoneMap &bone_map) {
-  MeshData out;
-  out.mesh_name = mesh->mName.C_Str();
-  out.model_name = model_name;
-
-  out.vertices.resize(mesh->mNumVertices);
+void process_mesh(entt::registry &registry, entt::entity container,
+                  std::map<aiNode *, entt::entity> &node_mapping, aiMesh *mesh,
+                  const aiScene *scene, const std::string model_name) {
+  auto &mesh_data = registry.emplace<opengl::mesh_data>(container);
+  auto &bp_mat = registry.emplace<opengl::blinn_phong_material>(container);
+  mesh_data.mesh_name =
+      str_format("%s:%s", mesh->mName.C_Str(),
+                 scene->mMaterials[mesh->mMaterialIndex]->GetName().C_Str());
+  mesh_data.vertices.resize(mesh->mNumVertices);
+  mesh_data.model_name = model_name;
 
   // --- Extract vertices ---
   for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
@@ -62,54 +63,52 @@ MeshData ProcessMesh(aiMesh *mesh, const aiScene *scene,
     v.bone_indices = {0, 0, 0, 0};
     v.bone_weights = {0.0f, 0.0f, 0.0f, 0.0f};
 
-    out.vertices[i] = v;
+    mesh_data.vertices[i] = v;
   }
 
   // --- Extract indices ---
   for (unsigned int f = 0; f < mesh->mNumFaces; f++) {
     aiFace face = mesh->mFaces[f];
     for (unsigned int j = 0; j < face.mNumIndices; j++) {
-      out.indices.push_back(face.mIndices[j]);
+      mesh_data.indices.push_back(face.mIndices[j]);
     }
   }
 
-  // --- Process bones ---
-  for (unsigned int b = 0; b < mesh->mNumBones; b++) {
-    aiBone *bone = mesh->mBones[b];
-    std::string bone_name = bone->mName.C_Str();
+  // // --- Process bones ---
+  // for (unsigned int b = 0; b < mesh->mNumBones; b++) {
+  //   aiBone *bone = mesh->mBones[b];
+  //   std::string bone_name = bone->mName.C_Str();
 
-    int bone_index;
-    if (bone_map.find(bone_name) == bone_map.end()) {
-      bone_index = (int)bone_map.size();
-      bone_map[bone_name] = bone_index;
-    } else {
-      bone_index = bone_map[bone_name];
-    }
+  //   int bone_index;
+  //   if (bone_map.find(bone_name) == bone_map.end()) {
+  //     bone_index = (int)bone_map.size();
+  //     bone_map[bone_name] = bone_index;
+  //   } else {
+  //     bone_index = bone_map[bone_name];
+  //   }
 
-    for (unsigned int w = 0; w < bone->mNumWeights; w++) {
-      unsigned int vid = bone->mWeights[w].mVertexId;
-      float weight = bone->mWeights[w].mWeight;
+  //   for (unsigned int w = 0; w < bone->mNumWeights; w++) {
+  //     unsigned int vid = bone->mWeights[w].mVertexId;
+  //     float weight = bone->mWeights[w].mWeight;
 
-      // Assign to first empty slot
-      for (int k = 0; k < 4; k++) {
-        if (out.vertices[vid].bone_weights[k] == 0.0f) {
-          out.vertices[vid].bone_indices[k] = bone_index;
-          out.vertices[vid].bone_weights[k] = weight;
-          break;
-        }
-      }
-    }
-  }
+  //     // Assign to first empty slot
+  //     for (int k = 0; k < 4; k++) {
+  //       if (out.vertices[vid].bone_weights[k] == 0.0f) {
+  //         out.vertices[vid].bone_indices[k] = bone_index;
+  //         out.vertices[vid].bone_weights[k] = weight;
+  //         break;
+  //       }
+  //     }
+  //   }
+  // }
 
   // --- Process blend shapes (morph targets) ---
   for (unsigned int m = 0; m < mesh->mNumAnimMeshes; m++) {
     aiAnimMesh *anim_mesh = mesh->mAnimMeshes[m];
     blend_shape shape;
-    shape.weight =
-        0.0f; // Assimp doesn't store weight here — handled by animation
-    shape.name = "Morph_" + std::to_string(m);
+    shape.weight = 0.0f;
+    shape.name = anim_mesh->mName.C_Str();
     shape.data.resize(mesh->mNumVertices);
-
     for (unsigned int i = 0; i < anim_mesh->mNumVertices; i++) {
       blend_shape_vertex bsv;
       if (anim_mesh->HasPositions()) {
@@ -122,52 +121,82 @@ MeshData ProcessMesh(aiMesh *mesh, const aiScene *scene,
       }
       shape.data[i] = bsv;
     }
-
-    out.blend_shapes.push_back(shape);
+    mesh_data.blend_shapes.push_back(shape);
   }
 
-  return out;
+  opengl::init_opengl_buffers(mesh_data);
 }
 
-// === Recursively process nodes ===
-void ProcessNode(aiNode *node, const aiScene *scene,
-                 const std::string &model_name,
-                 std::vector<MeshData> &all_meshes, BoneMap &bone_map) {
-  // Process all meshes in this node
-  for (unsigned int i = 0; i < node->mNumMeshes; i++) {
-    aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
-    all_meshes.push_back(ProcessMesh(mesh, scene, model_name, bone_map));
+entt::entity
+build_node_mapping(entt::registry &registry, aiNode *node, const aiScene *scene,
+                   std::map<aiNode *, entt::entity> &node_mapping) {
+  auto ent = registry.create();
+  auto &trans = registry.emplace<transform>(ent);
+  trans.name = node->mName.C_Str();
+  trans.set_local_transform(convert_assimp_mat4(node->mTransformation));
+  node_mapping[node] = ent;
+  for (int i = 0; i < node->mNumChildren; i++) {
+    auto child =
+        build_node_mapping(registry, node->mChildren[i], scene, node_mapping);
+    trans.add_child(child, false);
   }
-
-  // Process all child nodes
-  for (unsigned int i = 0; i < node->mNumChildren; i++) {
-    ProcessNode(node->mChildren[i], scene, model_name, all_meshes, bone_map);
-  }
+  return ent;
 }
 
-// === Main load function ===
-std::vector<MeshData> LoadModel(const std::string &path) {
+void open_model_assimp(entt::registry &registry, std::string filepath) {
   Assimp::Importer importer;
   const aiScene *scene = importer.ReadFile(
-      path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
-                aiProcess_CalcTangentSpace | aiProcess_GenNormals |
-                aiProcess_LimitBoneWeights);
+      filepath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
+                    aiProcess_CalcTangentSpace | aiProcess_GenNormals |
+                    aiProcess_LimitBoneWeights |
+                    aiProcess_PopulateArmatureData);
 
   if (!scene || !scene->mRootNode) {
     std::cerr << "Assimp failed: " << importer.GetErrorString() << std::endl;
-    return {};
+    return;
   }
 
-  std::vector<MeshData> all_meshes;
-  BoneMap bone_map;
+#ifdef _WIN32
+  std::string filename =
+      wstring_to_string(std::filesystem::u8path(filepath).filename().wstring());
+#else
+  std::string filename = std::filesystem::path(filepath).filename().string();
+#endif
 
-  std::string model_name = path.substr(path.find_last_of("/\\") + 1);
+  // build node mapping
+  std::map<aiNode *, entt::entity> node_mapping;
+  auto root_entity =
+      build_node_mapping(registry, scene->mRootNode, scene, node_mapping);
+  auto &root_trans = registry.get<transform>(root_entity);
+  root_trans.name = filename;
 
-  ProcessNode(scene->mRootNode, scene, model_name, all_meshes, bone_map);
-
-  return all_meshes;
+  // handle node with meshes
+  for (auto &p : node_mapping) {
+    if (p.first->mNumMeshes > 0) {
+      if (p.first->mNumMeshes == 1) {
+        process_mesh(registry, p.second, node_mapping,
+                     scene->mMeshes[p.first->mMeshes[0]], scene, filename);
+      } else {
+        auto &ptrans = registry.get<transform>(p.second);
+        auto ptrans_mat = ptrans.update_matrix();
+        for (int i = 0; i < p.first->mNumMeshes; i++) {
+          auto ent = registry.create();
+          auto &trans = registry.emplace<transform>(ent);
+          trans.name = str_format(
+              "%s:%s", scene->mMeshes[p.first->mMeshes[i]]->mName.C_Str(),
+              scene
+                  ->mMaterials[scene->mMeshes[p.first->mMeshes[i]]
+                                   ->mMaterialIndex]
+                  ->GetName()
+                  .C_Str());
+          trans.set_world_transform(ptrans_mat);
+          ptrans.add_child(ent);
+          process_mesh(registry, ent, node_mapping,
+                       scene->mMeshes[p.first->mMeshes[i]], scene, filename);
+        }
+      }
+    }
+  }
 }
-
-void open_model_assimp(entt::registry &registry, std::string filepath) {}
 
 }; // namespace toolkit::assets

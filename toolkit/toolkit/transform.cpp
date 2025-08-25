@@ -79,6 +79,9 @@ void transform::set_world_transform(math::matrix4 t) {
   set_world_rot(m_rot);
   set_world_scale(m_scale);
 }
+void transform::set_local_transform(math::matrix4 t) {
+  math::decompose_transform(t, m_local_pos, m_local_rot, m_local_scale);
+}
 
 void transform::set_world_pos(math::vector3 p) {
   m_pos = p;

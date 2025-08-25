@@ -49,6 +49,7 @@ public:
   void set_local_rot(math::quat q);
   void set_local_euler_degrees(math::vector3 a);
   void set_world_transform(math::matrix4 t);
+  void set_local_transform(math::matrix4 t);
 
   void reset();
   math::matrix4 matrix() const { return m_matrix; }

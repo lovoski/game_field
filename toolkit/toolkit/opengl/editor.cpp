@@ -501,20 +501,21 @@ void editor::draw_main_menubar() {
       if (ImGui::MenuItem("Import Model")) {
         std::string filepath;
         if (open_file_dialog("Open model asset file",
-                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
-                             "*.fbx, *.obj", filepath)) {
+                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ", "*.pmx", "*.PMX", "*.ply", "*.PLY"},
+                             "*.fbx, *.obj, *.pmx, *.ply", filepath)) {
           spdlog::info("Load model file {0}", filepath);
-          assets::open_model_ufbx(registry, filepath);
+          // assets::open_model_ufbx(registry, filepath);
+          assets::open_model_assimp(registry, filepath);
         }
       }
-      if (ImGui::MenuItem("Import   BVH")) {
-        std::string filepath;
-        if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
-                             "*.bvh", filepath)) {
-          spdlog::info("Load motion file {0}", filepath);
-          anim::create_bvh_actor(registry, filepath);
-        }
-      }
+      // if (ImGui::MenuItem("Import   BVH")) {
+      //   std::string filepath;
+      //   if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
+      //                        "*.bvh", filepath)) {
+      //     spdlog::info("Load motion file {0}", filepath);
+      //     anim::create_bvh_actor(registry, filepath);
+      //   }
+      // }
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Settings")) {
@@ -800,3 +801,30 @@ void editor::draw_entity_components() {
 }
 
 }; // namespace toolkit::opengl
+
+namespace toolkit::assets {
+
+#ifdef _WIN32
+#include <Windows.h>
+std::string wstring_to_string(const std::wstring &wstr) {
+  int buffer_size = WideCharToMultiByte(
+      CP_UTF8,         // UTF-8 encoding for Chinese support
+      0,               // No flags
+      wstr.c_str(),    // Input wide string
+      -1,              // Auto-detect length
+      nullptr, 0,      // Null to calculate required buffer size
+      nullptr, nullptr // Optional parameters (not needed here)
+  );
+
+  if (buffer_size == 0)
+    return ""; // Handle error if needed
+
+  std::string str(buffer_size, 0);
+  WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], buffer_size,
+                      nullptr, nullptr);
+  str.pop_back(); // Remove null terminator added by -1
+  return str;
+}
+#endif
+
+}; // namespace toolkit::assets
