@@ -19,7 +19,8 @@ parse_glsl_uniforms(std::vector<std::string> sources);
  * Each material type has a shader instance attached to it. The instance of
  * material merely holds the data needed for the shader.
  */
-struct material : public icomponent {
+class material : public icomponent {
+public:
   material() {}
   ~material() {}
 
@@ -45,7 +46,8 @@ struct material : public icomponent {
   static inline std::map<std::string,
                          std::function<void(entt::registry &, entt::entity)>>
       __material_draw_gui__;
-  static inline std::vector<std::function<bool(entt::registry &, entt::entity)>>
+  static inline std::map<std::string,
+                         std::function<bool(entt::registry &, entt::entity)>>
       __material_exists__;
   static inline std::map<std::string, std::unique_ptr<material>>
       __material_instance__;
@@ -108,8 +110,8 @@ bool has_any_materials(entt::registry &registry, entt::entity entity);
           __material_view_for_each_##class_name;                               \
       toolkit::opengl::material::__material_draw_gui__[#class_name] =          \
           __material_draw_gui_##class_name;                                    \
-      toolkit::opengl::material::__material_exists__.push_back(                \
-          __material_exists_##class_name);                                     \
+      toolkit::opengl::material::__material_exists__[#class_name] =            \
+          __material_exists_##class_name;                                      \
       toolkit::opengl::material::__material_instance__[#class_name] =          \
           std::make_unique<class_name>();                                      \
     }                                                                          \

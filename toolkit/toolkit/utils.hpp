@@ -3,6 +3,8 @@
 #include "toolkit/math.hpp"
 #include <chrono>
 #include <filesystem>
+#include <zlib.h>
+
 
 namespace toolkit {
 
@@ -48,6 +50,11 @@ template <typename... Paths> std::string join_path(Paths &&...paths) {
   (result /= ... /= std::filesystem::path(paths));
   return result.string();
 }
+
+bool zip_file(std::string src_filepath, std::string dst_filepath,
+              int level = Z_BEST_COMPRESSION);
+bool unzip_file(std::string src_filepath, std::string dst_filepath,
+                size_t buffer_size = 16384);
 
 class stopwatch {
 public:

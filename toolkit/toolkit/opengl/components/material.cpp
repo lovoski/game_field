@@ -7,7 +7,7 @@ namespace toolkit::opengl {
 bool has_any_materials(entt::registry &registry, entt::entity entity) {
   bool result = false;
   for (auto &f : material::__material_exists__)
-    result = result || f(registry, entity);
+    result |= f.second(registry, entity);
   return result;
 }
 

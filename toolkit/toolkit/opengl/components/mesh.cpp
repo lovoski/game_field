@@ -162,7 +162,8 @@ void mesh_data::init1() {
   std::string asset_path =
       join_path(base_path, str_format("%s.mesh", mesh_name.c_str()));
   asset_path = replace(replace(asset_path, ":", ""), " ", "");
-  std::ifstream input(asset_path, std::ios::binary);
+  unzip_file(asset_path, asset_path + ".tmp");
+  std::ifstream input(asset_path + ".tmp", std::ios::binary);
   if (input.is_open()) {
     spdlog::info("Load mesh {0} from path {1}", mesh_name, asset_path);
     std::vector<_render_vertex> data_vertices;
@@ -211,6 +212,7 @@ void mesh_data::init1() {
                   asset_path);
   }
   input.close();
+  std::remove((asset_path + ".tmp").c_str());
 }
 
 void mesh_data::draw(GLenum mode) { draw_mesh_data(*this, mode); }
@@ -275,7 +277,7 @@ void init_opengl_buffers_internal(mesh_data &data,
                   replace(replace(data.model_name, " ", ""), ":", ""));
     mkdir(base_path);
     std::string asset_path =
-        join_path(base_path, str_format("%s.mesh", data.mesh_name.c_str()));
+        join_path(base_path, str_format("%s.mesh.tmp", data.mesh_name.c_str()));
     asset_path = replace(replace(asset_path, ":", ""), " ", "");
     std::ofstream output(asset_path, std::ios::binary);
     if (output.is_open()) {
@@ -285,8 +287,10 @@ void init_opengl_buffers_internal(mesh_data &data,
       spdlog::info("Save mesh asset at path {0}", asset_path);
     } else {
       spdlog::error("Failed to create mesh asset at path {0}", asset_path);
-    }
+    } 
     output.close();
+    zip_file(asset_path, asset_path.substr(0, asset_path.size() - 4));
+    std::remove(asset_path.c_str());
   }
 }
 

@@ -1,9 +1,10 @@
 #include "toolkit/utils.hpp"
 #include <cctype>
 #include <cstdarg>
+#include <fstream>
+#include <iostream>
 #include <spdlog/spdlog.h>
 #include <tinyfiledialogs.h>
-
 
 namespace fs = std::filesystem;
 
@@ -159,6 +160,125 @@ void copy_dir(std::filesystem::path src_dirpath,
     spdlog::error("{0}, failed to copy file from {1} to {2}", e.what(),
                   src_dirpath.string(), dst_dirpath.string());
   }
+}
+
+bool zip_file(std::string in_filename, std::string out_filename, int level) {
+  constexpr size_t CHUNK = 16384;
+  std::vector<unsigned char> in(CHUNK), out(CHUNK);
+
+  std::ifstream infile(in_filename, std::ios::binary);
+  if (!infile.is_open()) {
+    spdlog::error("cannot open input file {0}", in_filename);
+    return false;
+  }
+
+  std::ofstream outfile(out_filename, std::ios::binary);
+  if (!outfile.is_open()) {
+    spdlog::error("cannot open output file {0}", out_filename);
+    return false;
+  }
+
+  z_stream strm{};
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.opaque = Z_NULL;
+
+  if (deflateInit(&strm, level) != Z_OK) {
+    spdlog::error("deflateInit failed");
+    return false;
+  }
+
+  int flush;
+  do {
+    infile.read(reinterpret_cast<char *>(in.data()), CHUNK);
+    strm.avail_in = infile.gcount();
+    if (infile.bad()) {
+      spdlog::error("Error reading file");
+      deflateEnd(&strm);
+      return false;
+    }
+    flush = infile.eof() ? Z_FINISH : Z_NO_FLUSH;
+    strm.next_in = in.data();
+
+    do {
+      strm.avail_out = CHUNK;
+      strm.next_out = out.data();
+      deflate(&strm, flush);
+      size_t have = CHUNK - strm.avail_out;
+      outfile.write(reinterpret_cast<char *>(out.data()), have);
+      if (!outfile.good()) {
+        spdlog::error("Error writing compressed file");
+        deflateEnd(&strm);
+        return false;
+      }
+    } while (strm.avail_out == 0);
+  } while (flush != Z_FINISH);
+
+  deflateEnd(&strm);
+  return true;
+}
+
+bool unzip_file(std::string in_filename, std::string out_filename,
+                size_t buffer_size) {
+  std::vector<unsigned char> in(buffer_size), out(buffer_size);
+
+  std::ifstream infile(in_filename, std::ios::binary);
+  if (!infile.is_open()) {
+    spdlog::error("cannot open input file {0}", in_filename);
+    return false;
+  }
+
+  std::ofstream outfile(out_filename, std::ios::binary);
+  if (!outfile.is_open()) {
+    spdlog::error("cannot open output file {0}", out_filename);
+    return false;
+  }
+
+  z_stream strm{};
+  strm.zalloc = Z_NULL;
+  strm.zfree = Z_NULL;
+  strm.opaque = Z_NULL;
+
+  if (inflateInit(&strm) != Z_OK) {
+    spdlog::error("inflateInit failed");
+    return false;
+  }
+
+  int ret;
+  do {
+    infile.read(reinterpret_cast<char *>(in.data()), buffer_size);
+    strm.avail_in = infile.gcount();
+    if (infile.bad()) {
+      spdlog::error("Error reading compressed file");
+      inflateEnd(&strm);
+      return false;
+    }
+    if (strm.avail_in == 0)
+      break;
+    strm.next_in = in.data();
+
+    do {
+      strm.avail_out = buffer_size;
+      strm.next_out = out.data();
+      ret = inflate(&strm, Z_NO_FLUSH);
+      if (ret == Z_STREAM_ERROR || ret == Z_DATA_ERROR || ret == Z_MEM_ERROR) {
+        spdlog::error("inflate failed");
+        inflateEnd(&strm);
+        return false;
+      }
+      size_t have = buffer_size - strm.avail_out;
+      outfile.write(reinterpret_cast<char *>(out.data()), have);
+      if (!outfile.good()) {
+        spdlog::error("Error writing decompressed file");
+        inflateEnd(&strm);
+        return false;
+      }
+    } while (strm.avail_out == 0);
+
+  } while (ret != Z_STREAM_END);
+
+  inflateEnd(&strm);
+  return ret == Z_STREAM_END;
 }
 
 }; // namespace toolkit

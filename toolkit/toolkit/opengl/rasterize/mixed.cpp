@@ -729,35 +729,35 @@ void defered_forward_mixed::render(entt::registry &registry) {
     cbuffer.bind();
     cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
 
-    // 2. cascaded shadow maps
-    // TODO: you can't place this inside msaa buffer
-    if (enable_sun) {
-      // glBlendFunc(GL_DST_COLOR, GL_ZERO);
-      // glBlendEquation(GL_FUNC_ADD);
-      csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
-      csm_selection_mask_program.use();
-      csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
-          .set_int("num_cascades", num_cascades)
-          .set_int("csm_depth_dim", csm_depth_dim)
-          .set_float("bias_scale", csm_bias_scale)
-          .set_float("max_bias", csm_max_bias)
-          .set_vec3("light_dir", sun_direction)
-          .set_int("pcf_kernal_size", pcf_kernal_size)
-          .set_vec2("viewport_size", g_instance.get_scene_size());
+    // // 2. cascaded shadow maps
+    // // TODO: you can't place this inside msaa buffer
+    // if (enable_sun) {
+    //   // glBlendFunc(GL_DST_COLOR, GL_ZERO);
+    //   // glBlendEquation(GL_FUNC_ADD);
+    //   csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
+    //   csm_selection_mask_program.use();
+    //   csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
+    //       .set_int("num_cascades", num_cascades)
+    //       .set_int("csm_depth_dim", csm_depth_dim)
+    //       .set_float("bias_scale", csm_bias_scale)
+    //       .set_float("max_bias", csm_max_bias)
+    //       .set_vec3("light_dir", sun_direction)
+    //       .set_int("pcf_kernal_size", pcf_kernal_size)
+    //       .set_vec2("viewport_size", g_instance.get_scene_size());
 
-      csm_selection_mask_program.set_texture2d("scene_pos",
-                                               pos_tex.get_handle(), 0);
-      csm_selection_mask_program.set_texture2d("scene_normal",
-                                               normal_tex.get_handle(), 1);
-      csm_selection_mask_program.set_texture2d("scene_mask",
-                                               mask_tex.get_handle(), 2);
-      csm_selection_mask_program.set_texture2d("cascade_depth",
-                                               csm_depth_atlas.get_handle(), 3);
-      glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
-                                        "csm_cascades"),
-                   10, csm_cascades);
-      quad_draw_call();
-    }
+    //   csm_selection_mask_program.set_texture2d("scene_pos",
+    //                                            pos_tex.get_handle(), 0);
+    //   csm_selection_mask_program.set_texture2d("scene_normal",
+    //                                            normal_tex.get_handle(), 1);
+    //   csm_selection_mask_program.set_texture2d("scene_mask",
+    //                                            mask_tex.get_handle(), 2);
+    //   csm_selection_mask_program.set_texture2d("cascade_depth",
+    //                                            csm_depth_atlas.get_handle(), 3);
+    //   glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
+    //                                     "csm_cascades"),
+    //                10, csm_cascades);
+    //   quad_draw_call();
+    // }
 
     cbuffer.unbind();
   }
