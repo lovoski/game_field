@@ -106,7 +106,7 @@ void process_mesh(entt::registry &registry, entt::entity container,
 
   // --- Extract vertices ---
   for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
-    mesh_vertex v;
+    auto &v = mesh_data.vertices[i];
     // Position
     if (mesh->HasPositions()) {
       aiVector3D pos = mesh->mVertices[i];
@@ -134,8 +134,6 @@ void process_mesh(entt::registry &registry, entt::entity container,
     // Bones
     v.bone_indices = {0, 0, 0, 0};
     v.bone_weights = {0.0f, 0.0f, 0.0f, 0.0f};
-
-    mesh_data.vertices[i] = v;
   }
 
   // --- Extract indices ---
@@ -298,6 +296,7 @@ void open_model_assimp(entt::registry &registry, std::string filepath) {
       for (int i = 0; i < p.first->mNumMeshes; i++) {
         auto ent = registry.create();
         auto &trans = registry.emplace<transform>(ent);
+        trans.set_world_transform(math::matrix4::Identity());
         trans.name = str_format(
             "%s:%s:%d", scene->mMeshes[p.first->mMeshes[i]]->mName.C_Str(),
             scene
