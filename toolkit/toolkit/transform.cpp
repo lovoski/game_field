@@ -81,6 +81,7 @@ void transform::set_world_transform(math::matrix4 t) {
 }
 void transform::set_local_transform(math::matrix4 t) {
   math::decompose_transform(t, m_local_pos, m_local_rot, m_local_scale);
+  dirty = true;
 }
 
 void transform::set_world_pos(math::vector3 p) {
@@ -278,8 +279,9 @@ void transform::force_update_hierarchy() {
     auto &cur_trans = registry->get<transform>(cur);
 
     cur_trans.m_matrix =
-        parent_matrix() *
-        math::compose_transform(m_local_pos, m_local_rot, m_local_scale);
+        cur_trans.parent_matrix() *
+        math::compose_transform(cur_trans.m_local_pos, cur_trans.m_local_rot,
+                                cur_trans.m_local_scale);
     math::decompose_transform(cur_trans.m_matrix, cur_trans.m_pos,
                               cur_trans.m_rot, cur_trans.m_scale);
     cur_trans.update_local_axes();
