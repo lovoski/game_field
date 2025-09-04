@@ -17,3 +17,4 @@ __pycache__
 
 /*.bvh
 /python/*.bvh
+/python/data

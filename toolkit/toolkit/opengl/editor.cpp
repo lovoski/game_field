@@ -5,6 +5,7 @@
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
+#include "toolkit/opengl/scripts/smplx.hpp"
 
 namespace toolkit::opengl {
 
