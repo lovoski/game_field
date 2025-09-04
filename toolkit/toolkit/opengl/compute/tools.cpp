@@ -7,24 +7,18 @@ std::string reduce_global_aabb = R"(
 #define WORK_GROUP_SIZE %d
 layout(local_size_x = WORK_GROUP_SIZE) in;
 
-#define MAX_BONES 4
 struct Vertex {
-  vec4 Position;
-  vec4 Normal;
-  vec4 TexCoords;
-  vec4 Color;
-  int BoneId[MAX_BONES];
-  float BoneWeight[MAX_BONES];
+  vec4 position;
+  vec4 normal;
+  vec4 texcoord;
 };
 struct AABB {
-  vec3 boxMin;
-  float padding1;
-  vec3 boxMax;
-  float padding2;
+  vec4 box_min;
+  vec4 box_max;
 };
 void mergeAABB(inout AABB a, AABB b) {
-  a.boxMin = min(a.boxMin, b.boxMin);
-  a.boxMax = max(a.boxMax, b.boxMax);
+  a.box_min.xyz = min(a.box_min.xyz, b.box_min.xyz);
+  a.box_max.xyz = max(a.box_max.xyz, b.box_max.xyz);
 }
 
 layout(std430, binding = 0) buffer VertexInput {
@@ -34,7 +28,6 @@ layout(std430, binding = 1) buffer IndicesInput {
   uint iIn[];
 };
 uniform int numTris;
-uniform mat4 modelToWorldMatrix;
 
 layout(std430, binding = 2) buffer AABBOutput {
   AABB aabbOut[];
@@ -49,11 +42,11 @@ void main() {
   uint groupId = gl_WorkGroupID.x;    // id for current work group
 
   if (gid < numTris) {
-    vec3 v0 = (modelToWorldMatrix * vIn[iIn[3 * gid + 0]].Position).xyz;
-    vec3 v1 = (modelToWorldMatrix * vIn[iIn[3 * gid + 1]].Position).xyz;
-    vec3 v2 = (modelToWorldMatrix * vIn[iIn[3 * gid + 2]].Position).xyz;
-    sharedData[lid].boxMin = min(min(v0, v1), v2);
-    sharedData[lid].boxMax = max(max(v0, v1), v2);
+    vec3 v0 = vIn[iIn[3 * gid + 0]].position.xyz;
+    vec3 v1 = vIn[iIn[3 * gid + 1]].position.xyz;
+    vec3 v2 = vIn[iIn[3 * gid + 2]].position.xyz;
+    sharedData[lid].box_min.xyz = min(min(v0, v1), v2);
+    sharedData[lid].box_max.xyz = max(max(v0, v1), v2);
     sharedDataValid[lid] = true;
   } else {
     sharedDataValid[lid] = false;

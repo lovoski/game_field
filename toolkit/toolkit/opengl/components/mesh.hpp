@@ -37,6 +37,8 @@ struct mesh_data : public icomponent {
 DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh)
 
 struct skinned_mesh_bundle : public icomponent {
+  math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
+  texture sun_shadowmap;
   std::vector<entt::entity> bone_entities, mesh_entities;
 };
 DECLARE_COMPONENT(skinned_mesh_bundle, data, bone_entities, mesh_entities)

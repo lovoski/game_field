@@ -7,6 +7,7 @@
 #include "toolkit/opengl/components/camera.hpp"
 #include "toolkit/opengl/components/lights.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
+#include "toolkit/opengl/compute/tools.hpp"
 
 #include "toolkit/opengl/effects/sky.hpp"
 
@@ -96,6 +97,7 @@ protected:
   compute_shader collect_scene_index_buffer_program;
   compute_shader scene_buffer_apply_blendshape_program;
   compute_shader scene_buffer_apply_mesh_skinning_program;
+  per_mesh_global_aabb per_mesh_global_aabb_program;
 
   buffer skeleton_matrices_buffer;
 

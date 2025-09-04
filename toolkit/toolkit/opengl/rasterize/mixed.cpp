@@ -56,21 +56,21 @@ void defered_forward_mixed::draw_menu_gui() {
     ss_model.update(sun_dir, sun_turbidity);
   }
 
-  ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
-  bool csm_modified = false;
-  csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
-  csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
-  ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
-  ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
-  ImGui::DragFloat("Bias Scale Term", &csm_bias_scale, 0.001f, 0.0f, 10.0f);
-  ImGui::DragFloat("Max Bias", &csm_max_bias, 0.0001f, 0.0f, 10.0f, "%.4f");
-  std::string csm_depth_text = "CSM Split Depth: ";
-  for (int i = 0; i < num_cascades + 1; i++) {
-    csm_depth_text += str_format("%.2f <-> ", csm_cascades[i]);
-  }
-  ImGui::Text(csm_depth_text.c_str());
-  if (csm_modified)
-    resize_csm_buffer();
+  // ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
+  // bool csm_modified = false;
+  // csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
+  // csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
+  // ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
+  // ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
+  // ImGui::DragFloat("Bias Scale Term", &csm_bias_scale, 0.001f, 0.0f, 10.0f);
+  // ImGui::DragFloat("Max Bias", &csm_max_bias, 0.0001f, 0.0f, 10.0f, "%.4f");
+  // std::string csm_depth_text = "CSM Split Depth: ";
+  // for (int i = 0; i < num_cascades + 1; i++) {
+  //   csm_depth_text += str_format("%.2f <-> ", csm_cascades[i]);
+  // }
+  // ImGui::Text(csm_depth_text.c_str());
+  // if (csm_modified)
+  //   resize_csm_buffer();
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -438,6 +438,33 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
         }
       });
 
+  // for skinned mesh bundled character, we would compute its uniformed aabb, so
+  // we can create a independent shadow map for it.
+  registry.view<entt::entity, skinned_mesh_bundle>().each(
+      [&](entt::entity entity, skinned_mesh_bundle &bundle_data) {
+        // create aabb for each of its mesh component, then merge these aabb
+        // into one uniform bounding box
+        for (auto mesh_ent : bundle_data.mesh_entities) {
+          auto &mesh_comp = registry.get<mesh_data>(mesh_ent);
+          auto [bb_min, bb_max] = per_mesh_global_aabb_program(
+              scene_vertex_buffer, scene_index_buffer,
+              mesh_comp.scene_vertex_offset, mesh_comp.scene_index_offset,
+              mesh_comp.indices.size() / 3);
+          mesh_comp.bb_min = bb_min;
+          mesh_comp.bb_max = bb_max;
+        }
+        auto &mesh_comp0 =
+            registry.get<mesh_data>(bundle_data.mesh_entities[0]);
+        bundle_data.bb_min = mesh_comp0.bb_min;
+        bundle_data.bb_max = mesh_comp0.bb_max;
+        for (int i = 1; i < bundle_data.mesh_entities.size(); i++) {
+          auto &mesh_comp =
+              registry.get<mesh_data>(bundle_data.mesh_entities[i]);
+          bundle_data.bb_min = math::min3(bundle_data.bb_min, mesh_comp.bb_min);
+          bundle_data.bb_max = math::max3(bundle_data.bb_max, mesh_comp.bb_max);
+        }
+      });
+
   // bind new scene vertex buffer and index buffer to scene vao
   scene_vao.bind();
   scene_vertex_buffer.bind_as(GL_ARRAY_BUFFER);
@@ -616,6 +643,20 @@ void defered_forward_mixed::render(entt::registry &registry) {
         auto script_sys = app_ptr->get_sys<script_system>();
         script_sys->draw_to_scene(app_ptr);
       }
+
+      registry.view<entt::entity, skinned_mesh_bundle>().each(
+          [&](entt::entity entity, skinned_mesh_bundle &bundle_data) {
+            for (auto mesh_ent : bundle_data.mesh_entities) {
+              auto &mesh_comp = registry.get<mesh_data>(mesh_ent);
+              draw_cube(mesh_comp.bb_min, math::world_forward, math::world_left,
+                        math::world_up, cam_comp.vp,
+                        mesh_comp.bb_max - mesh_comp.bb_min);
+            }
+            draw_cube(bundle_data.bb_min, math::world_forward, math::world_left,
+                      math::world_up, cam_comp.vp,
+                      bundle_data.bb_max - bundle_data.bb_min, Green);
+          });
+
       glEnable(GL_DEPTH_TEST);
     }
 

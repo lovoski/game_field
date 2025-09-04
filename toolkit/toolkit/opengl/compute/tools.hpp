@@ -4,9 +4,6 @@
 
 namespace toolkit::opengl {
 
-// Compute the global aabb for a mesh
-extern std::string reduce_global_aabb;
-
 /**
  * Compute morton code for each triangle primitive.
  * The actual coordinate for each triangle's bartcenter should be scaled
@@ -446,6 +443,7 @@ struct AABB {
 struct _packed_vertex {
   vec4 position;
   vec4 normal;
+  vec4 texcoord;
 };
 layout(std430, binding = 0) buffer WorldVertexBuffer {
   _packed_vertex gVertices[];

@@ -305,6 +305,7 @@ public:
   void create(GLenum target = GL_TEXTURE_2D) {
     gl_handle = 0;
     gl_target = target;
+    initialized = true;
     glGenTextures(1, &gl_handle);
     context::texture_handles.insert(gl_handle);
   }
@@ -417,7 +418,11 @@ public:
   GLsizei get_width() const { return m_width; }
   GLsizei get_height() const { return m_height; }
 
+  const bool inited() const { return initialized; }
+
 private:
+  bool initialized = false;
+
   GLuint gl_handle; // texture object ID
   GLenum gl_target; // texture target (e.g., GL_TEXTURE_2D)
 
@@ -531,8 +536,7 @@ public:
     glUniform1f(glGetUniformLocation(gl_handle, name.c_str()), value);
     return *this;
   }
-  shader &set_vec2(const std::string &name,
-                         const math::vector2 &value) {
+  shader &set_vec2(const std::string &name, const math::vector2 &value) {
     glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
     return *this;
@@ -541,42 +545,36 @@ public:
     glUniform2f(glGetUniformLocation(gl_handle, name.c_str()), x, y);
     return *this;
   }
-  shader &set_vec3(const std::string &name,
-                         const math::vector3 &value) {
+  shader &set_vec3(const std::string &name, const math::vector3 &value) {
     glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
     return *this;
   }
-  shader &set_vec3(const std::string &name, float x, float y,
-                         float z) {
+  shader &set_vec3(const std::string &name, float x, float y, float z) {
     glUniform3f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z);
     return *this;
   }
-  shader &set_vec4(const std::string &name,
-                         const math::vector4 &value) {
+  shader &set_vec4(const std::string &name, const math::vector4 &value) {
     glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
     return *this;
   }
   shader &set_vec4(const std::string &name, float x, float y, float z,
-                         float w) {
+                   float w) {
     glUniform4f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z, w);
     return *this;
   }
-  shader &set_mat2(const std::string &name,
-                         const math::matrix2 &mat) {
+  shader &set_mat2(const std::string &name, const math::matrix2 &mat) {
     glUniformMatrix2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
     return *this;
   }
-  shader &set_mat3(const std::string &name,
-                         const math::matrix3 &mat) {
+  shader &set_mat3(const std::string &name, const math::matrix3 &mat) {
     glUniformMatrix3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
     return *this;
   }
-  shader &set_mat4(const std::string &name,
-                         const math::matrix4 &mat) {
+  shader &set_mat4(const std::string &name, const math::matrix4 &mat) {
     glUniformMatrix4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
     return *this;
@@ -623,52 +621,47 @@ public:
     return *this;
   }
   compute_shader &set_vec2(const std::string &name,
-                                 const math::vector2 &value) {
+                           const math::vector2 &value) {
     glUniform2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
     return *this;
   }
-  compute_shader &set_vec2(const std::string &name, float x,
-                                 float y) {
+  compute_shader &set_vec2(const std::string &name, float x, float y) {
     glUniform2f(glGetUniformLocation(gl_handle, name.c_str()), x, y);
     return *this;
   }
   compute_shader &set_vec3(const std::string &name,
-                                 const math::vector3 &value) {
+                           const math::vector3 &value) {
     glUniform3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
     return *this;
   }
-  compute_shader &set_vec3(const std::string &name, float x, float y,
-                                 float z) {
+  compute_shader &set_vec3(const std::string &name, float x, float y, float z) {
     glUniform3f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z);
     return *this;
   }
   compute_shader &set_vec4(const std::string &name,
-                                 const math::vector4 &value) {
+                           const math::vector4 &value) {
     glUniform4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                  value.data());
     return *this;
   }
-  compute_shader &set_vec4(const std::string &name, float x, float y,
-                                 float z, float w) {
+  compute_shader &set_vec4(const std::string &name, float x, float y, float z,
+                           float w) {
     glUniform4f(glGetUniformLocation(gl_handle, name.c_str()), x, y, z, w);
     return *this;
   }
-  compute_shader &set_mat2(const std::string &name,
-                                 const math::matrix2 &mat) {
+  compute_shader &set_mat2(const std::string &name, const math::matrix2 &mat) {
     glUniformMatrix2fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
     return *this;
   }
-  compute_shader &set_mat3(const std::string &name,
-                                 const math::matrix3 &mat) {
+  compute_shader &set_mat3(const std::string &name, const math::matrix3 &mat) {
     glUniformMatrix3fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
     return *this;
   }
-  compute_shader &set_mat4(const std::string &name,
-                                 const math::matrix4 &mat) {
+  compute_shader &set_mat4(const std::string &name, const math::matrix4 &mat) {
     glUniformMatrix4fv(glGetUniformLocation(gl_handle, name.c_str()), 1,
                        GL_FALSE, mat.data());
     return *this;
