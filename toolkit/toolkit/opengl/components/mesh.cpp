@@ -287,7 +287,7 @@ void init_opengl_buffers_internal(mesh_data &data,
       spdlog::info("Save mesh asset at path {0}", asset_path);
     } else {
       spdlog::error("Failed to create mesh asset at path {0}", asset_path);
-    } 
+    }
     output.close();
     zip_file(asset_path, asset_path.substr(0, asset_path.size() - 4));
     std::remove(asset_path.c_str());
@@ -392,6 +392,27 @@ entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
   }
   init_opengl_buffers(mesh);
   return ent;
+}
+
+void skinned_mesh_bundle::try_setup() {
+  if (!gl_initialized) {
+    shadowmap_fb.create();
+    shadowmap_fb.bind();
+    shadowmap_depth.create(GL_TEXTURE_2D);
+    shadowmap_depth.set_data(4096, 4096, GL_DEPTH_COMPONENT24,
+                             GL_DEPTH_COMPONENT, GL_FLOAT);
+    shadowmap_depth.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                                    {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                                    {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                                    {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+    shadowmap_fb.attach_depth_buffer(shadowmap_depth);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    if (!shadowmap_fb.check_status())
+      spdlog::error("skinned mesh bundle shadow buffer not complete!");
+    shadowmap_fb.unbind();
+    gl_initialized = true;
+  }
 }
 
 }; // namespace toolkit::opengl

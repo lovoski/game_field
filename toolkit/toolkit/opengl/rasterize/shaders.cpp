@@ -127,7 +127,7 @@ void main() {
 }
 )";
 
-std::string csm_vs = R"(
+std::string shadow_vs = R"(
 #version 460 core
 layout (location = 0) in vec4 aPos;
 
@@ -137,7 +137,7 @@ void main() {
   gl_Position = gVP * gModel * aPos;
 }
 )";
-std::string csm_fs = R"(
+std::string shadow_fs = R"(
 #version 460 core
 void main() {}
 )";
@@ -249,5 +249,97 @@ void main() {
   //   frag_color = vec4(1.0,1.0,0.0,1.0);
   // else
   //   frag_color = vec4(1.0,1.0,1.0,1.0);
+}
+)";
+
+std::string shadow_mask_fs = R"(
+#version 430 core
+
+uniform mat4 shadow_vp;
+uniform int shadowmap_dim;
+uniform float bias_scale;
+uniform float max_bias;
+
+uniform vec2 viewport_size;
+
+uniform int pcf_kernal_size;
+uniform float light_radius;
+
+uniform vec3 light_dir;
+
+uniform sampler2D scene_pos;
+uniform sampler2D scene_normal;
+uniform sampler2D scene_mask;
+
+uniform sampler2D shadowmap;
+
+in vec2 texcoord;
+out vec4 frag_color;
+
+const vec2 pcf_offsets[25] = vec2[](
+  vec2(0.20605169082156424,0.4998593329807481),
+  vec2(0.007089038872620134,-0.9999748724482344),
+  vec2(-0.11681382219085022,0.6396302367876552),
+  vec2(0.01728945485250747,0.529360096232986),
+  vec2(-0.2369544993348378,-0.6126303038931756),
+  vec2(-0.10076776764102834,0.21237332344696727),
+  vec2(0.24356294745014198,0.9698850914564051),
+  vec2(0.07108779874000666,0.06811429147672578),
+  vec2(0.016550741379464117,0.03940137017422774),
+  vec2(0.46998412289381747,0.8826748689227133),
+  vec2(0.5649489898544424,-0.528404235399246),
+  vec2(0.08901358755644329,0.020129485528438542),
+  vec2(-0.017975847579679814,-0.014445630505701025),
+  vec2(-0.07005179429659197,-0.11040369840074625),
+  vec2(-0.11413913623700454,0.5927085139025287),
+  vec2(-0.38759472454078236,0.9218298810019965),
+  vec2(-0.33609191353859497,-0.061166857562018014),
+  vec2(-0.42560255201871106,0.38249979783214455),
+  vec2(-0.555707837511622,0.4915075698926023),
+  vec2(-0.484291842321525,-0.05916589009989929),
+  vec2(0.32972285873742446,-0.30557046636880403),
+  vec2(0.2913513390801587,0.903344438726286),
+  vec2(-0.05790678072074362,0.006156689742992485),
+  vec2(-0.10482858320276058,0.31758658054567573),
+  vec2(-0.20405586235522746,0.0430403094013775)
+);
+
+void main() {
+  vec3 l_dir = -normalize(light_dir);
+  vec2 viewport_texel = vec2(1.0)/viewport_size;
+
+  vec4 mask_value = texture(scene_mask, texcoord);
+  if (mask_value.r != 1.0) {
+    frag_color = vec4(1.0);
+    return;
+  }
+  vec3 frag_world_pos = texture(scene_pos,texcoord).xyz;
+  vec3 frag_normal = normalize(2*texture(scene_normal, texcoord).xyz-vec3(1.0));
+  vec4 lp_frag_world_pos = shadow_vp * vec4(frag_world_pos, 1.0);
+  lp_frag_world_pos.xyz /= lp_frag_world_pos.w;
+  if (lp_frag_world_pos.x < -1.0 || lp_frag_world_pos.x > 1.0 || lp_frag_world_pos.y < -1.0 || lp_frag_world_pos.y > 1.0) {
+    frag_color = vec4(1.0);
+    return;
+  }
+  vec2 shadow_texcoord = 0.5*(lp_frag_world_pos.xy+vec2(1.0));
+  float shadowmap_depth_value = texture(shadowmap, shadow_texcoord).r;
+  float frag_depth_value = (lp_frag_world_pos.z + 1.0) * 0.5;
+  float cos_alpha = max(0.0, dot(frag_normal, l_dir));
+  float bias = min(bias_scale*0.5/shadowmap_dim*sqrt(1.0-cos_alpha*cos_alpha)/cos_alpha, max_bias);
+  float repaired_depth = frag_depth_value - bias;
+  float shadow = 0.0;
+  // float penumbra = ((repaired_depth - shadowmap_depth_value) / shadowmap_depth_value) * light_radius;
+  float penumbra = light_radius;
+  vec2 tmp_shadow_texcoord;
+  for (int i = 0; i < pcf_offsets.length(); i++) {
+    tmp_shadow_texcoord = shadow_texcoord + penumbra / shadowmap_dim * pcf_offsets[i];
+    shadowmap_depth_value = texture(shadowmap, tmp_shadow_texcoord).r;
+    if (repaired_depth > shadowmap_depth_value) {
+      // shadow += min(repaired_depth - shadowmap_depth_value, 0.0001)/0.0001;
+      shadow += 1;
+    }
+  }
+  shadow = 1.0-shadow/pcf_offsets.length();
+  frag_color = vec4(vec3(shadow),1.0);
 }
 )";

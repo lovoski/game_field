@@ -56,6 +56,10 @@ void defered_forward_mixed::draw_menu_gui() {
     ss_model.update(sun_dir, sun_turbidity);
   }
 
+  ImGui::MenuItem("Character Shadow Maps", nullptr, nullptr, false);
+  ImGui::DragFloat("Max Bias Term", &shadowmap_max_bias, 0.000001f, 0.0f, 1.0f,
+                   "%.6f");
+
   // ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
   // bool csm_modified = false;
   // csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
@@ -128,9 +132,10 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   ao_buffer.create();
   csm_buffer.create();
   csm_vp_matrix_buffer.create();
-  csm_depth_program.compile_shader_from_source(csm_vs, csm_fs);
+  shadow_depth_program.compile_shader_from_source(shadow_vs, shadow_fs);
   csm_selection_mask_program.compile_shader_from_source(quad_vs,
                                                         csm_selection_mask_fs);
+  shadow_mask_program.compile_shader_from_source(quad_vs, shadow_mask_fs);
 
   light_data_buffer.create();
 
@@ -527,6 +532,8 @@ void defered_forward_mixed::render(entt::registry &registry) {
     update_scene_lights(registry);
 
     auto trans_mesh_view = registry.view<entt::entity, transform, mesh_data>();
+    auto skinned_mesh_bundle_view =
+        registry.view<entt::entity, skinned_mesh_bundle>();
 
     // ------------------ render to geometry framebuffer ------------------
     gbuffer.bind();
@@ -542,8 +549,9 @@ void defered_forward_mixed::render(entt::registry &registry) {
       gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
       trans_mesh_view.each([&](entt::entity entity, transform &trans,
                                mesh_data &data) {
-        if (!data.skinned && !visibility_check(cam_comp.planes, data.bb_min,
-                                               data.bb_max, trans.matrix())) {
+        if (!visibility_check(cam_comp.planes, data.bb_min, data.bb_max,
+                              data.skinned ? math::matrix4::Identity()
+                                           : trans.matrix())) {
           return; // break if not visible
         }
         gbuffer_geometry_pass.set_mat4("gModel", data.skinned
@@ -566,6 +574,46 @@ void defered_forward_mixed::render(entt::registry &registry) {
       ssao(pos_tex, normal_tex, mask_tex, cam_comp.view, cam_comp.proj,
            ssao_noise_scale, ssao_radius);
       ao_buffer.unbind();
+    }
+
+    // render per bundle shadow map if sun is enabled
+    static math::vector3 tmp_sun_up_dir =
+        math::vector3(0.0, 0.97, 0.3).normalized();
+    if (enable_sun) {
+      skinned_mesh_bundle_view.each([&](entt::entity entity,
+                                        skinned_mesh_bundle &bundle_data) {
+        bundle_data.try_setup();
+        bundle_data.shadowmap_fb.bind();
+        bundle_data.shadowmap_fb.set_viewport(0, 0, 4096, 4096);
+        glClear(GL_DEPTH_BUFFER_BIT);
+        glClearColor(0, 0, 0, 1);
+        scene_vao.bind();
+        shadow_depth_program.use();
+        math::vector3 center = (bundle_data.bb_min + bundle_data.bb_max) / 2;
+        float radius = (bundle_data.bb_max - bundle_data.bb_min).norm() / 2;
+        math::vector3 norm_dir =
+            sun_direction.cross(tmp_sun_up_dir).normalized();
+        bundle_data.shadow_vp =
+            math::ortho(-radius, radius, radius, -radius, -50, 50) *
+            math::lookat(center, center + sun_direction, norm_dir);
+        update_bounding_planes(bundle_data.vis_planes, bundle_data.shadow_vp);
+        shadow_depth_program.set_mat4("gVP", bundle_data.shadow_vp);
+        trans_mesh_view.each([&](entt::entity entity, transform &trans,
+                                 mesh_data &data) {
+          if (!visibility_check(
+                  bundle_data.vis_planes, data.bb_min, data.bb_max,
+                  data.skinned ? math::matrix4::Identity() : trans.matrix())) {
+            return; // break if not visible
+          }
+          shadow_depth_program.set_mat4("gModel",
+                                        data.skinned ? math::matrix4::Identity()
+                                                     : trans.matrix());
+          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                         (void *)(data.scene_index_offset * sizeof(GLuint)));
+        });
+        scene_vao.unbind();
+        bundle_data.shadowmap_fb.unbind();
+      });
     }
 
     // ------------------- render to multisample framebuffer -------------------
@@ -598,9 +646,11 @@ void defered_forward_mixed::render(entt::registry &registry) {
         if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
           if (mesh_ptr->should_render_mesh) {
             auto &trans = registry.get<transform>(entity);
-            if (!mesh_ptr->skinned &&
-                !visibility_check(cam_comp.planes, mesh_ptr->bb_min,
-                                  mesh_ptr->bb_max, trans.matrix())) {
+            if (!visibility_check(cam_comp.planes, mesh_ptr->bb_min,
+                                  mesh_ptr->bb_max,
+                                  mesh_ptr->skinned ? math::matrix4::Identity()
+                                                    : trans.matrix())) {
+              // spdlog::info("Cpu cull mesh {0}", mesh_ptr->mesh_name);
               return;
             }
             mat_shader.set_int("gVertexOffset", mesh_ptr->scene_vertex_offset);
@@ -684,6 +734,29 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     cbuffer.bind();
     cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
+
+    skinned_mesh_bundle_view.each([&](entt::entity entity,
+                                      skinned_mesh_bundle &bundle_data) {
+      csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
+      shadow_mask_program.use();
+      shadow_mask_program.set_mat4("shadow_vp", bundle_data.shadow_vp)
+          .set_int("shadowmap_dim", 4096)
+          .set_float("bias_scale", csm_bias_scale)
+          .set_float("max_bias", shadowmap_max_bias)
+          .set_vec3("light_dir", sun_direction)
+          .set_int("pcf_kernal_size", pcf_kernal_size)
+          .set_float("light_radius", 8.0f)
+          .set_vec2("viewport_size", g_instance.get_scene_size());
+
+      shadow_mask_program.set_texture2d("scene_pos", pos_tex.get_handle(), 0);
+      shadow_mask_program.set_texture2d("scene_normal", normal_tex.get_handle(),
+                                        1);
+      shadow_mask_program.set_texture2d("scene_mask", mask_tex.get_handle(), 2);
+      shadow_mask_program.set_texture2d(
+          "shadowmap", bundle_data.shadowmap_depth.get_handle(), 3);
+      quad_draw_call();
+    });
+
     cbuffer.unbind();
   }
 }

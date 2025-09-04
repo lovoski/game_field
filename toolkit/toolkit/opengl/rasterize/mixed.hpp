@@ -79,8 +79,9 @@ protected:
   // csm related
   framebuffer csm_buffer;
   texture csm_depth_atlas;
-  shader csm_depth_program, csm_selection_mask_program;
+  shader shadow_depth_program, csm_selection_mask_program, shadow_mask_program;
   int num_cascades = 3, csm_depth_dim = 2048, pcf_kernal_size = 1;
+  float shadowmap_max_bias = 0.0002f;
   float csm_split_lambda = 0.93f, csm_bias_scale = 1.0f, csm_max_bias = 0.0008f,
         csm_cascades[10];
   void resize_csm_buffer();
