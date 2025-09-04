@@ -2,7 +2,7 @@
 
 namespace toolkit::opengl {
 
-std::string ReduceGlobalAABB = R"(
+std::string reduce_global_aabb = R"(
 #version 430
 #define WORK_GROUP_SIZE %d
 layout(local_size_x = WORK_GROUP_SIZE) in;
@@ -75,7 +75,7 @@ void main() {
 }
 )";
 
-std::string MortonCodeForTris = R"(
+std::string morton_code_for_triangles = R"(
 #version 430
 #define WORK_GROUP_SIZE %d
 layout(local_size_x = WORK_GROUP_SIZE) in;

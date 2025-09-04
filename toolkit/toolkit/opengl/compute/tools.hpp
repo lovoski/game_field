@@ -5,14 +5,14 @@
 namespace toolkit::opengl {
 
 // Compute the global aabb for a mesh
-extern std::string ReduceGlobalAABB;
+extern std::string reduce_global_aabb;
 
 /**
  * Compute morton code for each triangle primitive.
  * The actual coordinate for each triangle's bartcenter should be scaled
  * relative to the global bounding box.
  */
-extern std::string MortonCodeForTris;
+extern std::string morton_code_for_triangles;
 
 class prefix_sum {
 public:
