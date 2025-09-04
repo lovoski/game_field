@@ -185,6 +185,11 @@ void smplx::setup_smpl_model(cnpy::npz_t &data) {
   mesh_comp.update_buffers(true);
 }
 
+void smplx::apply_smpl_betas(std::vector<float> betas) {}
+void smplx::apply_smplx_betas(std::vector<float> betas) {}
+
+void smplx::preupdate(iapp *app, float dt) {}
+
 void smplx::draw_gui(iapp *app) {
   ImGui::Text(str_format("model_path: %s", model_path.c_str()).c_str());
   if (ImGui::Button("Setup Model Dir", {-1, 30}))

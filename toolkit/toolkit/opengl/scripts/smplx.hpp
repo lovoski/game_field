@@ -19,6 +19,13 @@ public:
   void draw_gui(iapp *app) override;
   void draw_to_scene(iapp *app) override;
 
+  // Change the body shape and skeleton of SMPL
+  void apply_smpl_betas(std::vector<float> betas);
+  // Change the body shape and skeleton of SMPLX
+  void apply_smplx_betas(std::vector<float> betas);
+  // Tune pose based blend shape weights
+  void preupdate(iapp *app, float dt) override;
+
 private:
   int model_index = 0, gender_index = 0;
   std::string model_path = "", model_type = "smpl", gender_type = "NEUTRAL";

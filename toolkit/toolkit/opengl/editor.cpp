@@ -4,8 +4,8 @@
 #include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
-#include "toolkit/opengl/scripts/test_draw.hpp"
 #include "toolkit/opengl/scripts/smplx.hpp"
+#include "toolkit/opengl/scripts/test_draw.hpp"
 
 namespace toolkit::opengl {
 

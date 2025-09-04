@@ -501,61 +501,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     auto trans_mesh_view = registry.view<entt::entity, transform, mesh_data>();
 
-    // ---------------- render csm if sun is enabled ----------------
-    if (enable_sun) {
-      csm_buffer.bind();
-      glClear(GL_DEPTH_BUFFER_BIT);
-      glClearColor(0, 0, 0, 1);
-      csm_cascades[0] = cam_comp.z_near;
-      math::vector3 csm_side_dir = math::world_up;
-      if (abs(csm_side_dir.dot(sun_direction)) < 1e-3f)
-        csm_side_dir = (csm_side_dir + 0.1f * math::world_forward).normalized();
-      csm_depth_program.use();
-      scene_vao.bind();
-      csm_vp_matrix.resize(num_cascades);
-      for (int i = 0; i < num_cascades; i++) {
-        // render to atlas by setting up viewports
-        csm_buffer.set_viewport(i * csm_depth_dim, 0, csm_depth_dim,
-                                csm_depth_dim);
-        // compute depth for view frustom split
-        csm_cascades[i + 1] =
-            csm_split_lambda *
-                (cam_comp.z_near * pow(cam_comp.z_far / cam_comp.z_near,
-                                       (float)(i + 1) / num_cascades)) +
-            (1.0f - csm_split_lambda) *
-                (cam_comp.z_near +
-                 (i + 1) * (cam_comp.z_far - cam_comp.z_near) / num_cascades);
-        auto [bb_sphere_center, bb_sphere_radius] = frustom_bounding_sphere(
-            csm_cascades[i], csm_cascades[i + 1], cam_comp.fovy_degree,
-            g_instance.scene_width, g_instance.scene_height);
-        math::vector4 tmp_point;
-        tmp_point << bb_sphere_center, 1.0f;
-        tmp_point = cam_trans.matrix() * tmp_point;
-        csm_vp_matrix[i] =
-            math::ortho(-bb_sphere_radius, bb_sphere_radius, bb_sphere_radius,
-                        -bb_sphere_radius, std::min(-bb_sphere_radius, -300.0f),
-                        bb_sphere_radius) *
-            math::lookat(tmp_point.head<3>(),
-                         tmp_point.head<3>() + sun_direction.normalized(),
-                         csm_side_dir);
-        update_bounding_planes(csm_frustom_planes, csm_vp_matrix[i]);
-        csm_depth_program.set_mat4("gVP", csm_vp_matrix[i]);
-        trans_mesh_view.each([&](entt::entity entity, transform &trans,
-                                 mesh_data &data) {
-          if (!visibility_check(csm_frustom_planes, data.bb_min, data.bb_max,
-                                trans.matrix()))
-            return;
-          csm_depth_program.set_mat4("gModel", data.skinned
-                                                   ? math::matrix4::Identity()
-                                                   : trans.matrix());
-          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
-                         (void *)(data.scene_index_offset * sizeof(GLuint)));
-        });
-      }
-      scene_vao.unbind();
-      csm_buffer.unbind();
-    }
-
     // ------------------ render to geometry framebuffer ------------------
     gbuffer.bind();
     gbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
@@ -683,36 +628,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
       glBlendEquation(GL_FUNC_ADD);
       ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
     }
-
-    // // 2. cascaded shadow maps
-    // if (enable_sun) {
-    //   // glBlendFunc(GL_DST_COLOR, GL_ZERO);
-    //   // glBlendEquation(GL_FUNC_ADD);
-    //   csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
-    //   csm_selection_mask_program.use();
-    //   csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
-    //       .set_int("num_cascades", num_cascades)
-    //       .set_int("csm_depth_dim", csm_depth_dim)
-    //       .set_float("bias_scale", csm_bias_scale)
-    //       .set_float("max_bias", csm_max_bias)
-    //       .set_vec3("light_dir", sun_direction)
-    //       .set_int("pcf_kernal_size", pcf_kernal_size)
-    //       .set_vec2("viewport_size", g_instance.get_scene_size());
-
-    //   csm_selection_mask_program.set_texture2d("scene_pos",
-    //                                            pos_tex.get_handle(), 0);
-    //   csm_selection_mask_program.set_texture2d("scene_normal",
-    //                                            normal_tex.get_handle(), 1);
-    //   csm_selection_mask_program.set_texture2d("scene_mask",
-    //                                            mask_tex.get_handle(), 2);
-    //   csm_selection_mask_program.set_texture2d("cascade_depth",
-    //                                            csm_depth_atlas.get_handle(), 3);
-    //   glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
-    //                                     "csm_cascades"),
-    //                10, csm_cascades);
-    //   quad_draw_call();
-    // }
-
     glDisable(GL_BLEND);
 
     // ------------------- final presentation -------------------
@@ -728,37 +643,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     cbuffer.bind();
     cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
-
-    // // 2. cascaded shadow maps
-    // // TODO: you can't place this inside msaa buffer
-    // if (enable_sun) {
-    //   // glBlendFunc(GL_DST_COLOR, GL_ZERO);
-    //   // glBlendEquation(GL_FUNC_ADD);
-    //   csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
-    //   csm_selection_mask_program.use();
-    //   csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
-    //       .set_int("num_cascades", num_cascades)
-    //       .set_int("csm_depth_dim", csm_depth_dim)
-    //       .set_float("bias_scale", csm_bias_scale)
-    //       .set_float("max_bias", csm_max_bias)
-    //       .set_vec3("light_dir", sun_direction)
-    //       .set_int("pcf_kernal_size", pcf_kernal_size)
-    //       .set_vec2("viewport_size", g_instance.get_scene_size());
-
-    //   csm_selection_mask_program.set_texture2d("scene_pos",
-    //                                            pos_tex.get_handle(), 0);
-    //   csm_selection_mask_program.set_texture2d("scene_normal",
-    //                                            normal_tex.get_handle(), 1);
-    //   csm_selection_mask_program.set_texture2d("scene_mask",
-    //                                            mask_tex.get_handle(), 2);
-    //   csm_selection_mask_program.set_texture2d("cascade_depth",
-    //                                            csm_depth_atlas.get_handle(), 3);
-    //   glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
-    //                                     "csm_cascades"),
-    //                10, csm_cascades);
-    //   quad_draw_call();
-    // }
-
     cbuffer.unbind();
   }
 }
