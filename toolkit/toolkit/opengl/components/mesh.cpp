@@ -401,10 +401,13 @@ void skinned_mesh_bundle::try_setup() {
     shadowmap_depth.create(GL_TEXTURE_2D);
     shadowmap_depth.set_data(4096, 4096, GL_DEPTH_COMPONENT24,
                              GL_DEPTH_COMPONENT, GL_FLOAT);
-    shadowmap_depth.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-                                    {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-                                    {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-                                    {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+    shadowmap_depth.set_parameters(
+        {{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
+         {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
+         {GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE},
+         {GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL},
+         {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+         {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
     shadowmap_fb.attach_depth_buffer(shadowmap_depth);
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);

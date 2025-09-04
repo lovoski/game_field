@@ -59,7 +59,8 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::MenuItem("Character Shadow Maps", nullptr, nullptr, false);
   ImGui::DragFloat("Max Bias Term", &shadowmap_max_bias, 0.000001f, 0.0f, 1.0f,
                    "%.6f");
-
+  ImGui::DragFloat("Min Bias Term", &shadowmap_min_bias, 0.000001f, 0.0f, 1.0f,
+                   "%.6f");
   // ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
   // bool csm_modified = false;
   // csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
@@ -105,6 +106,18 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   mask_tex.create(GL_TEXTURE_2D);
   ao_color.create(GL_TEXTURE_2D);
   csm_depth_atlas.create(GL_TEXTURE_2D);
+
+  noise_tex_random.create(GL_TEXTURE_2D);
+  assets::image img;
+  img.resize(64, 64, 1);
+  for (int i = 0; i < 64; i++)
+    for (int j = 0; j < 64; j++)
+      img.pixel(i, j, 0) = (unsigned char)(255 * math::rand(0, 1));
+  noise_tex_random.set_data_from_image(img);
+  noise_tex_random.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
+                                   {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
+                                   {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                                   {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
 
   gbuffer_geometry_pass.compile_shader_from_source(gbuffer_geometry_pass_vs,
                                                    gbuffer_geometry_pass_fs);
@@ -741,11 +754,9 @@ void defered_forward_mixed::render(entt::registry &registry) {
       shadow_mask_program.use();
       shadow_mask_program.set_mat4("shadow_vp", bundle_data.shadow_vp)
           .set_int("shadowmap_dim", 4096)
-          .set_float("bias_scale", csm_bias_scale)
           .set_float("max_bias", shadowmap_max_bias)
+          .set_float("min_bias", shadowmap_min_bias)
           .set_vec3("light_dir", sun_direction)
-          .set_int("pcf_kernal_size", pcf_kernal_size)
-          .set_float("light_radius", 8.0f)
           .set_vec2("viewport_size", g_instance.get_scene_size());
 
       shadow_mask_program.set_texture2d("scene_pos", pos_tex.get_handle(), 0);
