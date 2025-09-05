@@ -502,11 +502,16 @@ void editor::draw_main_menubar() {
       if (ImGui::MenuItem("Import Model")) {
         std::string filepath;
         if (open_file_dialog("Open model asset file",
-                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ"},
-                             "*.fbx, *.obj", filepath)) {
+                             {"*.fbx", "*.FBX", "*.obj", "*.OBJ", "*.pmx",
+                              "*.PMX", "*.ply", "*.PLY"},
+                             "*.fbx, *.obj, *.pmx, *.ply", filepath)) {
           spdlog::info("Load model file {0}", filepath);
           // assets::open_model_assimp(registry, filepath);
-          assets::open_model_ufbx(registry, filepath);
+          if (endswith(filepath, ".FBX") || endswith(filepath, "*.fbx") ||
+              endswith(filepath, "*.OBJ") || endswith(filepath, "*.obj"))
+            assets::open_model_ufbx(registry, filepath);
+          else
+            assets::open_model_assimp(registry, filepath);
         }
       }
       // if (ImGui::MenuItem("Import   BVH")) {

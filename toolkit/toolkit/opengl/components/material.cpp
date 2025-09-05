@@ -127,4 +127,22 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
   return results;
 }
 
+void material::init1() {
+  auto mf = parse_glsl_uniforms(
+      {vertex_shader_source, fragment_shader_source, geometry_shader_source});
+  std::vector<material_field> missing_mfs;
+  for (auto &p : mf) {
+    bool field_found = false;
+    for (int i = 0; i < material_fields.size(); i++)
+      if (material_fields[i].name == p.name) {
+        field_found = true;
+        break;
+      }
+    if (!field_found)
+      missing_mfs.push_back(p);
+  }
+  for (int i = 0; i < missing_mfs.size(); i++)
+    material_fields.push_back(missing_mfs[i]);
+}
+
 }; // namespace toolkit::opengl

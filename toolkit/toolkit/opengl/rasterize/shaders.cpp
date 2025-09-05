@@ -159,8 +159,9 @@ layout(std430, binding = 0) buffer CascadeVPMatrices {
 };
 uniform int num_cascades;
 uniform int csm_depth_dim;
-uniform float bias_scale;
+
 uniform float max_bias;
+uniform float min_bias;
 
 uniform vec2 viewport_size;
 
@@ -173,68 +174,84 @@ uniform float csm_cascades[10];
 uniform sampler2D scene_pos;
 uniform sampler2D scene_normal;
 uniform sampler2D scene_mask;
+uniform mat4 cam_view;
 
-uniform sampler2D cascade_depth;
-uniform sampler2D cascade_pos;
+uniform sampler2DShadow cascade_depth;
 
 in vec2 texcoord;
 out vec4 frag_color;
 
+const vec2 POISSON_DISK[16] = vec2[](
+  vec2( -0.94201624, -0.39906216 ), vec2( 0.94558609, -0.76890725 ),
+  vec2( -0.094184101, -0.92938870 ), vec2( 0.34495938, 0.29387760 ),
+  vec2( -0.91588581, 0.45771432 ), vec2( -0.81544232, -0.87912464 ),
+  vec2( -0.38277543, 0.27676845 ), vec2( 0.97484398, 0.75648379 ),
+  vec2( 0.44323325, -0.97511554 ), vec2( 0.53742981, -0.47373420 ),
+  vec2( -0.26496911, -0.41893023 ), vec2( 0.79197514, 0.19090188 ),
+  vec2( -0.24188840, 0.99706507 ), vec2( -0.81409955, 0.91437590 ),
+  vec2( 0.19984126, 0.78641367 ), vec2( 0.14383161, -0.14100790 )
+);
+
+float random(vec2 st) {
+  return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
 void main() {
-  vec3 L = -normalize(light_dir);
-  vec2 viewport_texel = vec2(1.0)/viewport_size;
+  frag_color = vec4(1.0);
+  return;
 
-  vec4 mask_value = texture(scene_mask, texcoord);
-  float scene_depth = mask_value.r == 1.0 ? -mask_value.g : -1.0;
-  int match_cascade = -1;
-  for (int i = 0; i < num_cascades; i++) {
-    if (scene_depth > csm_cascades[i] && scene_depth <= csm_cascades[i+1]) {
-      match_cascade = i;
-      break;
-    }
-  }
+  // vec3 l_dir = -normalize(light_dir);
+  // vec2 viewport_texel = vec2(1.0)/viewport_size;
 
-  if (match_cascade < 0)
-    return;
+  // vec4 mask_value = texture(scene_mask, texcoord);
+  // if (mask_value.r == 0) {
+  //   // force white background
+  //   frag_color = vec4(1.0);
+  //   return;
+  // }
 
-  float shadow = 0.0, cos_alpha, bias, sampled_csm_depth, scene_light_depth, shadow0 = 0.0;
-  vec4 point;
-  vec3 N=normalize(texture(scene_normal, texcoord).xyz * 2 - 1), world_pos;
-  vec2 csm_texcoord;
-  cos_alpha = dot(N, L);
-  if (cos_alpha < 0.05) {
-    shadow = 1.0;
-  } else {
-    for (int i = -pcf_kernal_size; i <= pcf_kernal_size; i++) {
-      for (int j = -pcf_kernal_size; j <= pcf_kernal_size; j++) {
-        vec2 pcf_texcoord = texcoord + vec2(i*viewport_texel.x,j*viewport_texel.y);
-        if (texture(scene_mask, pcf_texcoord).r != 1.0)
-          continue;
-        N = normalize(texture(scene_normal, pcf_texcoord).xyz * 2 - 1);
-        cos_alpha = dot(N, L);
-        if (cos_alpha >= 0.05) {
-          world_pos = texture(scene_pos, pcf_texcoord).xyz;
-          cos_alpha = max(0.01, cos_alpha);
-          point = vec4(world_pos, 1.0);
-          point = csm_vp_mat[match_cascade]*point;
-          point.xyz = point.xyz/point.w;
-          vec2 csm_texcoord = vec2(match_cascade/float(num_cascades)+0.5*(point.x+1.0)/num_cascades,0.5*(point.y+1.0));
-          sampled_csm_depth = texture(cascade_depth, csm_texcoord).r;
-          scene_light_depth = 0.5*(point.z+1.0);
-          bias = min(bias_scale*0.5/csm_depth_dim*sqrt(1.0-cos_alpha*cos_alpha)/cos_alpha, max_bias);
-  
-          if (sampled_csm_depth + bias < scene_light_depth) {
-            shadow += 1.0;
-          }
-        } else {
-          shadow += 1.0;
-        }
-      }
-    }
-    shadow /= (2*pcf_kernal_size+1)*(2*pcf_kernal_size+1);
-  }
+  // vec3 frag_world_pos = texture(scene_pos, texcoord).xyz;
+  // vec3 frag_world_normal = normalize(2*texture(scene_normal, texcoord).xyz-vec3(1.0));
+  // vec4 cam_space_pos = cam_view * vec4(frag_world_pos, 1.0);
+  // cam_space_pos.xyz /= cam_space_pos.w;
+  // float linear_depth = -cam_space_pos.z;
+  // int match_cascade = -1;
+  // for (int i = 0; i < num_cascades; i++) {
+  //   if (linear_depth > csm_cascades[i] && linear_depth <= csm_cascades[i+1]) {
+  //     match_cascade = i;
+  //     break;
+  //   }
+  // }
+  // if (match_cascade < 0)
+  //   discard;
 
-  frag_color = vec4(vec3(mix(0.5, 1.0, clamp(1.0-shadow, 0.0, 1.0))),1.0);
+  // mat4 shadow_vp = csm_vp_mat[match_cascade];
+  // vec4 lp_frag_world_pos = shadow_vp * vec4(frag_world_pos, 1.0);
+  // lp_frag_world_pos.xyz /= lp_frag_world_pos.w;
+
+  // float cos_alpha = max(0.05, dot(frag_world_normal, l_dir));
+  // float bias = mix(max_bias, min_bias, cos_alpha);
+  // float frag_depth_value = (lp_frag_world_pos.z + 1.0) * 0.5;
+  // float repaired_depth = frag_depth_value - bias;
+
+  // vec2 shadow_texcoord = 0.5 * (lp_frag_world_pos.xy + vec2(1.0));
+  // shadow_texcoord.x = shadow_texcoord.x/float(num_cascades)+float(match_cascade)/float(num_cascades);
+  // // float shadowmap_value = texture(cascade_depth, shadow_texcoord).r;
+  // // float shadow = repaired_depth > shadowmap_value ? 0.0 : 1.0;
+
+  // float shadow = 0.0;
+  // float rand_angle = random(texcoord) * 2.0 * 3.14159265;
+  // float search_radius = 2.5 / float(csm_depth_dim);
+  // mat2 rotation_matrix = mat2(cos(rand_angle), sin(rand_angle), -sin(rand_angle), cos(rand_angle));
+  // for (int i = 0; i < POISSON_DISK.length(); i++) {
+  //   vec2 offset = rotation_matrix * POISSON_DISK[i];
+  //   offset.x /= float(num_cascades);
+  //   vec2 tmp_shadow_texcoord = shadow_texcoord + offset * search_radius;
+  //   shadow += texture(cascade_depth, vec3(tmp_shadow_texcoord, repaired_depth));
+  // }
+  // shadow /= POISSON_DISK.length();
+  // frag_color = vec4(vec3(shadow), 1.0);
+
   // if (match_cascade == 0)
   //   frag_color = vec4(1.0,0.0,0.0,1.0);
   // else if (match_cascade == 1)
@@ -273,10 +290,24 @@ uniform sampler2DShadow shadowmap;
 in vec2 texcoord;
 out vec4 frag_color;
 
+const vec2 POISSON_DISK[16] = vec2[](
+  vec2( -0.94201624, -0.39906216 ), vec2( 0.94558609, -0.76890725 ),
+  vec2( -0.094184101, -0.92938870 ), vec2( 0.34495938, 0.29387760 ),
+  vec2( -0.91588581, 0.45771432 ), vec2( -0.81544232, -0.87912464 ),
+  vec2( -0.38277543, 0.27676845 ), vec2( 0.97484398, 0.75648379 ),
+  vec2( 0.44323325, -0.97511554 ), vec2( 0.53742981, -0.47373420 ),
+  vec2( -0.26496911, -0.41893023 ), vec2( 0.79197514, 0.19090188 ),
+  vec2( -0.24188840, 0.99706507 ), vec2( -0.81409955, 0.91437590 ),
+  vec2( 0.19984126, 0.78641367 ), vec2( 0.14383161, -0.14100790 )
+);
+
+float random(vec2 st) {
+  return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+}
+
 void main() {
     if (texture(scene_mask, texcoord).r != 1.0) {
-        frag_color = vec4(1.0);
-        return;
+        discard;
     }
     vec3 frag_world_pos = texture(scene_pos, texcoord).xyz;
     vec3 frag_normal = normalize(2.0 * texture(scene_normal, texcoord).xyz - 1.0);
@@ -286,8 +317,7 @@ void main() {
     lp_frag_world_pos.xyz /= lp_frag_world_pos.w;
 
     if (abs(lp_frag_world_pos.x) > 1.0 || abs(lp_frag_world_pos.y) > 1.0) {
-        frag_color = vec4(1.0); // Not shadowed
-        return;
+        discard;
     }
 
     float cos_alpha = max(0.05, dot(frag_normal, l_dir)); // Clamped to prevent issues
@@ -295,15 +325,18 @@ void main() {
     float frag_depth_value = (lp_frag_world_pos.z + 1.0) * 0.5;
     float repaired_depth = frag_depth_value - bias;
 
-    float shadow = 0.0;
     vec2 shadow_texcoord = 0.5 * (lp_frag_world_pos.xy + vec2(1.0));
-    // hardware pcf
-    for (int i = -2; i <= 2; i++) {
-      for (int j = -2; j <= 2; j++) {
-        shadow += texture(shadowmap, vec3(shadow_texcoord+vec2(i,j)/float(shadowmap_dim), repaired_depth));
-      }
+    float shadow = 0.0;
+    float search_radius = 2.5 / float(shadowmap_dim); // How far to spread the samples
+    float rand_angle = random(texcoord) * 2.0 * 3.14159265;
+    mat2 rotation_matrix = mat2(cos(rand_angle), sin(rand_angle), -sin(rand_angle), cos(rand_angle));
+
+    for (int i = 0; i < 16; i++) {
+        vec2 offset = rotation_matrix * POISSON_DISK[i];
+        vec2 tmp_shadow_texcoord = shadow_texcoord + offset * search_radius;
+        shadow += texture(shadowmap, vec3(tmp_shadow_texcoord, repaired_depth));
     }
-    shadow /= 25;
+    shadow /= 16.0;
 
     frag_color = vec4(vec3(shadow), 1.0);
 }

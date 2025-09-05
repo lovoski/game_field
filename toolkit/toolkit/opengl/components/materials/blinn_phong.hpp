@@ -57,6 +57,10 @@ in vec3 worldPos;
 in vec3 worldNormal;
 in vec3 edgeDistance;
 
+uniform sampler2D gShadowMask;
+uniform bool ReceiveShadow;
+uniform float ShadowWeight;
+
 out vec4 FragColor;
 
 vec3 BlinnPhong(int index, vec3 fragWorldPos, vec3 fragWorldNormal, vec3 viewDir) {
@@ -98,11 +102,11 @@ void main() {
     result = shade;
   }
 
-  // if (ReceiveShadow) {
-  //   vec4 rtSample = texture(gRTTex0, screenTexCoord);
-  //   float shadow = 1.0 - (1.0 - rtSample.r) * ShadowWeight;
-  //   result = result * shadow;
-  // }
+  if (ReceiveShadow) {
+    float shadow = clamp(texture(gShadowMask, screenTexCoord).r, 0.0, 1.0);
+    shadow = 1.0 + clamp(ShadowWeight, 0.0, 1.0)*(shadow-1);
+    result = result * shadow;
+  }
 
   FragColor = vec4(result, 1.0);
 }

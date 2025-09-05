@@ -27,6 +27,7 @@ void defered_forward_mixed::draw_menu_gui() {
 
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
+  ImGui::Checkbox("Show Texture Wnd", &show_textures_wnd);
   ImGui::Separator();
 
   ImGui::MenuItem("Ambient Occlusion", nullptr, nullptr, false);
@@ -46,7 +47,7 @@ void defered_forward_mixed::draw_menu_gui() {
   sun_parameter_modified |= ImGui::DragFloat("Sun Horizontal Angle", &sun_h,
                                              0.1f, -180.0f, 180.0f, "%.3f");
   sun_parameter_modified |=
-      ImGui::DragFloat("Sun Vertical Angle", &sun_v, 0.1f, 0.0f, 89.0f, "%.3f");
+      ImGui::DragFloat("Sun Vertical Angle", &sun_v, 0.1f, 0.0f, 90.0f, "%.3f");
   ImGui::DragFloat("Sun Gamma", &ss_model.sun_gamma, 0.01f, 1.0f, 10.0f);
   if (sun_parameter_modified) {
     float sun_v_rad = sun_v / 180 * 3.1415927f;
@@ -56,26 +57,29 @@ void defered_forward_mixed::draw_menu_gui() {
     ss_model.update(sun_dir, sun_turbidity);
   }
 
-  ImGui::MenuItem("Character Shadow Maps", nullptr, nullptr, false);
+  ImGui::MenuItem("Skinned Character Shadow Maps", nullptr, nullptr, false);
   ImGui::DragFloat("Max Bias Term", &shadowmap_max_bias, 0.000001f, 0.0f, 1.0f,
                    "%.6f");
   ImGui::DragFloat("Min Bias Term", &shadowmap_min_bias, 0.000001f, 0.0f, 1.0f,
                    "%.6f");
-  // ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
-  // bool csm_modified = false;
-  // csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
-  // csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
-  // ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
-  // ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
-  // ImGui::DragFloat("Bias Scale Term", &csm_bias_scale, 0.001f, 0.0f, 10.0f);
-  // ImGui::DragFloat("Max Bias", &csm_max_bias, 0.0001f, 0.0f, 10.0f, "%.4f");
-  // std::string csm_depth_text = "CSM Split Depth: ";
-  // for (int i = 0; i < num_cascades + 1; i++) {
-  //   csm_depth_text += str_format("%.2f <-> ", csm_cascades[i]);
-  // }
-  // ImGui::Text(csm_depth_text.c_str());
-  // if (csm_modified)
-  //   resize_csm_buffer();
+
+  ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
+  bool csm_modified = false;
+  csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
+  csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
+  ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
+  ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
+  ImGui::DragFloat("Min Bias", &csm_min_bias, 0.000001f, 0.0f, 10.0f, "%.6f");
+  ImGui::DragFloat("Max Bias", &csm_max_bias, 0.000001f, 0.0f, 10.0f, "%.6f");
+  std::string csm_depth_text =
+      str_format("CSM Split Depth (znear %.2f, zfar %.2f): ", csm_cascades[0],
+                 csm_cascades[num_cascades]);
+  for (int i = 0; i < num_cascades + 1; i++) {
+    csm_depth_text += str_format("\n%.2f", csm_cascades[i]);
+  }
+  ImGui::Text(csm_depth_text.c_str());
+  if (csm_modified)
+    resize_csm_buffer();
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -96,6 +100,20 @@ void defered_forward_mixed::draw_gui(entt::registry &registry,
       }
     }
   }
+
+  if (show_textures_wnd)
+    show_textures_wnd_func();
+}
+
+void defered_forward_mixed::show_textures_wnd_func() {
+  ImGui::Begin("mixed_rsys_tex_wnd", &show_textures_wnd);
+  auto size = ImGui::GetWindowSize();
+  ImGui::Text("Shadow Mask");
+  ImGui::Image(
+      (void *)static_cast<std::uintptr_t>(scene_shadow_mask_tex.get_handle()),
+      {size.x, size.x / g_instance.scene_width * g_instance.scene_height},
+      ImVec2(0, 1), ImVec2(1, 0));
+  ImGui::End();
 }
 
 void defered_forward_mixed::init0(entt::registry &registry) {
@@ -106,6 +124,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   mask_tex.create(GL_TEXTURE_2D);
   ao_color.create(GL_TEXTURE_2D);
   csm_depth_atlas.create(GL_TEXTURE_2D);
+  scene_shadow_mask_tex.create(GL_TEXTURE_2D);
 
   noise_tex_random.create(GL_TEXTURE_2D);
   assets::image img;
@@ -144,6 +163,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   msaa_buffer.create();
   ao_buffer.create();
   csm_buffer.create();
+  scene_shadow_mask_buffer.create();
   csm_vp_matrix_buffer.create();
   shadow_depth_program.compile_shader_from_source(shadow_vs, shadow_fs);
   csm_selection_mask_program.compile_shader_from_source(quad_vs,
@@ -214,6 +234,21 @@ void defered_forward_mixed::resize(int width, int height) {
   if (!cbuffer.check_status())
     spdlog::error("cbuffer not complete!");
   cbuffer.unbind();
+
+  scene_shadow_mask_buffer.bind();
+  scene_shadow_mask_buffer.begin_draw_buffers();
+  scene_shadow_mask_tex.set_data(width, height, GL_RGBA8, GL_RGBA,
+                                 GL_UNSIGNED_BYTE);
+  scene_shadow_mask_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
+                                        {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
+                                        {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                                        {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+  scene_shadow_mask_buffer.attach_color_buffer(scene_shadow_mask_tex,
+                                               GL_COLOR_ATTACHMENT0);
+  scene_shadow_mask_buffer.end_draw_buffers();
+  if (!scene_shadow_mask_buffer.check_status())
+    spdlog::error("scene_shadow_mask_buffer not complete!");
+  scene_shadow_mask_buffer.unbind();
 
   ao_buffer.bind();
   ao_buffer.begin_draw_buffers();
@@ -525,10 +560,13 @@ void defered_forward_mixed::resize_csm_buffer() {
   csm_buffer.bind();
   csm_depth_atlas.set_data(num_cascades * csm_depth_dim, csm_depth_dim,
                            GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_FLOAT);
-  csm_depth_atlas.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-                                  {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-                                  {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-                                  {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+  csm_depth_atlas.set_parameters(
+      {{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
+       {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
+       {GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE},
+       {GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL},
+       {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+       {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
   csm_buffer.attach_depth_buffer(csm_depth_atlas);
   glDrawBuffer(GL_NONE);
   glReadBuffer(GL_NONE);
@@ -549,33 +587,36 @@ void defered_forward_mixed::render(entt::registry &registry) {
         registry.view<entt::entity, skinned_mesh_bundle>();
 
     // ------------------ render to geometry framebuffer ------------------
-    gbuffer.bind();
-    gbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glClearColor(0, 0, 0, 1);
-    if (scene_mesh_counter > 0) {
-      scene_vao.bind();
-      gbuffer_geometry_pass.use();
-      gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
-      gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
-      trans_mesh_view.each([&](entt::entity entity, transform &trans,
-                               mesh_data &data) {
-        if (!visibility_check(cam_comp.planes, data.bb_min, data.bb_max,
-                              data.skinned ? math::matrix4::Identity()
-                                           : trans.matrix())) {
-          return; // break if not visible
-        }
-        gbuffer_geometry_pass.set_mat4("gModel", data.skinned
-                                                     ? math::matrix4::Identity()
-                                                     : trans.matrix());
-        glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
-                       (void *)(data.scene_index_offset * sizeof(GLuint)));
-      });
-      scene_vao.unbind();
+    {
+      gbuffer.bind();
+      gbuffer.set_viewport(0, 0, g_instance.scene_width,
+                           g_instance.scene_height);
+      glEnable(GL_DEPTH_TEST);
+      glDepthMask(GL_TRUE);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glClearColor(0, 0, 0, 1);
+      if (scene_mesh_counter > 0) {
+        scene_vao.bind();
+        gbuffer_geometry_pass.use();
+        gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
+        gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
+        trans_mesh_view.each([&](entt::entity entity, transform &trans,
+                                 mesh_data &data) {
+          if (!visibility_check(cam_comp.planes, data.bb_min, data.bb_max,
+                                data.skinned ? math::matrix4::Identity()
+                                             : trans.matrix())) {
+            return; // break if not visible
+          }
+          gbuffer_geometry_pass.set_mat4(
+              "gModel",
+              data.skinned ? math::matrix4::Identity() : trans.matrix());
+          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                         (void *)(data.scene_index_offset * sizeof(GLuint)));
+        });
+        scene_vao.unbind();
+      }
+      gbuffer.unbind();
     }
-    gbuffer.unbind();
 
     // render ao buffer if needed
     if (enable_ao_pass) {
@@ -589,186 +630,291 @@ void defered_forward_mixed::render(entt::registry &registry) {
       ao_buffer.unbind();
     }
 
-    // render per bundle shadow map if sun is enabled
-    static math::vector3 tmp_sun_up_dir =
-        math::vector3(0.0, 0.97, 0.3).normalized();
-    if (enable_sun) {
-      skinned_mesh_bundle_view.each([&](entt::entity entity,
-                                        skinned_mesh_bundle &bundle_data) {
-        bundle_data.try_setup();
-        bundle_data.shadowmap_fb.bind();
-        bundle_data.shadowmap_fb.set_viewport(0, 0, 4096, 4096);
+    // ---------------- render scene csm if sun is enabled ----------------
+    {
+      if (enable_sun) {
+        csm_buffer.bind();
         glClear(GL_DEPTH_BUFFER_BIT);
         glClearColor(0, 0, 0, 1);
-        scene_vao.bind();
+        csm_cascades[0] = cam_comp.z_near;
+        math::vector3 csm_side_dir = math::world_up;
+        if (abs(csm_side_dir.dot(sun_direction)) < 1e-3f)
+          csm_side_dir =
+              (csm_side_dir + 0.1f * math::world_forward).normalized();
         shadow_depth_program.use();
-        math::vector3 center = (bundle_data.bb_min + bundle_data.bb_max) / 2;
-        float radius = (bundle_data.bb_max - bundle_data.bb_min).norm() / 2;
-        math::vector3 norm_dir =
-            sun_direction.cross(tmp_sun_up_dir).normalized();
-        bundle_data.shadow_vp =
-            math::ortho(-radius, radius, radius, -radius, -50, 50) *
-            math::lookat(center, center + sun_direction, norm_dir);
-        update_bounding_planes(bundle_data.vis_planes, bundle_data.shadow_vp);
-        shadow_depth_program.set_mat4("gVP", bundle_data.shadow_vp);
-        trans_mesh_view.each([&](entt::entity entity, transform &trans,
-                                 mesh_data &data) {
-          if (!visibility_check(
-                  bundle_data.vis_planes, data.bb_min, data.bb_max,
-                  data.skinned ? math::matrix4::Identity() : trans.matrix())) {
-            return; // break if not visible
-          }
-          shadow_depth_program.set_mat4("gModel",
-                                        data.skinned ? math::matrix4::Identity()
-                                                     : trans.matrix());
-          glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
-                         (void *)(data.scene_index_offset * sizeof(GLuint)));
-        });
+        scene_vao.bind();
+        csm_vp_matrix.resize(num_cascades);
+        for (int i = 0; i < num_cascades; i++) {
+          // render to atlas by setting up viewports
+          csm_buffer.set_viewport(i * csm_depth_dim, 0, csm_depth_dim,
+                                  csm_depth_dim);
+          // compute depth for view frustom split
+          csm_cascades[i + 1] =
+              csm_split_lambda *
+                  (cam_comp.z_near * pow(cam_comp.z_far / cam_comp.z_near,
+                                         (float)(i + 1) / num_cascades)) +
+              (1.0f - csm_split_lambda) *
+                  (cam_comp.z_near +
+                   (i + 1) * (cam_comp.z_far - cam_comp.z_near) / num_cascades);
+          auto [bb_sphere_center, bb_sphere_radius] = frustom_bounding_sphere(
+              csm_cascades[i], csm_cascades[i + 1], cam_comp.fovy_degree,
+              g_instance.scene_width, g_instance.scene_height);
+          math::vector4 tmp_point;
+          tmp_point << bb_sphere_center, 1.0f;
+          tmp_point = cam_trans.matrix() * tmp_point;
+          csm_vp_matrix[i] =
+              math::ortho(-bb_sphere_radius, bb_sphere_radius, bb_sphere_radius,
+                          -bb_sphere_radius,
+                          std::min(-bb_sphere_radius, -300.0f),
+                          bb_sphere_radius) *
+              math::lookat(tmp_point.head<3>(),
+                           tmp_point.head<3>() + sun_direction.normalized(),
+                           csm_side_dir);
+          update_bounding_planes(csm_frustom_planes, csm_vp_matrix[i]);
+          shadow_depth_program.set_mat4("gVP", csm_vp_matrix[i]);
+          trans_mesh_view.each([&](entt::entity entity, transform &trans,
+                                   mesh_data &data) {
+            if (data.skinned ||
+                !visibility_check(csm_frustom_planes, data.bb_min, data.bb_max,
+                                  trans.matrix()))
+              return;
+            shadow_depth_program.set_mat4("gModel", trans.matrix());
+            glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                           (void *)(data.scene_index_offset * sizeof(GLuint)));
+          });
+        }
         scene_vao.unbind();
-        bundle_data.shadowmap_fb.unbind();
-      });
+        csm_buffer.unbind();
+      }
+
+      // render per bundle shadow map if sun is enabled
+      static math::vector3 tmp_sun_up_dir =
+          math::vector3(0.0, 0.97, 0.3).normalized();
+      if (enable_sun) {
+        skinned_mesh_bundle_view.each([&](entt::entity entity,
+                                          skinned_mesh_bundle &bundle_data) {
+          bundle_data.try_setup();
+          bundle_data.shadowmap_fb.bind();
+          bundle_data.shadowmap_fb.set_viewport(0, 0, 4096, 4096);
+          glClear(GL_DEPTH_BUFFER_BIT);
+          glClearColor(0, 0, 0, 1);
+          scene_vao.bind();
+          shadow_depth_program.use();
+          math::vector3 center = (bundle_data.bb_min + bundle_data.bb_max) / 2;
+          float radius = (bundle_data.bb_max - bundle_data.bb_min).norm() / 2;
+          math::vector3 norm_dir =
+              sun_direction.cross(tmp_sun_up_dir).normalized();
+          bundle_data.shadow_vp =
+              math::ortho(-radius, radius, radius, -radius, -50, 50) *
+              math::lookat(center, center + sun_direction, norm_dir);
+          update_bounding_planes(bundle_data.vis_planes, bundle_data.shadow_vp);
+          shadow_depth_program.set_mat4("gVP", bundle_data.shadow_vp);
+          trans_mesh_view.each([&](entt::entity entity, transform &trans,
+                                   mesh_data &data) {
+            if (!visibility_check(bundle_data.vis_planes, data.bb_min,
+                                  data.bb_max,
+                                  data.skinned ? math::matrix4::Identity()
+                                               : trans.matrix())) {
+              return; // break if not visible
+            }
+            shadow_depth_program.set_mat4(
+                "gModel",
+                data.skinned ? math::matrix4::Identity() : trans.matrix());
+            glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
+                           (void *)(data.scene_index_offset * sizeof(GLuint)));
+          });
+          scene_vao.unbind();
+          bundle_data.shadowmap_fb.unbind();
+        });
+      }
+    }
+
+    // render scene shadow mask texture
+    {
+      scene_shadow_mask_buffer.bind();
+      scene_shadow_mask_buffer.set_viewport(0, 0, g_instance.scene_width,
+                                            g_instance.scene_height);
+      glClear(GL_COLOR_BUFFER_BIT);
+      glClearColor(0, 0, 0, 1);
+
+      // render scene csm shadow mask
+      if (enable_sun) {
+        csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
+        csm_selection_mask_program.use();
+        csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
+            .set_int("num_cascades", num_cascades)
+            .set_int("csm_depth_dim", csm_depth_dim)
+            .set_float("min_bias", csm_min_bias)
+            .set_float("max_bias", csm_max_bias)
+            .set_vec3("light_dir", sun_direction)
+            .set_int("pcf_kernal_size", pcf_kernal_size)
+            .set_mat4("cam_view", cam_comp.view)
+            .set_vec2("viewport_size", g_instance.get_scene_size());
+
+        csm_selection_mask_program.set_texture2d("scene_pos",
+                                                 pos_tex.get_handle(), 0);
+        csm_selection_mask_program.set_texture2d("scene_normal",
+                                                 normal_tex.get_handle(), 1);
+        csm_selection_mask_program.set_texture2d("scene_mask",
+                                                 mask_tex.get_handle(), 2);
+        csm_selection_mask_program.set_texture2d(
+            "cascade_depth", csm_depth_atlas.get_handle(), 3);
+        glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
+                                          "csm_cascades"),
+                     10, csm_cascades);
+        quad_draw_call();
+
+        skinned_mesh_bundle_view.each([&](entt::entity entity,
+                                          skinned_mesh_bundle &bundle_data) {
+          csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
+          shadow_mask_program.use();
+          shadow_mask_program.set_mat4("shadow_vp", bundle_data.shadow_vp)
+              .set_int("shadowmap_dim", 4096)
+              .set_float("max_bias", shadowmap_max_bias)
+              .set_float("min_bias", shadowmap_min_bias)
+              .set_vec3("light_dir", sun_direction)
+              .set_vec2("viewport_size", g_instance.get_scene_size());
+
+          shadow_mask_program.set_texture2d("scene_pos", pos_tex.get_handle(),
+                                            0);
+          shadow_mask_program.set_texture2d("scene_normal",
+                                            normal_tex.get_handle(), 1);
+          shadow_mask_program.set_texture2d("scene_mask", mask_tex.get_handle(),
+                                            2);
+          shadow_mask_program.set_texture2d(
+              "shadowmap", bundle_data.shadowmap_depth.get_handle(), 3);
+          quad_draw_call();
+        });
+      }
+
+      scene_shadow_mask_buffer.unbind();
     }
 
     // ------------------- render to multisample framebuffer -------------------
-    msaa_buffer.bind();
-    msaa_buffer.set_viewport(0, 0, g_instance.scene_width,
-                             g_instance.scene_height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glClearColor(0, 0, 0, 1);
+    {
+      msaa_buffer.bind();
+      msaa_buffer.set_viewport(0, 0, g_instance.scene_width,
+                               g_instance.scene_height);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glClearColor(0, 0, 0, 1);
 
-    glDisable(GL_DEPTH_TEST);
-    ss_model.render(cam_comp.vp, cam_trans.position());
-    glEnable(GL_DEPTH_TEST);
-
-    // iterate through all material types
-    scene_vao.bind();
-    for (auto &mat_shader_pair : material::__material_shaders__) {
-      auto mat_name = mat_shader_pair.first;
-      auto &mat_shader = mat_shader_pair.second;
-      material::__material_instance__[mat_name]->prepare0();
-      mat_shader.use();
-      // bind common bindings
-      mat_shader.set_mat4("gViewMat", cam_comp.view);
-      mat_shader.set_mat4("gProjMat", cam_comp.proj);
-      mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
-      mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
-      mat_shader.set_buffer_ssbo(light_data_buffer, 0);
-      ss_model.setup_uniforms(mat_shader);
-      material::__material_view__[mat_name](registry, [&](entt::entity entity,
-                                                          material *mat) {
-        if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
-          if (mesh_ptr->should_render_mesh) {
-            auto &trans = registry.get<transform>(entity);
-            if (!visibility_check(cam_comp.planes, mesh_ptr->bb_min,
-                                  mesh_ptr->bb_max,
-                                  mesh_ptr->skinned ? math::matrix4::Identity()
-                                                    : trans.matrix())) {
-              // spdlog::info("Cpu cull mesh {0}", mesh_ptr->mesh_name);
-              return;
-            }
-            mat_shader.set_int("gVertexOffset", mesh_ptr->scene_vertex_offset);
-            mat_shader.set_mat4("gModelToWorldPoint",
-                                mesh_ptr->skinned ? math::matrix4::Identity()
-                                                  : trans.matrix());
-            mat_shader.set_mat3(
-                "gModelToWorldDir",
-                mesh_ptr->skinned
-                    ? (math::matrix3)(math::matrix3::Identity())
-                    : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
-            mat->bind_uniforms(mat_shader);
-            glDrawElements(
-                GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
-                (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
-          }
-        }
-      });
-      material::__material_instance__[mat_name]->prepare1();
-    }
-    scene_vao.unbind();
-
-    // ------------------- debug rendering -------------------
-
-    // render grids
-    if (should_draw_grid) {
-      glEnable(GL_BLEND);
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-      glBlendEquation(GL_FUNC_ADD);
-      draw_infinite_grid(cam_comp.view, cam_comp.proj, cam_comp.z_near,
-                         cam_comp.z_far, grid_spacing);
-      glDisable(GL_BLEND);
-    }
-
-    // render debug ui from scripts
-    if (should_draw_debug) {
       glDisable(GL_DEPTH_TEST);
-      // debug rendering
-      if (auto app_ptr = registry.ctx().get<iapp *>()) {
-        auto script_sys = app_ptr->get_sys<script_system>();
-        script_sys->draw_to_scene(app_ptr);
+      ss_model.render(cam_comp.vp, cam_trans.position());
+      glEnable(GL_DEPTH_TEST);
+
+      // iterate through all material types
+      scene_vao.bind();
+      for (auto &mat_shader_pair : material::__material_shaders__) {
+        auto mat_name = mat_shader_pair.first;
+        auto &mat_shader = mat_shader_pair.second;
+        material::__material_instance__[mat_name]->prepare0();
+        mat_shader.use();
+        // bind common bindings
+        mat_shader.set_mat4("gViewMat", cam_comp.view);
+        mat_shader.set_mat4("gProjMat", cam_comp.proj);
+        mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
+        mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
+        mat_shader.set_texture2d("gShadowMask",
+                                 scene_shadow_mask_tex.get_handle(), 0);
+        mat_shader.set_buffer_ssbo(light_data_buffer, 0);
+        ss_model.setup_uniforms(mat_shader);
+        material::__material_view__[mat_name](registry, [&](entt::entity entity,
+                                                            material *mat) {
+          if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
+            if (mesh_ptr->should_render_mesh) {
+              auto &trans = registry.get<transform>(entity);
+              if (!visibility_check(
+                      cam_comp.planes, mesh_ptr->bb_min, mesh_ptr->bb_max,
+                      mesh_ptr->skinned ? math::matrix4::Identity()
+                                        : trans.matrix())) {
+                // spdlog::info("Cpu cull mesh {0}", mesh_ptr->mesh_name);
+                return;
+              }
+              mat_shader.set_int("gVertexOffset",
+                                 mesh_ptr->scene_vertex_offset);
+              mat_shader.set_mat4("gModelToWorldPoint",
+                                  mesh_ptr->skinned ? math::matrix4::Identity()
+                                                    : trans.matrix());
+              mat_shader.set_mat3(
+                  "gModelToWorldDir",
+                  mesh_ptr->skinned
+                      ? (math::matrix3)(math::matrix3::Identity())
+                      : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
+              mat->bind_uniforms(mat_shader);
+              glDrawElements(
+                  GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
+                  (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
+            }
+          }
+        });
+        material::__material_instance__[mat_name]->prepare1();
+      }
+      scene_vao.unbind();
+
+      // ------------------- debug rendering -------------------
+
+      // render grids
+      if (should_draw_grid) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendEquation(GL_FUNC_ADD);
+        draw_infinite_grid(cam_comp.view, cam_comp.proj, cam_comp.z_near,
+                           cam_comp.z_far, grid_spacing);
+        glDisable(GL_BLEND);
       }
 
-      registry.view<entt::entity, skinned_mesh_bundle>().each(
-          [&](entt::entity entity, skinned_mesh_bundle &bundle_data) {
-            for (auto mesh_ent : bundle_data.mesh_entities) {
-              auto &mesh_comp = registry.get<mesh_data>(mesh_ent);
-              draw_cube(mesh_comp.bb_min, math::world_forward, math::world_left,
-                        math::world_up, cam_comp.vp,
-                        mesh_comp.bb_max - mesh_comp.bb_min);
-            }
-            draw_cube(bundle_data.bb_min, math::world_forward, math::world_left,
-                      math::world_up, cam_comp.vp,
-                      bundle_data.bb_max - bundle_data.bb_min, Green);
-          });
+      // render debug ui from scripts
+      if (should_draw_debug) {
+        glDisable(GL_DEPTH_TEST);
+        // debug rendering
+        if (auto app_ptr = registry.ctx().get<iapp *>()) {
+          auto script_sys = app_ptr->get_sys<script_system>();
+          script_sys->draw_to_scene(app_ptr);
+        }
 
-      glEnable(GL_DEPTH_TEST);
+        registry.view<entt::entity, skinned_mesh_bundle>().each(
+            [&](entt::entity entity, skinned_mesh_bundle &bundle_data) {
+              for (auto mesh_ent : bundle_data.mesh_entities) {
+                auto &mesh_comp = registry.get<mesh_data>(mesh_ent);
+                draw_cube(mesh_comp.bb_min, math::world_forward,
+                          math::world_left, math::world_up, cam_comp.vp,
+                          mesh_comp.bb_max - mesh_comp.bb_min);
+              }
+              draw_cube(bundle_data.bb_min, math::world_forward,
+                        math::world_left, math::world_up, cam_comp.vp,
+                        bundle_data.bb_max - bundle_data.bb_min, Green);
+            });
+
+        glEnable(GL_DEPTH_TEST);
+      }
+
+      // ------------------- apply post processing -------------------
+      glEnable(GL_BLEND);
+
+      // 1. ambient occlusion
+      if (enable_ao_pass) {
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendEquation(GL_FUNC_ADD);
+        ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
+      }
+      glDisable(GL_BLEND);
+
+      // ------------------- final presentation -------------------
+      // copy color texture from multisample framebuffer to color framebuffer
+      // for presentation
+      glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_buffer.get_handle());
+      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, cbuffer.get_handle());
+      glBlitFramebuffer(0, 0, g_instance.scene_width, g_instance.scene_height,
+                        0, 0, g_instance.scene_width, g_instance.scene_height,
+                        GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+      msaa_buffer.unbind();
     }
 
-    // ------------------- apply post processing -------------------
-    glEnable(GL_BLEND);
-
-    // 1. ambient occlusion
-    if (enable_ao_pass) {
-      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-      glBlendEquation(GL_FUNC_ADD);
-      ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
-    }
-    glDisable(GL_BLEND);
-
-    // ------------------- final presentation -------------------
-    // copy color texture from multisample framebuffer to color framebuffer for
-    // presentation
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, msaa_buffer.get_handle());
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, cbuffer.get_handle());
-    glBlitFramebuffer(0, 0, g_instance.scene_width, g_instance.scene_height, 0,
-                      0, g_instance.scene_width, g_instance.scene_height,
-                      GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-    msaa_buffer.unbind();
-
-    cbuffer.bind();
-    cbuffer.set_viewport(0, 0, g_instance.scene_width, g_instance.scene_height);
-
-    skinned_mesh_bundle_view.each([&](entt::entity entity,
-                                      skinned_mesh_bundle &bundle_data) {
-      csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
-      shadow_mask_program.use();
-      shadow_mask_program.set_mat4("shadow_vp", bundle_data.shadow_vp)
-          .set_int("shadowmap_dim", 4096)
-          .set_float("max_bias", shadowmap_max_bias)
-          .set_float("min_bias", shadowmap_min_bias)
-          .set_vec3("light_dir", sun_direction)
-          .set_vec2("viewport_size", g_instance.get_scene_size());
-
-      shadow_mask_program.set_texture2d("scene_pos", pos_tex.get_handle(), 0);
-      shadow_mask_program.set_texture2d("scene_normal", normal_tex.get_handle(),
-                                        1);
-      shadow_mask_program.set_texture2d("scene_mask", mask_tex.get_handle(), 2);
-      shadow_mask_program.set_texture2d(
-          "shadowmap", bundle_data.shadowmap_depth.get_handle(), 3);
-      quad_draw_call();
-    });
-
-    cbuffer.unbind();
+    // cbuffer.bind();
+    // cbuffer.set_viewport(0, 0, g_instance.scene_width,
+    // g_instance.scene_height); glClear(GL_COLOR_BUFFER_BIT); glClearColor(0,
+    // 0, 0, 1); cbuffer.unbind();
   }
 }
 

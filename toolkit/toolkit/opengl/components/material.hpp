@@ -26,6 +26,7 @@ public:
 
   void draw_gui(iapp *app) override;
   void bind_uniforms(shader &mat_shader);
+  void init1() override;
 
   void prepare0() {}
   void prepare1() {}

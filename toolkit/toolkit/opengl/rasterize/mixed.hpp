@@ -49,6 +49,8 @@ public:
   int msaa_samples = 8;
 
   bool should_draw_debug = true;
+  bool show_textures_wnd = false;
+  void show_textures_wnd_func();
 
   bool enable_ao_pass = false;
   int ao_filter_size = 9;
@@ -56,7 +58,7 @@ public:
   float ssao_noise_scale = 64.0f, ssao_radius = 0.2f;
 
   bool enable_sun = true;
-  float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 89.0f;
+  float sun_turbidity = 2.5f, sun_h = 0.0f, sun_v = 80.0f;
   math::vector3 sun_color = math::vector3(0.9, 0.9, 0.9);
   // direction point away from the sun
   math::vector3 sun_direction;
@@ -76,15 +78,15 @@ protected:
 
   texture color_tex;
 
-  // csm related
-  framebuffer csm_buffer;
-  texture csm_depth_atlas;
+  // scene shadow related
+  framebuffer csm_buffer, scene_shadow_mask_buffer;
+  texture csm_depth_atlas, scene_shadow_mask_tex;
   shader shadow_depth_program, csm_selection_mask_program, shadow_mask_program;
   int num_cascades = 3, csm_depth_dim = 2048, pcf_kernal_size = 1;
-  float shadowmap_max_bias = 0.0002f, shadowmap_min_bias = 0.0001f;
+  float shadowmap_max_bias = 0.0006f, shadowmap_min_bias = 0.00001f;
   texture noise_tex_random;
-  float csm_split_lambda = 0.93f, csm_bias_scale = 1.0f, csm_max_bias = 0.0008f,
-        csm_cascades[10];
+  float csm_split_lambda = 0.93f, csm_min_bias = 0.0001f,
+        csm_max_bias = 0.0008f, csm_cascades[10];
   void resize_csm_buffer();
   // csm cache
   buffer csm_vp_matrix_buffer;
@@ -113,7 +115,7 @@ DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
                sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
-               csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_bias_scale,
+               csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_min_bias,
                csm_max_bias)
 
 }; // namespace toolkit::opengl
