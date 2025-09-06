@@ -1,4 +1,6 @@
-# 说明文档
+# toolkit library | Document
+
+![teaser](docs/toolkit_teaser_20250906.png)
 
 本项目主体包括下面的几个部分：
 
