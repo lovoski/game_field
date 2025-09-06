@@ -77,7 +77,7 @@ protected:
   float light_mask_shadow_weight = 0.5f;
 
   texture color_tex, color_backup_tex;
-  bool enable_fxaa = true;
+  bool enable_fxaa = false;
   shader fxaa_program;
 
   // scene shadow related
@@ -118,6 +118,7 @@ DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
                sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
                csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_min_bias,
-               csm_max_bias, shadowmap_max_bias, shadowmap_min_bias)
+               csm_max_bias, shadowmap_max_bias, shadowmap_min_bias,
+               enable_fxaa)
 
 }; // namespace toolkit::opengl

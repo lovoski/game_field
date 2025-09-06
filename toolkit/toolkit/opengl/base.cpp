@@ -89,6 +89,7 @@ void context::run(std::function<void(void)> mainLoop) {
 }
 
 void context::poll() {
+  wnd_resized = false;
   scroll_offset << 0.0, 0.0;
   triggered_keys.clear();
   untriggered_keys.clear();

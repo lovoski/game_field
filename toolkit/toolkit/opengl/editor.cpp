@@ -4,6 +4,7 @@
 #include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
+#include "toolkit/opengl/rasterize/shaders.hpp"
 #include "toolkit/opengl/scripts/smplx.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
 
@@ -18,6 +19,16 @@ void editor::init() {
   imgui_io = &ImGui::GetIO();
   imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+  quad_program.compile_shader_from_source(quad_vs, R"(
+#version 430 core
+uniform sampler2D scene_tex;
+in vec2 texcoord;
+out vec4 frag_color;
+void main() {
+  frag_color = texture(scene_tex, texcoord);
+}
+)");
 }
 
 void editor::shutdown() { g_instance.shutdown(); }
@@ -49,73 +60,124 @@ void editor::late_deserialize(nlohmann::json &j) {
   anim_sys = get_sys<anim::anim_system>();
 }
 
-void editor::run() {
-  auto &instance = context::get_instance();
+void editor::game_mode_main_loop() {
+  float dt = timer.elapse_s();
   timer.reset();
 
-  add_default_objects();
+  transform_sys->update_transform(registry);
+  render_sys->update_scene_buffers(registry);
+  active_camera_manipulate(dt);
 
-  instance.run([&]() {
-    float dt = timer.elapse_s();
-    timer.reset();
+  for (auto sys : systems)
+    if (sys->active)
+      sys->preupdate(registry, dt);
+  if (script_sys->active)
+    script_sys->preupdate(this, dt);
+  for (auto sys : systems)
+    if (sys->active)
+      sys->update(registry, dt);
+  if (script_sys->active)
+    script_sys->update(this, dt);
+  for (auto sys : systems)
+    if (sys->active)
+      sys->lateupdate(registry, dt);
+  if (script_sys->active)
+    script_sys->lateupdate(this, dt);
 
-    transform_sys->update_transform(registry);
-    render_sys->update_scene_buffers(registry);
-    active_camera_manipulate(dt);
+  if (g_instance.wnd_resized) {
+    g_instance.scene_width = g_instance.wnd_width;
+    g_instance.scene_height = g_instance.wnd_height;
+    render_sys->resize(g_instance.scene_width, g_instance.scene_height);
+  }
+  render_sys->render(registry);
 
-    for (auto sys : systems)
-      if (sys->active)
-        sys->preupdate(registry, dt);
-    if (script_sys->active)
-      script_sys->preupdate(this, dt);
-    for (auto sys : systems)
-      if (sys->active)
-        sys->update(registry, dt);
-    if (script_sys->active)
-      script_sys->update(this, dt);
-    for (auto sys : systems)
-      if (sys->active)
-        sys->lateupdate(registry, dt);
-    if (script_sys->active)
-      script_sys->lateupdate(this, dt);
+  glClearColor(0, 0, 0, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0, 0, g_instance.wnd_width, g_instance.wnd_height);
 
+  quad_program.use();
+  quad_program.set_texture2d("scene_tex",
+                             render_sys->get_target_texture().get_handle(), 0);
+  quad_draw_call();
+  g_instance.swap_buffer();
+}
+void editor::editor_mode_main_loop() {
+  float dt = timer.elapse_s();
+  timer.reset();
+
+  transform_sys->update_transform(registry);
+  render_sys->update_scene_buffers(registry);
+  active_camera_manipulate(dt);
+
+  for (auto sys : systems)
+    if (sys->active)
+      sys->preupdate(registry, dt);
+  if (script_sys->active)
+    script_sys->preupdate(this, dt);
+  for (auto sys : systems)
+    if (sys->active)
+      sys->update(registry, dt);
+  if (script_sys->active)
+    script_sys->update(this, dt);
+  for (auto sys : systems)
+    if (sys->active)
+      sys->lateupdate(registry, dt);
+  if (script_sys->active)
+    script_sys->lateupdate(this, dt);
+
+  render_sys->render(registry);
+
+  glClearColor(0, 0, 0, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0, 0, g_instance.wnd_width, g_instance.wnd_height);
+
+  g_instance.begin_imgui();
+
+  ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+  ImGui::Begin("Scene");
+  ImGui::BeginChild("GameRenderer");
+  auto size = ImGui::GetContentRegionAvail();
+  auto pos = ImGui::GetWindowPos();
+  g_instance.scene_pos_x = pos.x;
+  g_instance.scene_pos_y = pos.y;
+  ImGui::Image((void *)static_cast<std::uintptr_t>(
+                   render_sys->get_target_texture().get_handle()),
+               {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
+  if (g_instance.scene_width != size.x || g_instance.scene_height != size.y) {
+    // resize sceneFBO
+    g_instance.scene_width = size.x;
+    g_instance.scene_height = size.y;
+    render_sys->resize(size.x, size.y);
     render_sys->render(registry);
+  }
+  draw_gizmos();
+  ImGui::EndChild();
+  ImGui::End();
 
-    glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glViewport(0, 0, instance.wnd_width, instance.wnd_height);
+  draw_main_menubar();
+  draw_entity_hierarchy();
+  draw_entity_components();
+  editor_shortkeys();
 
-    instance.begin_imgui();
+  g_instance.end_imgui();
 
-    ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
-    ImGui::Begin("Scene");
-    ImGui::BeginChild("GameRenderer");
-    auto size = ImGui::GetContentRegionAvail();
-    auto pos = ImGui::GetWindowPos();
-    instance.scene_pos_x = pos.x;
-    instance.scene_pos_y = pos.y;
-    ImGui::Image((void *)static_cast<std::uintptr_t>(
-                     render_sys->get_target_texture().get_handle()),
-                 {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
-    if (instance.scene_width != size.x || instance.scene_height != size.y) {
-      // resize sceneFBO
-      instance.scene_width = size.x;
-      instance.scene_height = size.y;
-      render_sys->resize(size.x, size.y);
-      render_sys->render(registry);
+  g_instance.swap_buffer();
+}
+
+void editor::run() {
+  timer.reset();
+  add_default_objects();
+  g_instance.run([&]() {
+    if (g_instance.is_key_triggered(GLFW_KEY_0)) {
+      g_instance.scene_width = g_instance.wnd_width;
+      g_instance.scene_height = g_instance.wnd_height;
+      render_sys->resize(g_instance.scene_width, g_instance.scene_height);
+      in_game_mode = !in_game_mode;
     }
-    draw_gizmos();
-    ImGui::EndChild();
-    ImGui::End();
-
-    draw_main_menubar();
-    draw_entity_hierarchy();
-    draw_entity_components();
-    editor_shortkeys();
-
-    instance.end_imgui();
-
-    instance.swap_buffer();
+    if (!in_game_mode)
+      editor_mode_main_loop();
+    else
+      game_mode_main_loop();
   });
 }
 

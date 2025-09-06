@@ -92,6 +92,9 @@ public:
   void draw_entity_components();
   void draw_gizmos(bool enable = true);
 
+  void game_mode_main_loop();
+  void editor_mode_main_loop();
+
   /**
    * Handle keyboard short cut inputs, modify editor states
    */
@@ -112,6 +115,8 @@ public:
 
 private:
   int gizmo_mode_idx = 0;
+  bool in_game_mode = false;
+  shader quad_program;
 
   active_camera_manipulate_data cam_manip_data;
 };

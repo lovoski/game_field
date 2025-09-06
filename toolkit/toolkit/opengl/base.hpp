@@ -42,6 +42,7 @@ public:
   static void framebuffer_resize_callback(GLFWwindow *window, int width,
                                           int height) {
     auto &context = context::get_instance();
+    context.wnd_resized = true;
     context.wnd_width = width;
     context.wnd_height = height;
   }
@@ -126,6 +127,7 @@ public:
            scene_pos_x = 0, scene_pos_y = 0;
 
   bool caps_lock_on = false;
+  bool wnd_resized = false;
 
   entt::entity active_camera = entt::null;
 
