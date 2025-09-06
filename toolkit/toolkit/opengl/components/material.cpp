@@ -65,10 +65,26 @@ void material::bind_uniforms(shader &mat_shader) {
   }
 }
 
+std::vector<std::string> get_segs(std::string str, char sep) {
+  std::vector<std::string> segments;
+  std::string current;
+  for (char ch : str) {
+    if (ch == sep) {
+      segments.push_back(current);
+      current.clear();
+    } else {
+      current += ch;
+    }
+  }
+  segments.push_back(current);
+  return segments;
+}
+
 std::vector<material_field>
 parse_glsl_uniforms(std::vector<std::string> sources) {
   std::vector<material_field> results;
   std::map<std::string, std::string> name_to_type;
+  std::map<std::string, std::string> meta_infos;
   for (int i = 0; i < sources.size(); i++) {
     std::string source = replace(replace(sources[i], "\r", ""), ";", "");
     int previous = 0;
@@ -93,6 +109,22 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
         if (segments.size() > 0 && segments[0] == "uniform") {
           name_to_type[segments[2]] = segments[1];
         }
+        if (segments.size() > 0 && segments[0] == "//@meta") {
+          // meta informations
+          std::string info = segments[1];
+          int lb = -1, rb = -1;
+          for (int i = 0; i < info.size(); i++) {
+            if (info[i] == '(')
+              lb = i;
+            if (info[i] == ')')
+              rb = i;
+          }
+          if (lb == -1 || rb == -1) {
+            spdlog::error("Failed to parse meta info {0}", info);
+          } else {
+            meta_infos[info.substr(0, lb)] = info.substr(lb + 1, rb - lb - 1);
+          }
+        }
         previous = j + 1;
       }
     }
@@ -105,10 +137,39 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
     mf.type = p.second;
     if (p.second == "vec2") {
       mf.value = (math::vector2)math::vector2::Zero();
+      if (meta_infos.find(mf.name) != meta_infos.end()) {
+        auto segs = get_segs(meta_infos[mf.name], ',');
+        if (segs.size() < 2)
+          spdlog::error("Failed to setup meta info for variable {0}", mf.name);
+        else {
+          mf.value = math::vector2(std::atof(segs[0].c_str()),
+                                   std::atof(segs[1].c_str()));
+        }
+      }
     } else if (p.second == "vec3") {
       mf.value = (math::vector3)math::vector3::Ones();
+      if (meta_infos.find(mf.name) != meta_infos.end()) {
+        auto segs = get_segs(meta_infos[mf.name], ',');
+        if (segs.size() < 3)
+          spdlog::error("Failed to setup meta info for variable {0}", mf.name);
+        else {
+          mf.value = math::vector3(std::atof(segs[0].c_str()),
+                                   std::atof(segs[1].c_str()),
+                                   std::atof(segs[2].c_str()));
+        }
+      }
     } else if (p.second == "vec4") {
       mf.value = (math::vector4)math::vector4::Ones();
+      if (meta_infos.find(mf.name) != meta_infos.end()) {
+        auto segs = get_segs(meta_infos[mf.name], ',');
+        if (segs.size() < 4)
+          spdlog::error("Failed to setup meta info for variable {0}", mf.name);
+        else {
+          mf.value = math::vector4(
+              std::atof(segs[0].c_str()), std::atof(segs[1].c_str()),
+              std::atof(segs[2].c_str()), std::atof(segs[3].c_str()));
+        }
+      }
     } else if (p.second == "mat2") {
       mf.value = (math::matrix2)math::matrix2::Identity();
     } else if (p.second == "mat3") {
@@ -117,10 +178,26 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
       mf.value = (math::matrix4)math::matrix4::Identity();
     } else if (p.second == "float") {
       mf.value = 0.0f;
+      if (meta_infos.find(mf.name) != meta_infos.end()) {
+        mf.value = std::atof(meta_infos[mf.name].c_str());
+      }
     } else if (p.second == "bool") {
       mf.value = false;
+      if (meta_infos.find(mf.name) != meta_infos.end()) {
+        auto meta_info = lower_case(meta_infos[mf.name]);
+        if (meta_info == "true")
+          mf.value = true;
+        else if (meta_info == "false")
+          mf.value = false;
+        else
+          spdlog::error("Failed to recognize boolean meta info for field {0}",
+                        mf.name);
+      }
     } else if (p.second == "int") {
       mf.value = 0;
+      if (meta_infos.find(mf.name) != meta_infos.end()) {
+        mf.value = std::atoi(meta_infos[mf.name].c_str());
+      }
     }
     results.push_back(mf);
   }
@@ -128,21 +205,17 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
 }
 
 void material::init1() {
-  auto mf = parse_glsl_uniforms(
-      {vertex_shader_source, fragment_shader_source, geometry_shader_source});
-  std::vector<material_field> missing_mfs;
-  for (auto &p : mf) {
-    bool field_found = false;
-    for (int i = 0; i < material_fields.size(); i++)
-      if (material_fields[i].name == p.name) {
-        field_found = true;
+  auto mf = parse_glsl_uniforms({get_vertex_shader_source(),
+                                 get_fragment_shader_source(),
+                                 get_geometry_shader_source()});
+  for (auto p : material_fields) {
+    for (int i = 0; i < mf.size(); i++)
+      if (mf[i].name == p.name) {
+        mf[i] = p;
         break;
       }
-    if (!field_found)
-      missing_mfs.push_back(p);
   }
-  for (int i = 0; i < missing_mfs.size(); i++)
-    material_fields.push_back(missing_mfs[i]);
+  material_fields = mf;
 }
 
 }; // namespace toolkit::opengl

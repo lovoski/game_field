@@ -14,9 +14,10 @@ REFLECT(material_field, name, type, value)
 
 /**
  * Automatically parse uniforms variables as material fields.
- * 
- * You can use the following annotation to declare meta informations about uniforms.
- * 
+ *
+ * You can use the following annotation to declare meta informations about
+ * uniforms.
+ *
  * //@meta float_uniform_variable(min_value, max_value, default_value)
  * //@meta int_uniform_variable(min_value, max_value, default_value)
  * //@meta bool_uniform_variable(default_value)
@@ -43,9 +44,9 @@ public:
   virtual void prepare0(entt::registry &registry) {}
   virtual void prepare1(entt::registry &registry) {}
 
-  std::string vertex_shader_source = "";
-  std::string fragment_shader_source = "";
-  std::string geometry_shader_source = "none";
+  virtual std::string get_vertex_shader_source() { return ""; }
+  virtual std::string get_fragment_shader_source() { return ""; }
+  virtual std::string get_geometry_shader_source() { return "none"; }
 
   static inline std::map<std::string, std::function<void(entt::registry &)>>
       __material_constructors__;
@@ -78,17 +79,17 @@ bool has_any_materials(entt::registry &registry, entt::entity entity);
     if (!toolkit::opengl::material::__shader_initialized__[#class_name]) {     \
       toolkit::opengl::shader material_shader;                                 \
       material_shader.compile_shader_from_source(                              \
-          mat_instance.vertex_shader_source,                                   \
-          mat_instance.fragment_shader_source,                                 \
-          mat_instance.geometry_shader_source);                                \
+          mat_instance.get_vertex_shader_source(),                                   \
+          mat_instance.get_fragment_shader_source(),                                 \
+          mat_instance.get_geometry_shader_source());                                \
       toolkit::opengl::material::__material_shaders__[#class_name] =           \
           material_shader;                                                     \
       toolkit::opengl::material::__shader_initialized__[#class_name] = true;   \
     }                                                                          \
     mat_instance.material_fields =                                             \
-        parse_glsl_uniforms({mat_instance.vertex_shader_source,                \
-                             mat_instance.fragment_shader_source,              \
-                             mat_instance.geometry_shader_source});            \
+        parse_glsl_uniforms({mat_instance.get_vertex_shader_source(),                \
+                             mat_instance.get_fragment_shader_source(),              \
+                             mat_instance.get_geometry_shader_source()});            \
   }                                                                            \
   inline void __material_view_for_each_##class_name(                           \
       entt::registry &registry,                                                \

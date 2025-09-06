@@ -28,6 +28,10 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
   ImGui::Checkbox("Show Texture Wnd", &show_textures_wnd);
+  static int capture_frame_counter = 0;
+  if (ImGui::Button("Export Frame Image", {-1, 30}))
+    color_tex.save_as_image().save_png(
+        str_format("frame_capture_%d.png", capture_frame_counter++));
   ImGui::Separator();
 
   ImGui::MenuItem("Ambient Occlusion", nullptr, nullptr, false);
@@ -60,26 +64,31 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::MenuItem("Skinned Character Shadow Maps", nullptr, nullptr, false);
   ImGui::DragFloat("Max Bias Term", &shadowmap_max_bias, 0.000001f, 0.0f, 1.0f,
                    "%.6f");
-  ImGui::DragFloat("Min Bias Term", &shadowmap_min_bias, 0.000001f, 0.0f,
-                   1.0f, "%.6f");
+  ImGui::DragFloat("Min Bias Term", &shadowmap_min_bias, 0.000001f, 0.0f, 1.0f,
+                   "%.6f");
 
-  ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
-  bool csm_modified = false;
-  csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
-  csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
-  ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
-  ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
-  ImGui::DragFloat("Min Bias", &csm_min_bias, 0.000001f, 0.0f, 10.0f, "%.6f");
-  ImGui::DragFloat("Max Bias", &csm_max_bias, 0.000001f, 0.0f, 10.0f, "%.6f");
-  std::string csm_depth_text =
-      str_format("CSM Split Depth (znear %.2f, zfar %.2f): ", csm_cascades[0],
-                 csm_cascades[num_cascades]);
-  for (int i = 0; i < num_cascades + 1; i++) {
-    csm_depth_text += str_format("\n%.2f", csm_cascades[i]);
-  }
-  ImGui::Text(csm_depth_text.c_str());
-  if (csm_modified)
-    resize_csm_buffer();
+  ImGui::MenuItem("Scene Light Mask", nullptr, nullptr, false);
+  ImGui::DragFloat("Light Mask Shadow Weight", &light_mask_shadow_weight, 0.1,
+                   0.0, 1.0);
+
+  // ImGui::MenuItem("Cascaded Shadow Maps", nullptr, nullptr, false);
+  // bool csm_modified = false;
+  // csm_modified |= ImGui::InputInt("Num Cascades", &num_cascades);
+  // csm_modified |= ImGui::InputInt("CSM Dimension", &csm_depth_dim);
+  // ImGui::SliderFloat("Split Lambda", &csm_split_lambda, 0.0f, 1.0f);
+  // ImGui::InputInt("PCF Kernal Size", &pcf_kernal_size);
+  // ImGui::DragFloat("Min Bias", &csm_min_bias, 0.000001f, 0.0f, 10.0f,
+  // "%.6f"); ImGui::DragFloat("Max Bias", &csm_max_bias, 0.000001f,
+  // 0.0f, 10.0f, "%.6f"); std::string csm_depth_text =
+  //     str_format("CSM Split Depth (znear %.2f, zfar %.2f): ",
+  //     csm_cascades[0],
+  //                csm_cascades[num_cascades]);
+  // for (int i = 0; i < num_cascades + 1; i++) {
+  //   csm_depth_text += str_format("\n%.2f", csm_cascades[i]);
+  // }
+  // ImGui::Text(csm_depth_text.c_str());
+  // if (csm_modified)
+  //   resize_csm_buffer();
 }
 
 void defered_forward_mixed::draw_gui(entt::registry &registry,
@@ -169,6 +178,8 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   csm_selection_mask_program.compile_shader_from_source(quad_vs,
                                                         csm_selection_mask_fs);
   shadow_mask_program.compile_shader_from_source(quad_vs, shadow_mask_fs);
+  static_mesh_light_mask_program.compile_shader_from_source(
+      quad_vs, static_mesh_light_mask_fs);
 
   light_data_buffer.create();
 
@@ -762,6 +773,16 @@ void defered_forward_mixed::render(entt::registry &registry) {
         //                                   "csm_cascades"),
         //              10, csm_cascades);
         // quad_draw_call();
+        static_mesh_light_mask_program.use();
+        static_mesh_light_mask_program.set_vec3("light_dir", sun_direction)
+            .set_float("shadow_weight", light_mask_shadow_weight);
+        static_mesh_light_mask_program.set_texture2d("scene_pos",
+                                                     pos_tex.get_handle(), 0);
+        static_mesh_light_mask_program.set_texture2d(
+            "scene_normal", normal_tex.get_handle(), 1);
+        static_mesh_light_mask_program.set_texture2d("scene_mask",
+                                                     mask_tex.get_handle(), 2);
+        quad_draw_call();
 
         skinned_mesh_bundle_view.each([&](entt::entity entity,
                                           skinned_mesh_bundle &bundle_data) {
@@ -772,6 +793,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
               .set_float("max_bias", shadowmap_max_bias)
               .set_float("min_bias", shadowmap_min_bias)
               .set_vec3("light_dir", sun_direction)
+              .set_float("shadow_weight", light_mask_shadow_weight)
               .set_vec2("viewport_size", g_instance.get_scene_size());
 
           shadow_mask_program.set_texture2d("scene_pos", pos_tex.get_handle(),

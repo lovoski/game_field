@@ -74,13 +74,15 @@ protected:
   // uniform buffer storing all active lights
   buffer light_data_buffer;
   float shadowmap_max_bias = 0.00006f, shadowmap_min_bias = 0.00002f;
+  float light_mask_shadow_weight = 0.5f;
 
   texture color_tex;
 
   // scene shadow related
   framebuffer csm_buffer, scene_light_mask_buffer;
   texture csm_depth_atlas, scene_light_mask_tex;
-  shader shadow_depth_program, csm_selection_mask_program, shadow_mask_program;
+  shader shadow_depth_program, csm_selection_mask_program, shadow_mask_program,
+      static_mesh_light_mask_program;
   int num_cascades = 3, csm_depth_dim = 2048, pcf_kernal_size = 1;
   texture noise_tex_random;
   float csm_split_lambda = 0.93f, csm_min_bias = 0.0001f,

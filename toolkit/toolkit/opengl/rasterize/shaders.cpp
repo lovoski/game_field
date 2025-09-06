@@ -269,6 +269,36 @@ void main() {
 }
 )";
 
+std::string static_mesh_light_mask_fs = R"(
+#version 430 core
+
+uniform vec3 light_dir;
+
+uniform sampler2D scene_pos;
+uniform sampler2D scene_normal;
+uniform sampler2D scene_mask;
+
+uniform float shadow_weight;
+
+in vec2 texcoord;
+out vec4 frag_color;
+
+void main() {
+  if (texture(scene_mask, texcoord).r != 1.0) {
+    discard;
+  }
+  vec3 frag_world_pos = texture(scene_pos, texcoord).xyz;
+  vec3 frag_normal = normalize(2.0 * texture(scene_normal, texcoord).xyz - 1.0);
+  vec3 l_dir = -normalize(light_dir);
+
+  float diffuse = max(0.0, dot(frag_normal, l_dir));
+  float shadow = diffuse;
+  shadow = 1.0+shadow_weight*(shadow-1);
+
+  frag_color = vec4(vec3(shadow), 1.0);
+}
+)";
+
 std::string shadow_mask_fs = R"(
 #version 430 core
 
@@ -278,9 +308,10 @@ uniform int shadowmap_dim;
 uniform float max_bias;
 uniform float min_bias;
 
+uniform float shadow_weight;
+
 uniform vec3 light_dir;
 
-// Deferred rendering G-Buffer samplers
 uniform sampler2D scene_pos;
 uniform sampler2D scene_normal;
 uniform sampler2D scene_mask;
@@ -341,7 +372,7 @@ void main() {
     float diffuse = max(0.0, dot(frag_normal, l_dir));
     // float diffuse = 0.5*(dot(frag_normal, l_dir) + 1.0);
     shadow = min(diffuse, shadow);
-    shadow = 0.5 + 0.5*shadow;
+    shadow = 1.0+shadow_weight*(shadow-1);
 
     frag_color = vec4(vec3(shadow), 1.0);
 }

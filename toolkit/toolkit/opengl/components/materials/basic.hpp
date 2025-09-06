@@ -9,7 +9,8 @@ public:
   void prepare0(entt::registry &registry) override {}
   void prepare1(entt::registry &registry) override {}
 
-  std::string vertex_shader_source = R"(
+  std::string get_vertex_shader_source() override {
+    return R"(
 #version 430 core
 layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;
@@ -31,8 +32,16 @@ void main() {
   gl_Position = gProjMat * gViewMat * vec4(vworldPos, 1.0);
 }
 )";
-  std::string fragment_shader_source = R"(
+  }
+  std::string get_fragment_shader_source() override {
+    return R"(
 #version 430 core
+
+//@meta Wireframe(true)
+//@meta WireframeWidth(0.1)
+//@meta WireframeSmooth(0.6)
+//@meta WireframeColor(0,0,0)
+
 uniform vec3 Albedo;
 uniform vec2 gViewport;
 
@@ -74,7 +83,9 @@ void main() {
   FragColor = vec4(result, 1.0);
 }
 )";
-  std::string geometry_shader_source = R"(
+  }
+  std::string get_geometry_shader_source() override {
+    return R"(
 #version 430 core
 layout (triangles) in;
 layout (triangle_strip) out;
@@ -139,6 +150,7 @@ void main() {
   EndPrimitive();
 }
 )";
+  }
 };
 DECLARE_MATERIAL(basic_material)
 

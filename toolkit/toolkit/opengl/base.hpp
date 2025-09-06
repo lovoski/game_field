@@ -296,6 +296,9 @@ private:
   GLuint gl_handle;
 };
 
+bool create_image_from_texture(GLuint texture_handle, assets::image &img,
+                               bool flip_vertical = true);
+
 class texture {
 public:
   texture() {}
@@ -337,24 +340,7 @@ public:
   }
   assets::image save_as_image() {
     assets::image img;
-
-    img.nchannels = 1;
-    if (m_format == GL_RGB)
-      img.nchannels = 3;
-    else if (m_format == GL_RGBA)
-      img.nchannels = 4;
-    else if (m_format == GL_RG)
-      img.nchannels = 2;
-    img.data = std::vector<unsigned char>(m_width * m_height * img.nchannels);
-    if (img.nchannels == 3 || img.nchannels == 1)
-      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    else
-      glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    glReadPixels(0, 0, m_width, m_height, m_format, GL_UNSIGNED_BYTE,
-                 img.data.data());
-    img.width = m_width;
-    img.height = m_height;
-
+    create_image_from_texture(get_handle(), img);
     return img;
   }
 

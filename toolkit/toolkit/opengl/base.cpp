@@ -312,4 +312,67 @@ void check_compile_errors(GLuint shader, std::string type) {
   }
 }
 
+bool create_image_from_texture(GLuint texture_handle, assets::image &img,
+                               bool flip_vertical) {
+  // Bind the texture
+  glBindTexture(GL_TEXTURE_2D, texture_handle);
+
+  // Get texture parameters: width, height, format
+  int width, height, internalFormat;
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+  glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT,
+                           &internalFormat);
+
+  // Determine number of channels based on internalFormat
+  int channels = 4;        // default to RGBA
+  GLenum format = GL_RGBA; // default format
+  switch (internalFormat) {
+  case GL_RGB8:
+  case GL_RGB:
+    channels = 3;
+    format = GL_RGB;
+    break;
+  case GL_RGBA8:
+  case GL_RGBA:
+    channels = 4;
+    format = GL_RGBA;
+    break;
+  case GL_R8:
+  case GL_RED:
+    channels = 1;
+    format = GL_RED;
+    break;
+  // Add more cases as needed
+  default:
+    // fallback
+    channels = 4;
+    format = GL_RGBA;
+  }
+
+  // Allocate buffer
+  std::vector<unsigned char> pixels(width * height * channels);
+
+  // Read the pixel data
+  glGetTexImage(GL_TEXTURE_2D, 0, format, GL_UNSIGNED_BYTE, pixels.data());
+
+  // Optionally flip vertically
+  if (flip_vertical) {
+    int rowSize = width * channels;
+    std::vector<unsigned char> tempRow(rowSize);
+    for (int y = 0; y < height / 2; ++y) {
+      unsigned char *row1 = pixels.data() + y * rowSize;
+      unsigned char *row2 = pixels.data() + (height - y - 1) * rowSize;
+      std::copy(row1, row1 + rowSize, tempRow.begin());
+      std::copy(row2, row2 + rowSize, row1);
+      std::copy(tempRow.begin(), tempRow.end(), row2);
+    }
+  }
+
+  // Fill the image struct
+  img.resize(width, height, channels);
+  img.data = std::move(pixels);
+  return true;
+}
+
 }; // namespace toolkit::opengl

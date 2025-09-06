@@ -11,5 +11,6 @@ extern std::string shadow_vs;
 extern std::string shadow_fs;
 
 extern std::string quad_vs;
+extern std::string static_mesh_light_mask_fs;
 extern std::string shadow_mask_fs;
 extern std::string csm_selection_mask_fs;

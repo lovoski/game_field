@@ -30,8 +30,8 @@ REFLECT(test1, m0, m1, m2)
 int main() {
   toolkit::opengl::basic_material bp_mat;
   auto results = toolkit::opengl::parse_glsl_uniforms(
-      {bp_mat.vertex_shader_source, bp_mat.fragment_shader_source,
-       bp_mat.geometry_shader_source});
+      {bp_mat.get_vertex_shader_source(), bp_mat.get_fragment_shader_source(),
+       bp_mat.get_geometry_shader_source()});
 
   std::cout << ((nlohmann::json)results).dump(2) << std::endl;
 
