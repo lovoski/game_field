@@ -76,7 +76,9 @@ protected:
   float shadowmap_max_bias = 0.00006f, shadowmap_min_bias = 0.00002f;
   float light_mask_shadow_weight = 0.5f;
 
-  texture color_tex;
+  texture color_tex, color_backup_tex;
+  bool enable_fxaa = true;
+  shader fxaa_program;
 
   // scene shadow related
   framebuffer csm_buffer, scene_light_mask_buffer;

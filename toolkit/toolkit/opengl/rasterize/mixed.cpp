@@ -42,6 +42,9 @@ void defered_forward_mixed::draw_menu_gui() {
   ImGui::DragFloat("SSAO Noise Scale", &ssao_noise_scale, 0.01f, 0.0f, 1000.0f);
   ImGui::Separator();
 
+  ImGui::MenuItem("Post Processing", nullptr, nullptr, false);
+  ImGui::Checkbox("Enable FXAA", &enable_fxaa);
+
   ImGui::MenuItem("Sun Light Settings", nullptr, nullptr, false);
   ImGui::Checkbox("Enable", &enable_sun);
   bool sun_parameter_modified = false;
@@ -135,6 +138,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   ao_color.create(GL_TEXTURE_2D);
   csm_depth_atlas.create(GL_TEXTURE_2D);
   scene_light_mask_tex.create(GL_TEXTURE_2D);
+  color_backup_tex.create(GL_TEXTURE_2D);
 
   noise_tex_random.create(GL_TEXTURE_2D);
   assets::image img;
@@ -180,6 +184,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   shadow_mask_program.compile_shader_from_source(quad_vs, shadow_mask_fs);
   static_mesh_light_mask_program.compile_shader_from_source(
       quad_vs, static_mesh_light_mask_fs);
+  fxaa_program.compile_shader_from_source(quad_vs, fxaa_fs);
 
   light_data_buffer.create();
 
@@ -232,6 +237,12 @@ void defered_forward_mixed::resize(int width, int height) {
   if (!gbuffer.check_status())
     spdlog::error("gbuffer not complete!");
   gbuffer.unbind();
+
+  color_backup_tex.set_data(width, height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+  color_backup_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
+                                   {GL_TEXTURE_MAG_FILTER, GL_LINEAR},
+                                   {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                                   {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
 
   cbuffer.bind();
   cbuffer.begin_draw_buffers();
@@ -811,7 +822,8 @@ void defered_forward_mixed::render(entt::registry &registry) {
       scene_light_mask_buffer.unbind();
     }
 
-    // ------------------- render to multisample framebuffer -------------------
+    // ------------------- render to default color framebuffer
+    // -------------------
     {
       cbuffer.bind();
       cbuffer.set_viewport(0, 0, g_instance.scene_width,
@@ -905,6 +917,17 @@ void defered_forward_mixed::render(entt::registry &registry) {
         ao_gaussian_filter(ao_color, ao_filter_size, ao_filter_sigma);
       }
       glDisable(GL_BLEND);
+
+      // 2. fxaa
+      if (enable_fxaa) {
+        glCopyImageSubData(color_tex.get_handle(), GL_TEXTURE_2D, 0, 0, 0, 0,
+                           color_backup_tex.get_handle(), GL_TEXTURE_2D, 0, 0, 0,
+                           0, g_instance.scene_width, g_instance.scene_height, 1);
+        fxaa_program.use();
+        fxaa_program.set_vec2("viewport_size", g_instance.get_scene_size());
+        fxaa_program.set_texture2d("color_tex", color_backup_tex.get_handle(), 0);
+        quad_draw_call();
+      }
 
       cbuffer.unbind();
     }

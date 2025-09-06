@@ -122,7 +122,8 @@ parse_glsl_uniforms(std::vector<std::string> sources) {
           if (lb == -1 || rb == -1) {
             spdlog::error("Failed to parse meta info {0}", info);
           } else {
-            meta_infos[info.substr(0, lb)] = info.substr(lb + 1, rb - lb - 1);
+            meta_infos[info.substr(0, lb)] =
+                replace(info.substr(lb + 1, rb - lb - 1), " ", "");
           }
         }
         previous = j + 1;
