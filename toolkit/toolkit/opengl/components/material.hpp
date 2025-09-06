@@ -12,6 +12,18 @@ struct material_field {
 };
 REFLECT(material_field, name, type, value)
 
+/**
+ * Automatically parse uniforms variables as material fields.
+ * 
+ * You can use the following annotation to declare meta informations about uniforms.
+ * 
+ * //@meta float_uniform_variable(min_value, max_value, default_value)
+ * //@meta int_uniform_variable(min_value, max_value, default_value)
+ * //@meta bool_uniform_variable(default_value)
+ * //@meta vec2_uniform_variable(default_value)
+ * //@meta vec3_uniform_variable(default_value)
+ * //@meta vec4_uniform_variable(default_value)
+ */
 std::vector<material_field>
 parse_glsl_uniforms(std::vector<std::string> sources);
 
@@ -28,8 +40,8 @@ public:
   void bind_uniforms(shader &mat_shader);
   void init1() override;
 
-  void prepare0() {}
-  void prepare1() {}
+  virtual void prepare0(entt::registry &registry) {}
+  virtual void prepare1(entt::registry &registry) {}
 
   std::string vertex_shader_source = "";
   std::string fragment_shader_source = "";

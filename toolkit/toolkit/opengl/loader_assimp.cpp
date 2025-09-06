@@ -97,7 +97,7 @@ void process_mesh(entt::registry &registry, entt::entity container,
                   std::vector<entt::entity> &bone_entities,
                   math::matrix4 pretrans) {
   auto &mesh_data = registry.emplace<opengl::mesh_data>(container);
-  auto &bp_mat = registry.emplace<opengl::blinn_phong_material>(container);
+  auto &bp_mat = registry.emplace<opengl::basic_material>(container);
   mesh_data.mesh_name =
       str_format("%s:%s", mesh->mName.C_Str(),
                  scene->mMaterials[mesh->mMaterialIndex]->GetName().C_Str());

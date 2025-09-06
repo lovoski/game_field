@@ -36,6 +36,7 @@ public:
 
   void update_scene_buffers(entt::registry &registry);
   void update_scene_lights(entt::registry &registry);
+  void update_scene_data_structures(entt::registry &registry);
 
   texture get_target_texture() const { return color_tex; }
 
@@ -45,8 +46,6 @@ public:
 
   bool should_draw_grid = true;
   int grid_spacing = 1;
-
-  int msaa_samples = 8;
 
   bool should_draw_debug = true;
   bool show_textures_wnd = false;
@@ -65,25 +64,24 @@ public:
   preetham_sun_sky ss_model;
 
 protected:
-  framebuffer gbuffer, cbuffer, msaa_buffer;
+  framebuffer gbuffer, cbuffer;
   shader gbuffer_geometry_pass, defered_phong_pass;
-  texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex;
-  unsigned int msaa_color_buffer, msaa_depth_buffer;
+  texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex, cbuffer_depth;
 
   framebuffer ao_buffer;
   texture ao_color;
 
   // uniform buffer storing all active lights
   buffer light_data_buffer;
+  float shadowmap_max_bias = 0.00006f, shadowmap_min_bias = 0.00002f;
 
   texture color_tex;
 
   // scene shadow related
-  framebuffer csm_buffer, scene_shadow_mask_buffer;
-  texture csm_depth_atlas, scene_shadow_mask_tex;
+  framebuffer csm_buffer, scene_light_mask_buffer;
+  texture csm_depth_atlas, scene_light_mask_tex;
   shader shadow_depth_program, csm_selection_mask_program, shadow_mask_program;
   int num_cascades = 3, csm_depth_dim = 2048, pcf_kernal_size = 1;
-  float shadowmap_max_bias = 0.0006f, shadowmap_min_bias = 0.00001f;
   texture noise_tex_random;
   float csm_split_lambda = 0.93f, csm_min_bias = 0.0001f,
         csm_max_bias = 0.0008f, csm_cascades[10];
@@ -116,6 +114,6 @@ DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
                sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
                csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_min_bias,
-               csm_max_bias)
+               csm_max_bias, shadowmap_max_bias, shadowmap_min_bias)
 
 }; // namespace toolkit::opengl

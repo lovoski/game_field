@@ -4,7 +4,11 @@
 
 namespace toolkit::opengl {
 
-struct blinn_phong_material : public material {
+class basic_material : public material {
+public:
+  void prepare0(entt::registry &registry) override {}
+  void prepare1(entt::registry &registry) override {}
+
   std::string vertex_shader_source = R"(
 #version 430 core
 layout (location = 0) in vec4 aPos;
@@ -29,20 +33,7 @@ void main() {
 )";
   std::string fragment_shader_source = R"(
 #version 430 core
-
-struct light_data_package {
-  ivec4 idata;
-  vec4 pos;
-  vec4 color;
-  vec4 fdata0;
-  vec4 fdata1;
-};
-layout(std430, binding = 0) buffer SceneLightBuffer {
-  light_data_package gLights[];
-};
-
 uniform vec3 Albedo;
-
 uniform vec2 gViewport;
 
 uniform bool Wireframe;
@@ -57,34 +48,15 @@ in vec3 worldPos;
 in vec3 worldNormal;
 in vec3 edgeDistance;
 
-uniform sampler2D gShadowMask;
-uniform bool ReceiveShadow;
-uniform float ShadowWeight;
+uniform sampler2D gLightMask;
+uniform vec3 gSunDir;
 
 out vec4 FragColor;
 
-vec3 BlinnPhong(int index, vec3 fragWorldPos, vec3 fragWorldNormal, vec3 viewDir) {
-  light_data_package lightData = gLights[index];
-  vec3 lightColor = lightData.color.xyz;
-  vec3 lightPos = lightData.pos.xyz;
-  vec3 lightDir;
-  if (lightData.idata[0] == 0) {
-    lightDir = -normalize(lightData.fdata0.xyz);
-  } else if (lightData.idata[0] == 1) {
-    lightDir = normalize(lightPos-worldPos);
-  }
-  float diff = 0.5 * (dot(worldNormal, lightDir) + 1.0);
-  return diff * lightColor;
-}
-
 void main() {
   vec2 screenTexCoord = gl_FragCoord.xy / gViewport;
-  vec3 shade = vec3(0.0);
-  for (int i = 0; i < gLights.length(); i++)
-    shade += BlinnPhong(i, worldPos, normalize(worldNormal), -gViewDir);
-  shade *= Albedo;
-
-  vec3 result;
+  float light_mask_value = clamp(texture(gLightMask, screenTexCoord).r, 0.0, 1.0);
+  vec3 result = light_mask_value * Albedo;
   // wireframe related
   if (Wireframe) {
     float d = min(edgeDistance.x, min(edgeDistance.y, edgeDistance.z));
@@ -97,17 +69,8 @@ void main() {
       float x = d - (WireframeWidth - WireframeSmooth);
       alpha = exp2(-2.0 * x * x);
     }
-    result = mix(shade, WireframeColor, clamp(alpha, 0.0, 1.0));
-  } else {
-    result = shade;
+    result = mix(result, WireframeColor, clamp(alpha, 0.0, 1.0));
   }
-
-  if (ReceiveShadow) {
-    float shadow = clamp(texture(gShadowMask, screenTexCoord).r, 0.0, 1.0);
-    shadow = 1.0 + clamp(ShadowWeight, 0.0, 1.0)*(shadow-1);
-    result = result * shadow;
-  }
-
   FragColor = vec4(result, 1.0);
 }
 )";
@@ -177,6 +140,6 @@ void main() {
 }
 )";
 };
-DECLARE_MATERIAL(blinn_phong_material)
+DECLARE_MATERIAL(basic_material)
 
 }; // namespace toolkit::opengl

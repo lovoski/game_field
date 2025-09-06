@@ -207,7 +207,7 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     auto &mesh_trans = registry.emplace<transform>(mesh_entity);
     auto &mesh_comp = registry.emplace<opengl::mesh_data>(mesh_entity);
     auto &material =
-        registry.emplace<opengl::blinn_phong_material>(mesh_entity);
+        registry.emplace<opengl::basic_material>(mesh_entity);
     if (mesh->materials.count >= pi + 1) {
       auto material = mesh->materials[pi];
       mesh_trans.name =

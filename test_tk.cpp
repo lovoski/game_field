@@ -28,7 +28,7 @@ REFLECT(test1, m0, m1, m2)
 #include "toolkit/opengl/components/materials/all.hpp"
 
 int main() {
-  toolkit::opengl::blinn_phong_material bp_mat;
+  toolkit::opengl::basic_material bp_mat;
   auto results = toolkit::opengl::parse_glsl_uniforms(
       {bp_mat.vertex_shader_source, bp_mat.fragment_shader_source,
        bp_mat.geometry_shader_source});

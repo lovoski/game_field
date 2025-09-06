@@ -320,8 +320,8 @@ void main() {
         discard;
     }
 
-    float cos_alpha = max(0.05, dot(frag_normal, l_dir)); // Clamped to prevent issues
-    float bias = mix(max_bias, min_bias, cos_alpha);
+    float bias = max(min_bias, max_bias * (1.0 - abs(dot(frag_normal, l_dir))));
+
     float frag_depth_value = (lp_frag_world_pos.z + 1.0) * 0.5;
     float repaired_depth = frag_depth_value - bias;
 
@@ -337,6 +337,11 @@ void main() {
         shadow += texture(shadowmap, vec3(tmp_shadow_texcoord, repaired_depth));
     }
     shadow /= 16.0;
+
+    float diffuse = max(0.0, dot(frag_normal, l_dir));
+    // float diffuse = 0.5*(dot(frag_normal, l_dir) + 1.0);
+    shadow = min(diffuse, shadow);
+    shadow = 0.5 + 0.5*shadow;
 
     frag_color = vec4(vec3(shadow), 1.0);
 }
