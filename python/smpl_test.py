@@ -41,10 +41,13 @@ if __name__ == '__main__':
   #           del data_dict[field]
   #   np.savez(os.path.join(output_dir, file), **data_dict)
 
-    base_dir = 'data/models/smpl'
-    files = os.listdir(base_dir)
-    for file in files:
-      if not file.endswith('.npz'):
-        continue
-      data = dict(np.load(os.path.join(base_dir, file)))
-      print(data)
+    # base_dir = 'data/models/smpl'
+    # files = os.listdir(base_dir)
+    # for file in files:
+    #   if not file.endswith('.npz'):
+    #     continue
+    #   data = dict(np.load(os.path.join(base_dir, file)))
+    #   print(data)
+
+  model = smplx.create('./data/models', model_type='smpl', gender='NEUTRAL')
+  print(model.parent)

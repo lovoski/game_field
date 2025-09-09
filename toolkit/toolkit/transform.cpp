@@ -115,6 +115,7 @@ void transform::set_local_pos(math::vector3 p) {
 
 void transform::set_local_scale(math::vector3 s) {
   m_local_scale = s;
+  update_local_axes();
   dirty = true;
 }
 

@@ -84,7 +84,11 @@ void context::shutdown() {
 void context::run(std::function<void(void)> mainLoop) {
   while (!glfwWindowShouldClose(window)) {
     poll();
+
     mainLoop();
+
+    mouse_last_x = mouse_x;
+    mouse_last_y = mouse_y;
   }
 }
 

@@ -5,7 +5,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 
-def format_motion_files_motion_persona(source_dir, target_dir, scale=1):
+def format_motion_files_motion_persona(source_dir, target_dir, scale=1.0):
   if not os.path.exists(target_dir):
     os.mkdir(target_dir)
   raw_filenames = os.listdir(source_dir)

@@ -66,7 +66,8 @@ void editor::game_mode_main_loop() {
 
   transform_sys->update_transform(registry);
   render_sys->update_scene_buffers(registry);
-  active_camera_manipulate(dt);
+  if (editor_manipulate_camera)
+    active_camera_manipulate(dt);
 
   for (auto sys : systems)
     if (sys->active)
@@ -107,7 +108,8 @@ void editor::editor_mode_main_loop() {
 
   transform_sys->update_transform(registry);
   render_sys->update_scene_buffers(registry);
-  active_camera_manipulate(dt);
+  if (editor_manipulate_camera)
+    active_camera_manipulate(dt);
 
   for (auto sys : systems)
     if (sys->active)
@@ -168,7 +170,8 @@ void editor::run() {
   timer.reset();
   add_default_objects();
   g_instance.run([&]() {
-    if (g_instance.is_key_triggered(GLFW_KEY_0)) {
+    if (g_instance.is_key_triggered(GLFW_KEY_0) &&
+        g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL)) {
       g_instance.scene_width = g_instance.wnd_width;
       g_instance.scene_height = g_instance.wnd_height;
       render_sys->resize(g_instance.scene_width, g_instance.scene_height);
@@ -569,8 +572,8 @@ void editor::draw_main_menubar() {
                              "*.fbx, *.obj, *.pmx, *.ply", filepath)) {
           spdlog::info("Load model file {0}", filepath);
           // assets::open_model_assimp(registry, filepath);
-          if (endswith(filepath, ".FBX") || endswith(filepath, "*.fbx") ||
-              endswith(filepath, "*.OBJ") || endswith(filepath, "*.obj"))
+          if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx") ||
+              endswith(filepath, ".OBJ") || endswith(filepath, ".obj"))
             assets::open_model_ufbx(registry, filepath);
           else
             assets::open_model_assimp(registry, filepath);
@@ -627,6 +630,7 @@ void editor::draw_main_menubar() {
                    else
                      current_gizmo_mode = ImGuizmo::MODE::WORLD;
                  });
+      ImGui::Checkbox("Editor Manipulate Camera", &editor_manipulate_camera);
 
       ImGui::EndMenu();
     }

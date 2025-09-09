@@ -111,6 +111,7 @@ public:
   bool screen_query_ray(math::vector2 screen_pos, math::vector3 &o,
                         math::vector3 &d);
 
+  bool editor_manipulate_camera = true;
   void active_camera_manipulate(float dt);
 
 private:

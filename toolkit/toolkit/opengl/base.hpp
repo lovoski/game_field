@@ -81,6 +81,11 @@ public:
     auto &context = context::get_instance();
     context.mouse_x = xpos;
     context.mouse_y = ypos;
+    if (context.mouse_pos_init) {
+      context.mouse_last_x = xpos;
+      context.mouse_last_y = ypos;
+      context.mouse_pos_init = false;
+    }
   }
 
   static void scroll_callback(GLFWwindow *window, double xoffset,
@@ -118,6 +123,9 @@ public:
   math::vector2 get_mouse_position() const { return {mouse_x, mouse_y}; }
 
   math::vector2 get_scroll_offsets() { return scroll_offset; }
+  math::vector2 get_mouse_offsets() {
+    return {mouse_x - mouse_last_x, mouse_y - mouse_last_y};
+  }
 
   math::vector2 get_window_size() const { return {wnd_width, wnd_height}; }
   math::vector2 get_scene_size() const { return {scene_width, scene_height}; }
@@ -143,7 +151,8 @@ private:
   std::unordered_map<int, bool> key_states;
   std::set<int> triggered_mouse_keys, untriggered_mouse_keys;
   std::unordered_map<int, bool> mouse_button_states;
-  double mouse_x, mouse_y;
+  bool mouse_pos_init = true;
+  double mouse_x, mouse_y, mouse_last_x, mouse_last_y;
   math::vector2 scroll_offset{0.0, 0.0};
 
   ImFont *default_font, *icon_font;

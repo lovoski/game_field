@@ -1,5 +1,7 @@
 #include "toolkit/anim/anim_system.hpp"
 #include "toolkit/anim/components/actor.hpp"
+#include "toolkit/anim/scripts/motion_matching.hpp"
+#include "toolkit/anim/scripts/tps_cam_controller.hpp"
 #include <spdlog/spdlog.h>
 
 namespace toolkit::anim {
@@ -146,8 +148,7 @@ void apply_pose(entt::registry &registry, actor &actor_comp,
   int missing_joints_num = 0;
   std::vector<std::string> missing_joint_names;
   // apply root translation
-  registry.get<transform>(root->second)
-      .set_local_pos(pose_data.root_local_pos);
+  registry.get<transform>(root->second).set_local_pos(pose_data.root_local_pos);
   // apply joint rotations for joints defined in the pose
   for (int pose_joint_ind = 0; pose_joint_ind < pose_joint_num;
        ++pose_joint_ind) {
