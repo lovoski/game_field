@@ -27,12 +27,12 @@ public:
   std::string name = "";
   bool dirty = true;
 
-  math::vector3 position() const { return m_pos; }
-  math::vector3 scale() const { return m_scale; }
-  math::quat rotation() const { return m_rot; }
-  math::vector3 local_position() const { return m_local_pos; }
-  math::vector3 local_scale() const { return m_local_scale; }
-  math::quat local_rotation() const { return m_local_rot; }
+  math::vector3 world_pos() const { return m_pos; }
+  math::vector3 world_scl() const { return m_scale; }
+  math::quat world_rot() const { return m_rot; }
+  math::vector3 local_pos() const { return m_local_pos; }
+  math::vector3 local_scl() const { return m_local_scale; }
+  math::quat local_rot() const { return m_local_rot; }
   math::vector3 local_euler_degrees() const { return m_local_euler; }
   math::vector3 local_up() const { return m_local_up; }
   math::vector3 local_forward() const { return m_local_forward; }

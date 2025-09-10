@@ -8,7 +8,7 @@ void compute_vp_matrix(entt::registry &registry, entt::entity entity,
                        float width, float height) {
   auto &trans = registry.get<transform>(entity);
   auto &cam = registry.get<camera>(entity);
-  auto camPos = trans.position();
+  auto camPos = trans.world_pos();
 
   cam.view =
       math::lookat(camPos, camPos - trans.local_forward(), trans.local_up());

@@ -557,7 +557,7 @@ void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
       [&](entt::entity entity, point_light &light, transform &trans) {
         light_data_pacakge package;
         package.idata[0] = 1;
-        package.pos << trans.position(), 1.0f;
+        package.pos << trans.world_pos(), 1.0f;
         package.color << light.color, 1.0f;
         lights.emplace_back(package);
       });
@@ -832,7 +832,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
       glClearColor(0, 0, 0, 1);
 
       glDisable(GL_DEPTH_TEST);
-      ss_model.render(cam_comp.vp, cam_trans.position());
+      ss_model.render(cam_comp.vp, cam_trans.world_pos());
       glEnable(GL_DEPTH_TEST);
 
       // iterate through all material types

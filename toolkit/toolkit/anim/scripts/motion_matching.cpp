@@ -6,17 +6,20 @@ namespace toolkit::anim {
 void motion_matching::start() {
   auto actor_comp = registry->try_get<anim::actor>(entity);
   if (actor_comp != nullptr) {
-    actor_world_rot.resize(actor_comp->ordered_entities.size(),
-                           math::quat::Identity());
-    actor_world_pos.resize(actor_comp->ordered_entities.size(),
-                           math::vector3::Zero());
+    actor_bind_rot.resize(actor_comp->ordered_entities.size(),
+                          math::quat::Identity());
+    actor_bind_pos.resize(actor_comp->ordered_entities.size(),
+                          math::vector3::Zero());
+    actor_bind_mat.resize(actor_comp->ordered_entities.size(),
+                          math::matrix4::Identity());
     registry->get<transform>(actor_comp->ordered_entities[0])
         .force_update_hierarchy();
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto &joint_trans =
           registry->get<transform>(actor_comp->ordered_entities[i]);
-      actor_world_rot[i] = joint_trans.rotation();
-      actor_world_pos[i] = joint_trans.position();
+      actor_bind_rot[i] = joint_trans.world_rot();
+      actor_bind_pos[i] = joint_trans.local_pos();
+      actor_bind_mat[i] = joint_trans.matrix();
     }
   }
 }
@@ -69,14 +72,6 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
   return {ofr, oa, ofr * in_rot, in_ang + oa};
 }
 
-template <typename T>
-std::vector<T> sub_vec(std::vector<T> &v, int start, int end) {
-  std::vector<T> r(end - start);
-  for (int i = start; i < end; i++)
-    r[i - start] = v[i];
-  return r;
-}
-
 void motion_matching::update(iapp *app, float dt) {
   float residual = cur_time - cur_exec_fixed * fixed_interval;
   while (residual > fixed_interval) {
@@ -85,6 +80,13 @@ void motion_matching::update(iapp *app, float dt) {
     cur_exec_fixed += 1;
   }
   cur_time += dt;
+
+  // update camera settings
+  auto &cam_trans = registry->get<transform>(opengl::g_instance.active_camera);
+  math::vector3 cam_fixed_pos =
+      root_pos + 3 * math::world_forward + 2 * math::world_up;
+  math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
+  cam_trans.set_world_pos(cam_fixed_pos);
 }
 void motion_matching::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
@@ -202,7 +204,11 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
     // Ypos -> local position
     // Yrot -> local rotation
     std::vector<math::matrix4> local_trans(parents.size()),
-        global_trans(parents.size());
+        global_trans(parents.size()), motion_bind_trans(parents.size());
+    std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
+        world_rot(parents.size(), math::quat::Identity());
+    std::vector<math::vector3> local_pos(parents.size(), math::vector3::Zero()),
+        old_local_pos(parents.size(), math::vector3::Zero());
     math::vector3 scale_value = math::vector3::Ones();
     float iner_halflife = 0.075;
     for (int i = 0; i < parents.size(); i++) {
@@ -220,31 +226,61 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
         off_vel[i] = ov;
         off_rot[i] = orf;
         off_ang[i] = oa;
-        local_trans[i] =
-            math::compose_transform(out_pos, out_rot, scale_value);
+        local_rot[i] = out_rot;
+        local_pos[i] = out_pos;
+        local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
+        // local_trans[i] = math::compose_transform(
+        //     Ypos[anim_frame][i], Yrot[anim_frame][i], scale_value);
         // local_trans[i] = math::compose_transform(
         //     Ypos[anim_frame][i], Yrot[anim_frame][i], scale_value);
       }
     }
+    old_local_pos = local_pos;
     for (int i = 0; i < parents.size(); i++) {
-      if (parents[i] != -1)
+      if (parents[i] != -1) {
         global_trans[i] = global_trans[parents[i]] * local_trans[i];
-      else
+        world_rot[i] = world_rot[parents[i]] * local_rot[i];
+      } else {
         global_trans[i] = local_trans[i];
+        world_rot[i] = root_rot;
+      }
     }
+    math::quat id_quat = math::quat::Identity();
+    math::vector3 id_vec = math::vector3::Ones();
     for (int i = 0; i < parents.size(); i++) {
       data_joints_world_pos[i] = global_trans[i].col(3).head<3>();
+      motion_bind_trans[i] =
+          math::compose_transform(data_joints_world_pos[i], id_quat, id_vec);
     }
-    // for (auto &p : joint_name_to_idx) {
-    //   if (actor_comp->name_to_entity.find(p.first) !=
-    //       actor_comp->name_to_entity.end()) {
-    //     auto joint_entity = actor_comp->name_to_entity[p.first];
-    //     auto joint_data_idx = p.second;
-    //   } else {
-    //     if (p.second != 0)
-    //       spdlog::warn("Joint named {0} not found in actor comp", p.first);
-    //   }
-    // }
+
+    math::vector3 tmp_world_pos, tmp_world_scale;
+    math::quat tmp_world_rot;
+    for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
+      auto joint_entity = actor_comp->ordered_entities[i];
+      auto &joint_trans = registry->get<transform>(joint_entity);
+      if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
+        int joint_data_idx = joint_name_to_idx[joint_trans.name];
+        math::decompose_transform(global_trans[joint_data_idx], tmp_world_pos,
+                                  tmp_world_rot, tmp_world_scale);
+        // joint_trans.set_world_rot(tmp_world_rot);
+        if (i == 0) {
+          joint_trans.set_world_pos(tmp_world_pos);
+          joint_trans.set_world_rot(world_rot[joint_data_idx]);
+        } else {
+          joint_trans.set_local_rot(local_rot[joint_data_idx]);
+        }
+        // joint_trans.set_world_pos(tmp_world_pos);
+        // joint_trans.set_world_rot(world_rot[joint_data_idx] *
+        //                           actor_bind_rot[i]);
+        // joint_trans.set_local_rot(actor_bind_rot[i]);
+
+        // joint_trans.set_world_pos(
+        //     global_trans[joint_data_idx].col(3).head<3>());
+
+        // self.ori = parent.ori * self.rot
+        // self.pos = parent.pos + parent.ori * self.off
+      }
+    }
   }
 }
 

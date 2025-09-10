@@ -29,8 +29,8 @@ public:
       auto &trans = registry->emplace<toolkit::transform>(target);
       auto &self_trans = registry->get<toolkit::transform>(entity);
       trans.name = self_trans.name + " spring damper target";
-      trans.set_world_pos(self_trans.position());
-      trans.set_world_rot(self_trans.rotation());
+      trans.set_world_pos(self_trans.world_pos());
+      trans.set_world_rot(self_trans.world_rot());
     }
   }
   void lateupdate(toolkit::iapp *app, float dt) override {
@@ -39,8 +39,8 @@ public:
     auto &target_trans = registry->get<toolkit::transform>(target);
     const float e = 2.71828f;
     float lambda = log(2) / (damper_half_life * log(e));
-    toolkit::math::vector3 x0 = self_trans.position(),
-                           xt = target_trans.position();
+    toolkit::math::vector3 x0 = self_trans.world_pos(),
+                           xt = target_trans.world_pos();
     toolkit::math::vector3 x = x0 - xt;
     auto x_prev = x;
     x = (x_prev + (velocity + lambda * x_prev) * dt) * exp(-lambda * dt);
@@ -48,8 +48,8 @@ public:
     self_trans.set_world_pos(x + xt);
 
     // update the rotation of attached entity given target rotation and dt
-    auto q0 = self_trans.rotation();
-    auto qt = target_trans.rotation();
+    auto q0 = self_trans.world_rot();
+    auto qt = target_trans.world_rot();
     if (q0.dot(qt) < 0.0f)
       qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
     toolkit::math::vector3 q = toolkit::math::quat_to_so3(q0 * qt.inverse());
@@ -66,7 +66,7 @@ public:
         app, [&](toolkit::opengl::editor *editor, toolkit::transform &trans,
                  toolkit::opengl::camera &cam_comp) {
           toolkit::opengl::draw_wire_sphere(
-              registry->get<toolkit::transform>(target).position(), cam_comp.vp,
+              registry->get<toolkit::transform>(target).world_pos(), cam_comp.vp,
               0.1f);
         });
   }

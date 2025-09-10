@@ -65,8 +65,9 @@ private:
   math::vector3 desired_vel = math::vector3::Zero(),
                 desired_dir = math::vector3(0, 0, 1);
 
-  std::vector<math::quat> actor_world_rot;
-  std::vector<math::vector3> actor_world_pos, data_joints_world_pos;
+  std::vector<math::quat> actor_bind_rot;
+  std::vector<math::vector3> actor_bind_pos, data_joints_world_pos;
+  std::vector<math::matrix4> actor_bind_mat;
 
   std::vector<float> t_times = {20.0f / 60.0f, 40.0f / 60.0f, 60.0f / 60.0f};
   std::vector<math::vector3> t_pos =

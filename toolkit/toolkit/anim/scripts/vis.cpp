@@ -32,17 +32,17 @@ void vis_skeleton::draw_to_scene(iapp *app) {
         z_dir.reserve(active_joint_entities.size());
         for (auto joint_entity : active_joint_entities) {
           auto &joint_trans = eptr->registry.get<transform>(joint_entity);
-          x_dir.emplace_back(std::make_pair(joint_trans.position(),
-                                            joint_trans.position() +
+          x_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
+                                            joint_trans.world_pos() +
                                                 axes_length * avg_bone_length *
                                                     joint_trans.local_left()));
-          y_dir.emplace_back(std::make_pair(joint_trans.position(),
-                                            joint_trans.position() +
+          y_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
+                                            joint_trans.world_pos() +
                                                 axes_length * avg_bone_length *
                                                     joint_trans.local_up()));
           z_dir.emplace_back(std::make_pair(
-              joint_trans.position(),
-              joint_trans.position() +
+              joint_trans.world_pos(),
+              joint_trans.world_pos() +
                   axes_length * avg_bone_length * joint_trans.local_forward()));
         }
         opengl::draw_arrows(x_dir, cam_comp.vp, opengl::Red,
@@ -57,7 +57,7 @@ void vis_skeleton::draw_to_scene(iapp *app) {
         joint_positions.reserve(active_joint_entities.size());
         for (auto joint_entity : active_joint_entities) {
           joint_positions.push_back(
-              eptr->registry.get<transform>(joint_entity).position());
+              eptr->registry.get<transform>(joint_entity).world_pos());
         }
         opengl::draw_wire_spheres(joint_positions, cam_comp.vp,
                                   0.08f * avg_bone_length, bone_color);
@@ -93,7 +93,7 @@ void vis_skeleton::collect_skeleton_draw_queue(actor &actor_comp) {
         auto &child_trans =
             registry->get<transform>(actor_comp.ordered_entities[c]);
         draw_queue.emplace_back(
-            std::make_pair(current_trans.position(), child_trans.position()));
+            std::make_pair(current_trans.world_pos(), child_trans.world_pos()));
         q.push(c);
       }
     }

@@ -9,8 +9,8 @@ void draw_view_frustom(toolkit::transform &trans, float fovy_deg, float znear,
   float z0 = znear, z1 = zfar;
   float h0 = z0 * tan(half_fovy_rad), h1 = z1 * tan(half_fovy_rad),
         asp = w_div_h;
-  toolkit::math::vector3 base0 = trans.position() - z0 * trans.local_forward();
-  toolkit::math::vector3 base1 = trans.position() - z1 * trans.local_forward();
+  toolkit::math::vector3 base0 = trans.world_pos() - z0 * trans.local_forward();
+  toolkit::math::vector3 base1 = trans.world_pos() - z1 * trans.local_forward();
   frustom_lines[0] = std::make_pair(
       base0 + h0 * trans.local_up() + asp * h0 * trans.local_left(),
       base0 + h0 * trans.local_up() - asp * h0 * trans.local_left());

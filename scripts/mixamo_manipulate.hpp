@@ -30,9 +30,9 @@ public:
         lft_trans.set_parent(entity);
         if (target != entt::null) {
           lft_trans.set_world_pos(
-              registry->get<toolkit::transform>(target).position());
+              registry->get<toolkit::transform>(target).world_pos());
           lft_trans.set_world_rot(
-              registry->get<toolkit::transform>(target).rotation());
+              registry->get<toolkit::transform>(target).world_rot());
         }
       }
       if (left_foot_pole == entt::null) {
@@ -41,9 +41,9 @@ public:
         lfp_trans.name = "left foot ik pole";
         lfp_trans.set_parent(entity);
         if (pole != entt::null) {
-          auto p0 = registry->get<toolkit::transform>(root).position();
-          auto p1 = registry->get<toolkit::transform>(pole).position();
-          auto p2 = registry->get<toolkit::transform>(target).position();
+          auto p0 = registry->get<toolkit::transform>(root).world_pos();
+          auto p1 = registry->get<toolkit::transform>(pole).world_pos();
+          auto p2 = registry->get<toolkit::transform>(target).world_pos();
           toolkit::math::vector3 h02 =
               ((p1 - p0) -
                (p1 - p0).dot((p2 - p0).normalized()) * (p2 - p0).normalized())
@@ -68,11 +68,11 @@ public:
             if (left_foot_target != entt::null) {
               vis_pos.push_back(
                   registry->get<toolkit::transform>(left_foot_target)
-                      .position());
+                      .world_pos());
             }
             if (left_foot_pole != entt::null) {
               vis_pos.push_back(
-                  registry->get<toolkit::transform>(left_foot_pole).position());
+                  registry->get<toolkit::transform>(left_foot_pole).world_pos());
             }
             vis_pos.push_back(tp0);
             vis_pos.push_back(tp1);
@@ -91,38 +91,38 @@ public:
       auto &pole = registry->get<toolkit::transform>(left_foot_pole);
       auto &target = registry->get<toolkit::transform>(left_foot_target);
 
-      float l01 = (t1.position() - t0.position()).norm();
-      float l12 = (t2.position() - t1.position()).norm();
-      float dist = (target.position() - t0.position()).norm();
+      float l01 = (t1.world_pos() - t0.world_pos()).norm();
+      float l12 = (t2.world_pos() - t1.world_pos()).norm();
+      float dist = (target.world_pos() - t0.world_pos()).norm();
 
       if (l01 + l12 <= dist) {
-        tp0 = t0.position();
-        tp1 = l01 * (target.position() - t0.position()).normalized() + tp0;
-        tp2 = (l01 + l12) * (target.position() - t0.position()).normalized() +
+        tp0 = t0.world_pos();
+        tp1 = l01 * (target.world_pos() - t0.world_pos()).normalized() + tp0;
+        tp2 = (l01 + l12) * (target.world_pos() - t0.world_pos()).normalized() +
               tp0;
       } else {
-        auto n = (pole.position() - t0.position())
-                     .cross(target.position() - t0.position())
+        auto n = (pole.world_pos() - t0.world_pos())
+                     .cross(target.world_pos() - t0.world_pos())
                      .normalized();
-        auto h = n.cross((t0.position() - target.position()).normalized())
+        auto h = n.cross((t0.world_pos() - target.world_pos()).normalized())
                      .normalized();
         float cos_theta =
             std::clamp((l01 * l01 + dist * dist - l12 * l12) / (2 * l01 * dist),
                        -1.0f, 1.0f);
         float sin_theta = std::sqrt(1 - cos_theta * cos_theta);
-        tp0 = t0.position();
-        tp2 = target.position();
+        tp0 = t0.world_pos();
+        tp2 = target.world_pos();
         tp1 = tp0 + sin_theta * l01 * h +
               cos_theta * l01 * ((tp2 - tp0).normalized());
       }
 
       auto dq0 =
-          toolkit::math::from_to_rot(t1.position() - t0.position(), tp1 - tp0);
-      auto rp2 = dq0 * (t2.position() - t0.position()) + t0.position();
+          toolkit::math::from_to_rot(t1.world_pos() - t0.world_pos(), tp1 - tp0);
+      auto rp2 = dq0 * (t2.world_pos() - t0.world_pos()) + t0.world_pos();
       auto dq1 = toolkit::math::from_to_rot(rp2 - tp1, tp2 - tp1);
-      t0.set_world_rot(dq0 * t0.rotation());
-      t1.set_world_rot(dq1 * t1.parent_rotation() * t1.local_rotation());
-      t2.set_world_rot(target.rotation());
+      t0.set_world_rot(dq0 * t0.world_rot());
+      t1.set_world_rot(dq1 * t1.parent_rotation() * t1.local_rot());
+      t2.set_world_rot(target.world_rot());
     }
   }
 

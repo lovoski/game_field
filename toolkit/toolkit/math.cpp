@@ -53,9 +53,12 @@ double rand(double low, double high) {
 }
 
 matrix4 lookat(vector3 eye, vector3 center, vector3 up) {
-  vector3 f = (center - eye).normalized();
-  vector3 s = (f.cross(up)).normalized();
-  vector3 u = s.cross(f);
+  // z
+  vector3 f = (eye - center).normalized();
+  // x
+  vector3 s = (up.cross(f)).normalized();
+  // y
+  vector3 u = f.cross(s);
 
   matrix4 result = matrix4::Identity();
   result(0, 0) = s.x();
@@ -64,12 +67,14 @@ matrix4 lookat(vector3 eye, vector3 center, vector3 up) {
   result(1, 0) = u.x();
   result(1, 1) = u.y();
   result(1, 2) = u.z();
-  result(2, 0) = -f.x();
-  result(2, 1) = -f.y();
-  result(2, 2) = -f.z();
+  result(2, 0) = f.x();
+  result(2, 1) = f.y();
+  result(2, 2) = f.z();
+
   result(0, 3) = -s.dot(eye);
   result(1, 3) = -u.dot(eye);
-  result(2, 3) = f.dot(eye);
+  result(2, 3) = -f.dot(eye);
+
   return result;
 }
 

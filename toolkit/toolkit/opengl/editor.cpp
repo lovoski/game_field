@@ -238,9 +238,9 @@ void editor::editor_shortkeys() {
                 return;
               ray_query_data data;
               data.entity = entity;
-              data.dist = (trans.position() - ray_o).norm();
-              auto h = (trans.position() - ray_o).dot(ray_d) * ray_d;
-              data.pdist = ((trans.position() - ray_o) - h).norm();
+              data.dist = (trans.world_pos() - ray_o).norm();
+              auto h = (trans.world_pos() - ray_o).dot(ray_d) * ray_d;
+              data.pdist = ((trans.world_pos() - ray_o) - h).norm();
               q.emplace(data);
             });
         if (!q.empty()) {
@@ -307,7 +307,7 @@ bool editor::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o,
     math::vector4 p0 = cam_comp->vp.inverse() * ndc_pos;
     math::vector3 world_pos =
         math::vector3(p0.x() / p0.w(), p0.y() / p0.w(), p0.z() / p0.w());
-    o = cam_trans.position();
+    o = cam_trans.world_pos();
     d = (world_pos - o).normalized();
 
     return true;
@@ -337,10 +337,10 @@ void editor::active_camera_manipulate(float dt) {
                    registry.get<transform>(g_instance.active_camera).name,
                    registry.get<transform>(selected_entity).name);
       cam_manip_data.camera_pivot =
-          registry.get<transform>(selected_entity).position();
+          registry.get<transform>(selected_entity).world_pos();
     }
     auto cam_comp = registry.get<camera>(g_instance.active_camera);
-    auto cam_pos = cam_trans->position();
+    auto cam_pos = cam_trans->world_pos();
     if ((cam_pos - cam_manip_data.camera_pivot).norm() < 1e-9f) {
       cam_manip_data.camera_pivot = cam_pos - cam_trans->local_forward();
       spdlog::info("push pivot away from camera");
@@ -354,7 +354,7 @@ void editor::active_camera_manipulate(float dt) {
     if (g_instance.cursor_in_scene_window()) {
       // check action queue for mouse scroll event
       math::vector2 scrollOffset = g_instance.get_scroll_offsets();
-      cam_trans->set_world_pos(cam_trans->position() -
+      cam_trans->set_world_pos(cam_trans->world_pos() -
                                cam_trans->local_forward() * scrollOffset.y() *
                                    movement_delta);
     }
@@ -387,14 +387,14 @@ void editor::active_camera_manipulate(float dt) {
           if (screen_query_ray(screen_pos, ray_o, ray_d)) {
             cam_manip_data.camera_pivot =
                 ray_o +
-                ray_d * (cam_manip_data.camera_pivot - cam_trans->position())
+                ray_d * (cam_manip_data.camera_pivot - cam_trans->world_pos())
                             .norm();
           }
         }
         // move camera position with wasd key board
         math::vector3 camera_movement = math::vector3::Zero();
         math::vector3 cam_vec =
-            (cam_trans->position() - cam_manip_data.camera_pivot).normalized();
+            (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
         if (g_instance.is_key_pressed(GLFW_KEY_W))
           camera_movement -= cam_trans->local_forward();
         if (g_instance.is_key_pressed(GLFW_KEY_S))
@@ -405,7 +405,7 @@ void editor::active_camera_manipulate(float dt) {
           camera_movement += cam_trans->local_left();
         camera_movement *= (cam_manip_data.fps_camera_speed * dt);
         cam_manip_data.camera_pivot += camera_movement;
-        cam_trans->set_world_pos(cam_trans->position() + camera_movement);
+        cam_trans->set_world_pos(cam_trans->world_pos() + camera_movement);
       } else if (press_mouse_mid_btn) {
         // rotate the camera around the pivot, or translate the camera
         if (g_instance.is_key_pressed(GLFW_KEY_LEFT_SHIFT)) {
@@ -428,12 +428,12 @@ void editor::active_camera_manipulate(float dt) {
                     cam_trans->local_left() +
                 worldRayDir.dot(cam_trans->local_up()) * cam_trans->local_up();
             cam_manip_data.camera_pivot += deltaPos;
-            cam_trans->set_world_pos(cam_trans->position() + deltaPos);
+            cam_trans->set_world_pos(cam_trans->world_pos() + deltaPos);
           }
         } else {
           // repose the camera
           auto rotateOffset = mouse_offset * 0.1f;
-          math::vector3 posVector = cam_trans->position();
+          math::vector3 posVector = cam_trans->world_pos();
           math::vector3 newPos =
               math::angle_axis(math::deg_to_rad(-rotateOffset.x()),
                                math::world_up) *
@@ -450,7 +450,7 @@ void editor::active_camera_manipulate(float dt) {
 
     math::vector3 lastLeft = cam_trans->local_left();
     math::vector3 forward =
-        (cam_trans->position() - cam_manip_data.camera_pivot).normalized();
+        (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
     math::vector3 up = math::world_up;
     math::vector3 left = up.cross(forward).normalized();
     // flip left if non-consistent

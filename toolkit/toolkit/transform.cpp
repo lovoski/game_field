@@ -75,8 +75,8 @@ math::matrix4 transform::update_matrix() {
 
 void transform::set_world_transform(math::matrix4 t) {
   math::decompose_transform(t, m_pos, m_rot, m_scale);
-  set_world_pos(m_pos);
   set_world_rot(m_rot);
+  set_world_pos(m_pos);
   set_world_scale(m_scale);
 }
 void transform::set_local_transform(math::matrix4 t) {
@@ -296,9 +296,9 @@ void transform::force_update_hierarchy() {
 void transform_system::draw_gui(entt::registry &registry, entt::entity entity) {
   if (auto trans = registry.try_get<transform>(entity)) {
     if (ImGui::CollapsingHeader("Transform")) {
-      auto position = trans->position();
+      auto position = trans->world_pos();
       auto localEuler = trans->local_euler_degrees();
-      auto scale = trans->scale();
+      auto scale = trans->world_scl();
       if (ImGui::DragFloat3("World Pos.", position.data(), 0.01f))
         trans->set_world_pos(position);
       if (ImGui::DragFloat3("Local Rot.", localEuler.data(), 0.01f))

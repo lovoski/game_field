@@ -21,7 +21,7 @@ void test_draw::draw_to_scene(iapp *app) {
           editor_ptr->registry.get<camera>(g_instance.active_camera);
       draw_text3d(
           "This is the test for debug text draw\nThere can be multiple lines.",
-          trans.position(), trans.rotation(), cam_comp.vp, Purple,
+          trans.world_pos(), trans.world_rot(), cam_comp.vp, Purple,
           text_thickness, text_scale, text_width, text_height, text_spacing,
           text_line_height);
 
