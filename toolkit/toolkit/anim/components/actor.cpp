@@ -54,8 +54,8 @@ entt::entity create_bvh_actor(entt::registry &registry, std::string filepath) {
   auto &container_trans = registry.emplace<transform>(container);
   auto &vis_script = registry.emplace<vis_skeleton>(container);
   container_trans.name = std::filesystem::path(filepath).filename().string();
-  assets::motion motion_data;
-  motion_data.load_from_bvh(filepath);
+  assets::bvh_motion motion_data;
+  motion_data.load(filepath);
   create_actor_with_skeleton(registry, container, motion_data.skeleton);
   return container;
 }

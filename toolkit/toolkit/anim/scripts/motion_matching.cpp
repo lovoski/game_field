@@ -22,6 +22,10 @@ void motion_matching::start() {
       actor_bind_mat[i] = joint_trans.matrix();
     }
   }
+
+  // disable default editor camera manipulation
+  static_cast<opengl::editor *>(registry->ctx().get<iapp *>())
+      ->editor_manipulate_camera = false;
 }
 void motion_matching::destroy() {}
 
@@ -86,7 +90,8 @@ void motion_matching::update(iapp *app, float dt) {
   math::vector3 cam_fixed_pos =
       root_pos + 3 * math::world_forward + 2 * math::world_up;
   math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
-  cam_trans.set_world_pos(cam_fixed_pos);
+  cam_trans.set_world_transform(
+      math::lookat(cam_fixed_pos, cam_focus_target, math::world_up).inverse());
 }
 void motion_matching::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
@@ -154,17 +159,6 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
                                         Yang[anim_frame], Yrot[best_frame],
                                         Yang[best_frame]);
 
-        // for (int i = 1; i < parents.size(); i++) {
-        //   auto [sdp, sdv] = spring_damper_position(
-        //       Ypos[anim_frame][i], Yvel[anim_frame][i], Ypos[best_frame][i],
-        //       Yvel[best_frame][i], dt, 0.2f);
-        //   auto [sdr, sda] = spring_damper_rotation(
-        //       Yrot[anim_frame][i], Yang[anim_frame][i], Yrot[best_frame][i],
-        //       Yang[best_frame][i], dt, 0.2f);
-        //   off_pos[i] = sdp;
-        //   off_rot[i] = sdr;
-        // }
-
         anim_range = best_range;
         anim_frame = best_frame;
       }
@@ -193,7 +187,19 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
     root_rot = rot;
     // root_ang = root_rot * (Yrot[anim_frame][0].inverse() *
     // Yang[anim_frame][0]);
+    // root_vel = Yrot[anim_frame][0] * (Yrot[anim_frame][0].inverse() *
+    // Yvel[anim_frame][0]);
+    // std::cout << Yvel[anim_frame][0].x() << "," << Yvel[anim_frame][0].y()
+    //           << "," << Yvel[anim_frame][0].z() << std::endl;
     root_vel = root_rot * (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
+    // root_vel = vel;
+    // root_vel = Yvel[anim_frame][0];
+    // root_vel = root_rot * (root_rot.inverse() * Yvel[anim_frame][0]);
+    // if (left_stick.norm() < 0.01f) {
+    //   auto [decay_v, decay_a] = spring_damper_position(root_vel, )
+    // }
+    // std::cout << root_vel.x() << "," << root_vel.y() << "," << root_vel.z()
+    //           << std::endl;
     root_pos = root_pos + root_vel * dt;
     // root_rot = math::so3_to_quat(root_ang * dt) * root_rot;
     // std::cout << root_ang.x() << "," << root_ang.y() << "," << root_ang.z()

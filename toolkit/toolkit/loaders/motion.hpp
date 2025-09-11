@@ -25,7 +25,7 @@ namespace toolkit::assets {
 
 struct skeleton;
 struct pose;
-struct motion;
+struct bvh_motion;
 
 // The parent joint has a lower index than all its children
 struct skeleton {
@@ -78,9 +78,8 @@ struct pose {
   // // local positions of all joints
   // std::vector<toolkit::math::Vector3> jointPositions;
 
-  // local position for root joint only
   toolkit::math::vector3 root_local_pos;
-  // local rotations of all joints in quaternion
+  std::vector<toolkit::math::vector3> joint_local_pos;
   std::vector<toolkit::math::quat> joint_local_rot;
 
   // Extract the facing direction projected to xz plane,
@@ -104,9 +103,9 @@ struct pose {
   // glm::vec2 GetFacingDirection();
 };
 
-struct motion {
-  motion() {}
-  ~motion() {}
+struct bvh_motion {
+  bvh_motion() {}
+  ~bvh_motion() {}
   int fps;
   skeleton skeleton;
   std::vector<pose> poses;
@@ -118,7 +117,7 @@ struct motion {
   // the rotation channels can only follow behind the position channels.
   // Be aware that the euler angles in bvh file should
   // be parsed in reversed order, xyz rotation should be quaternion qx*qy*qz.
-  bool load_from_bvh(std::string filename, float scale = 1.0f);
+  bool load(std::string filename, float scale = 1.0f);
   // The saved bvh file's position channels will always be XYZ,
   // the rotation channels will be ZYX and
   // can only follow behind the position channels.
@@ -129,7 +128,7 @@ struct motion {
   // f"{parentName}_End", if the parameter `keep_joint_names` is set to true,
   // an `End Site` with offset `0 0 0` will be automatically added.
   // Otherwise, this joint itself will be renamed to `End Site`.
-  bool save_to_bvh(std::string filename, bool keep_joint_names = true,
+  bool save(std::string filename, bool keep_joint_names = true,
                    float scale = 1.0f);
 
   // Takes a float value as paramter, returns the slerp interpolated value.

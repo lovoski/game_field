@@ -52,7 +52,7 @@ private:
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;
   float cur_time = 0.0f, fixed_interval = 1.0f / 30.0f;
-  float search_time = 0.15f, search_timer = search_time;
+  float search_time = 0.25f, search_timer = search_time;
   bool xnpz_loaded = false, ynpz_loaded = false, mapping_loaded = false;
   math::vector3 root_pos = math::vector3::Zero(),
                 root_vel = math::vector3::Zero(),

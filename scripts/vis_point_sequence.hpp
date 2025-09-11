@@ -61,7 +61,7 @@ struct vis_point_sequence : public toolkit::scriptable {
       std::string filepath;
       if (toolkit::open_file_dialog("Select .bvh file", {"*.bvh"}, "*.bvh",
                                     filepath)) {
-        motion_data.load_from_bvh(filepath, 0.01f);
+        motion_data.load(filepath, 0.01f);
       }
     }
     ImGui::Checkbox("Auto Play", &auto_play);
@@ -135,6 +135,6 @@ struct vis_point_sequence : public toolkit::scriptable {
   std::vector<std::vector<toolkit::math::vector3>> positions;
   std::vector<int> parents;
 
-  toolkit::assets::motion motion_data;
+  toolkit::assets::bvh_motion motion_data;
 };
 DECLARE_SCRIPT(vis_point_sequence, debug)

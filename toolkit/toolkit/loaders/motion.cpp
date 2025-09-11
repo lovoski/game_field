@@ -75,7 +75,7 @@ quat QuatFromEulers(vector3 angles, int order) {
     return quat::Identity();
 }
 
-bool motion::load_from_bvh(string filename, float scale) {
+bool bvh_motion::load(string filename, float scale) {
   std::ifstream fileInput(filename);
   if (!fileInput.is_open()) {
     printf("failed to open file %s\n", filename.c_str());
@@ -195,7 +195,7 @@ bool motion::load_from_bvh(string filename, float scale) {
               for (int frameInd = 0; frameInd < poses.size(); ++frameInd) {
                 getline(fileInput, line);
                 lineSeg = SplitByWhiteSpace(line);
-                vector<vector3> jointPositions(jointNumber, vector3::Zero());
+                vector<vector3> jointPositions = skeleton.joint_offset;
                 poses[frameInd].skeleton = &this->skeleton;
                 poses[frameInd].joint_local_rot.resize(jointNumber,
                                                       quat::Identity());
@@ -251,7 +251,7 @@ inline void BVHPadding(std::ostream &out, int depth) {
     out << "\t";
 }
 
-bool motion::save_to_bvh(string filename, bool keepJointNames, float scale) {
+bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
   // apply the initial rotations of skeleton joints
   // the motion data remains unchanged
   auto restPose = skeleton.get_rest_pose();
@@ -439,7 +439,7 @@ vector<vector3> pose::fk() {
   return fk(orientations);
 }
 
-pose motion::at(float frame) {
+pose bvh_motion::at(float frame) {
   if (frame <= 0.0f)
     return poses[0];
   if (frame >= poses.size() - 1)
@@ -477,11 +477,11 @@ void skeleton::export_as_bvh(std::string filepath, bool keep_joint_names) {
   int jointNum = get_num_joints();
   pose emptyPose = get_rest_pose();
   emptyPose.skeleton = this;
-  motion tmpMotion;
+  bvh_motion tmpMotion;
   tmpMotion.skeleton = *this;
   tmpMotion.fps = 30;
   tmpMotion.poses.push_back(emptyPose);
-  tmpMotion.save_to_bvh(filepath, keep_joint_names);
+  tmpMotion.save(filepath, keep_joint_names);
 }
 
 vector3 pose::get_facing_dir(vector3 restFacing) {
