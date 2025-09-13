@@ -1,153 +1,66 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from dataset.MotionPersona import format_motion_files_motion_persona
-from utils.bvh_motion import Motion
+from utils import bvh, bvh_motion
+import os
+from scipy.spatial.transform import Rotation
 
-src_dir = 'data/motion_persona/ZhiqingMom'
-dst_dir = 'data/motion_persona/ZhiqingMom_processed'
-format_motion_files_motion_persona(src_dir, dst_dir, 0.026524)
+def forward_kinematics_trans(data):
+  nframes, njoints = data['positions'].shape[:2]
+  local_trans = np.zeros((nframes, njoints, 4, 4)).astype(np.float64)
+  global_trans = np.zeros((nframes, njoints, 4, 4)).astype(np.float64)
+  for frame in range(nframes):
+    for joint in range(njoints):
+      # construct T*R homogeneous transform matrix
+      local_trans[frame, joint, 3, 3] = 1
+      local_trans[frame, joint, :3, :3] = Rotation.from_quat(data['rot_quats'][frame, joint, [1,2,3,0]]).as_matrix()
+      local_trans[frame, joint, :3, 3] = data['positions'][frame, joint]
+    for joint_idx, parent_idx in enumerate(data['parents']):
+      # build up transform matrix chain
+      if parent_idx == -1:
+        global_trans[frame, joint_idx] = local_trans[frame, joint_idx]
+      else:
+        global_trans[frame, joint_idx] = global_trans[frame, parent_idx] @ local_trans[frame, joint_idx]
+  return global_trans, local_trans
 
-# motion = Motion.load_bvh(
-#     "data/motion_persona/ZhiqingMom_processed/ZhiqingMom_Neutral_BR.bvh"
-# )
-# # for j in range(motion.joint_num):
-# #     print(f'"{motion.names[j]}",')
+def forward_kinematics_direct(data):
+  nframes, njoints = data['positions'].shape[:2]
+  gpos = np.zeros((nframes, njoints, 3)).astype(np.float64)
+  grot = np.zeros((nframes, njoints, 4)).astype(np.float64)
+  grot[...,0] = 1
+  for frame in range(nframes):
+    for joint_idx, parent_idx in enumerate(data['parents']):
+      if parent_idx == -1:
+        grot[frame, joint_idx] = data['rot_quats'][frame, joint_idx]
+        gpos[frame, joint_idx] = data['positions'][frame, joint_idx]
+      else:
+        grot[frame, joint_idx] = (Rotation.from_quat(grot[frame,parent_idx,[1,2,3,0]])*Rotation.from_quat(data['rot_quats'][frame,joint_idx,[1,2,3,0]])).as_quat()[3,0,1,2]
+        gpos[frame, joint_idx] = gpos[frame, parent_idx] + Rotation.from_quat(grot[frame, joint_idx, [1,2,3,0]]).apply(data['positions'][frame, joint_idx])
+  return gpos, grot
 
-# smpl_parents = [
-#     -1,
-#     0,
-#     0,
-#     0,
-#     1,
-#     2,
-#     3,
-#     4,
-#     5,
-#     6,
-#     7,
-#     8,
-#     9,
-#     9,
-#     9,
-#     12,
-#     13,
-#     14,
-#     16,
-#     17,
-#     18,
-#     19,
-#     20,
-#     21,
-# ]
-# smpl_names = [
-#     "pelvis",
-#     "left_hip",
-#     "right_hip",
-#     "spine1",
-#     "left_knee",
-#     "right_knee",
-#     "spine2",
-#     "left_ankle",
-#     "right_ankle",
-#     "spine3",
-#     "left_foot",
-#     "right_foot",
-#     "neck",
-#     "left_collar",
-#     "right_collar",
-#     "head",
-#     "left_shoulder",
-#     "right_shoulder",
-#     "left_elbow",
-#     "right_elbow",
-#     "left_wrist",
-#     "right_wrist",
-#     "left_hand",
-#     "right_hand",
-# ]
-# persona_parents = [
-#     -1,
-#     0,
-#     1,
-#     2,
-#     3,
-#     4,
-#     5,
-#     6,
-#     4,
-#     8,
-#     9,
-#     10,
-#     4,
-#     12,
-#     13,
-#     14,
-#     0,
-#     16,
-#     17,
-#     18,
-#     0,
-#     20,
-#     21,
-#     22,
-# ]
-# persona_names = [
-#     "Hips",
-#     "Spine",
-#     "Spine1",
-#     "Spine2",
-#     "Spine3",
-#     "Neck",
-#     "Neck1",
-#     "Head",
-#     "RightShoulder",
-#     "RightArm",
-#     "RightForeArm",
-#     "RightHand",
-#     "LeftShoulder",
-#     "LeftArm",
-#     "LeftForeArm",
-#     "LeftHand",
-#     "RightUpLeg",
-#     "RightLeg",
-#     "RightFoot",
-#     "RightToeBase",
-#     "LeftUpLeg",
-#     "LeftLeg",
-#     "LeftFoot",
-#     "LeftToeBase",
-# ]
+def decompose_transform_trs(trans):
+  pos = trans[...,:3,3]
+  scl = np.array([
+    np.linalg.norm(trans[...,:3,0], axis=-1),
+    np.linalg.norm(trans[...,:3,1], axis=-1),
+    np.linalg.norm(trans[...,:3,2], axis=-1)])
+  rot = trans[...,:3,:3]
+  rot[:,0] /= scl[0]
+  rot[:,1] /= scl[1]
+  rot[:,2] /= scl[2]
+  return pos, rot, scl
 
-# # from smpl index to persona index
-# smpl_to_persona = {}
+def make_first_frame_rest_pose(data):
+  gpos, grot = forward_kinematics_direct(data)
+  
+  
 
-# def collect_children(parents):
-#   children = []
-#   for j in range(len(parents)):
-#     children.append([])
-#     if parents[j] != -1:
-#       children[parents[j]].append(j)
-#   return children
+if __name__ == '__main__':
+  base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion'
+  # base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_motion'
 
-# smpl_children = collect_children(smpl_parents)
-# # print(smpl_children)
-# # for j, children in enumerate(smpl_children):
-# #   if len(children) == 0:
-# #     print(f'smpl: {smpl_names[j]}, {j}')
-# persona_children = collect_children(persona_parents)
-# # print(persona_children)
-# # for j, children in enumerate(persona_children):
-# #   if len(children) == 0:
-# #     print(f'persona: {persona_names[j]}, {j}')
-
-# ee_pairs = [(10,23),(11,19),(15,7),(22,15),(23,11)]
-# for smpl_ee, persona_ee in ee_pairs:
-#   cur0, cur1 = smpl_ee, persona_ee
-#   while cur0 != -1 and cur1 != -1:
-#     smpl_to_persona[cur0] = cur1
-#     cur0 = smpl_parents[cur0]
-#     cur1 = persona_parents[cur1]
-
-# for smpl_j, persona_j in smpl_to_persona.items():
-#   print(f'{smpl_names[smpl_j]}, {persona_names[persona_j]}')
-# print(smpl_to_persona)
+  for filename in os.listdir(base_dir):
+    if not filename.endswith('.bvh'):
+      continue
+    data = bvh.load(os.path.join(base_dir, filename))
+    data = make_first_frame_rest_pose(data)
+    bvh.save('test.bvh', data)
+    break

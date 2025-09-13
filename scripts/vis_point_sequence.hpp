@@ -92,14 +92,14 @@ struct vis_point_sequence : public toolkit::scriptable {
                 if (parents[i] != -1)
                   bones.push_back(std::make_pair(tmp_pos[parents[i]], tmp_pos[i]));
               toolkit::opengl::draw_bones(bones, cam_comp.vp, positions_color);
-              if (motion_data.skeleton.get_num_joints() != 0) {
+              if (motion_data.skel.get_num_joints() != 0) {
                 auto frame_data = motion_data.at(current_frame);
                 auto motion_pos = frame_data.fk();
                 bones.clear();
                 toolkit::math::vector4 tmp_vec0, tmp_vec1;
-                for (int i = 0; i < motion_data.skeleton.joint_parent.size(); i++) {
-                  if (motion_data.skeleton.joint_parent[i] != -1) {
-                    tmp_vec0<<motion_pos[motion_data.skeleton.joint_parent[i]],1.0f;
+                for (int i = 0; i < motion_data.skel.joint_parent.size(); i++) {
+                  if (motion_data.skel.joint_parent[i] != -1) {
+                    tmp_vec0<<motion_pos[motion_data.skel.joint_parent[i]],1.0f;
                     tmp_vec1<<motion_pos[i],1.0f;
                     tmp_vec0 = registry->get<toolkit::transform>(entity).matrix()*tmp_vec0;
                     tmp_vec1 = registry->get<toolkit::transform>(entity).matrix()*tmp_vec1;

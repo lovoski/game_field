@@ -1,6 +1,6 @@
 import numpy as np
-from scipy.spatial.transform import Rotation
-from utils.bvh_motion import Motion
+from utils import bvh, quat
+import scipy.signal as signal
 
 
 def build_motion_db(files):
@@ -127,28 +127,21 @@ def build_motion_db(files):
     YrangeStarts = np.array(YrangeStarts)
     YrangeStops = np.array(YrangeStops)
 
-    return dict(
-        Ypos=Ypos,
-        Yrot=Yrot,
-        Yvel=Yvel,
-        Yang=Yang,
-        YrangeStarts=YrangeStarts,
-        YrangeStops=YrangeStops,
-        parents=parents,
-        names=names,
+    return (
+        Ypos.astype(np.float32),
+        Yrot.astype(np.float32),
+        Yvel.astype(np.float32),
+        Yang.astype(np.float32),
+        YrangeStarts.astype(np.int32),
+        YrangeStops.astype(np.int32),
+        parents.astype(np.int32),
+        names.tolist(),
     )
 
 
-def compute_db_features(Y):
-    Ypos = Y["Ypos"]
-    Yrot = Y["Yrot"]
-    Yvel = Y["Yvel"]
-    Yang = Y["Yang"]
-    YrangeStarts = Y["YrangeStarts"]
-    YrangeStops = Y["YrangeStops"]
-    parents = Y["parents"]
-    names = Y["names"].tolist()
-
+def compute_db_features(
+    Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names
+):
     posJoints = np.array([names.index(n) for n in ["LeftToeBase", "RightToeBase"]])
     velJoints = np.array(
         [names.index(n) for n in ["LeftToeBase", "RightToeBase", "Hips"]]
@@ -207,12 +200,50 @@ def compute_db_features(Y):
 
     X = (X - Xoffset) / Xscale
 
-    return X, Xoffset, Xscale
+    return X.astype(np.float32), Xoffset.astype(np.float32), Xscale.astype(np.float32)
 
 
 if __name__ == "__main__":
-    build_motion_db(
+    Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
         [
-            r"D:\repo\GenoViewPython-MotionMatching\resources\lafan_motion",
+            (
+                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/pushAndStumble1_subject5.bvh",
+                397,
+                706,
+            ),
+            (
+                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/run1_subject5.bvh",
+                172,
+                14136,
+            ),
+            (
+                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/walk1_subject5.bvh",
+                160,
+                15518,
+            ),
         ]
+    )
+    X, Xoffset, Xscale = compute_db_features(
+        Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names
+    )
+    with open("mapping.json", "w") as f:
+        import json
+
+        mapping = {}
+        for idx, name in enumerate(names):
+            mapping[name] = idx
+        json.dump(mapping, f)
+
+    np.savez(
+        "db.npz",
+        Ypos=Ypos,
+        Yrot=Yrot,
+        Yvel=Yvel,
+        Yang=Yang,
+        YrangeStarts=YrangeStarts,
+        YrangeStops=YrangeStops,
+        parents=parents,
+        X=X,
+        Xoffset=Xoffset,
+        Xscale=Xscale,
     )

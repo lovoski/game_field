@@ -82,7 +82,6 @@ bool bvh_motion::load(string filename, float scale) {
     fileInput.close();
     return false;
   } else {
-    skeleton.name = std::filesystem::path(filename).filename().string();
     vector<int> jointChannels;
     vector<int> jointChannelsOrder;
     string line;
@@ -94,8 +93,8 @@ bool bvh_motion::load(string filename, float scale) {
         int currentJoint = 0, parentJoint = -1;
         stack<int> s;
         s.push(currentJoint);
-        skeleton.joint_names.push_back(ConcatStr(lineSeg, 1)); // the name
-        skeleton.joint_parent.push_back(parentJoint);          // the parent
+        skel.joint_names.push_back(ConcatStr(lineSeg, 1)); // the name
+        skel.joint_parent.push_back(parentJoint);          // the parent
         while (!s.empty()) {
           getline(fileInput, line);
           lineSeg = SplitByWhiteSpace(line);
@@ -109,9 +108,9 @@ bool bvh_motion::load(string filename, float scale) {
             float xOffset = std::stof(lineSeg[1]) * scale;
             float yOffset = std::stof(lineSeg[2]) * scale;
             float zOffset = std::stof(lineSeg[3]) * scale;
-            skeleton.joint_offset.push_back(vector3(xOffset, yOffset, zOffset));
+            skel.joint_offset.push_back(vector3(xOffset, yOffset, zOffset));
             // ready to recieve children
-            skeleton.joint_children.push_back(vector<int>());
+            skel.joint_children.push_back(vector<int>());
             getline(fileInput, line);
             lineSeg = SplitByWhiteSpace(line);
             if (lineSeg[0] == "CHANNELS") {
@@ -139,16 +138,16 @@ bool bvh_motion::load(string filename, float scale) {
                       .c_str());
           } else if (lineSeg[0] == "JOINT") {
             parentJoint = s.top();
-            skeleton.joint_parent.push_back(parentJoint);
-            skeleton.joint_children[parentJoint].push_back(currentJoint);
-            skeleton.joint_names.push_back(
+            skel.joint_parent.push_back(parentJoint);
+            skel.joint_children[parentJoint].push_back(currentJoint);
+            skel.joint_names.push_back(
                 ConcatStr(lineSeg, 1)); // name of this joint
             s.push(currentJoint);       // keep record of this child joint
           } else if (lineSeg[0] == "End") {
             parentJoint = s.top();
-            skeleton.joint_parent.push_back(parentJoint);
-            skeleton.joint_children[parentJoint].push_back(currentJoint);
-            skeleton.joint_names.push_back(skeleton.joint_names[parentJoint] +
+            skel.joint_parent.push_back(parentJoint);
+            skel.joint_children[parentJoint].push_back(currentJoint);
+            skel.joint_names.push_back(skel.joint_names[parentJoint] +
                                           "_End"); // the end effector's name
             getline(fileInput, line);              // {
             getline(fileInput, line);              // OFFSET
@@ -157,9 +156,9 @@ bool bvh_motion::load(string filename, float scale) {
               float xOffset = std::stof(lineSeg[1]) * scale;
               float yOffset = std::stof(lineSeg[2]) * scale;
               float zOffset = std::stof(lineSeg[3]) * scale;
-              skeleton.joint_offset.push_back(
+              skel.joint_offset.push_back(
                   vector3(xOffset, yOffset, zOffset));
-              skeleton.joint_children.push_back(vector<int>());
+              skel.joint_children.push_back(vector<int>());
               jointChannels.push_back(0); // 0 for end effector
               jointChannelsOrder.push_back(0);
             } else
@@ -173,10 +172,10 @@ bool bvh_motion::load(string filename, float scale) {
         // initialize joint_rotation and joint_scale
         // bvh format don't store localRotation and localScale
         // of a skeleton hierarchy, initialize to identity transform
-        skeleton.joint_rotation =
-            std::vector<quat>(skeleton.get_num_joints(), quat::Identity());
-        skeleton.joint_scale =
-            std::vector<vector3>(skeleton.get_num_joints(), vector3::Ones());
+        skel.joint_rotation =
+            std::vector<quat>(skel.get_num_joints(), quat::Identity());
+        skel.joint_scale =
+            std::vector<vector3>(skel.get_num_joints(), vector3::Ones());
 
         // parse pose data
         getline(fileInput, line);
@@ -191,12 +190,12 @@ bool bvh_motion::load(string filename, float scale) {
             if (lineSeg[0] == "Frame" && lineSeg[1] == "Time:") {
               float timePerFrame = std::stof(lineSeg[2]);
               fps = std::round(1.0f / timePerFrame);
-              const int jointNumber = skeleton.get_num_joints();
+              const int jointNumber = skel.get_num_joints();
               for (int frameInd = 0; frameInd < poses.size(); ++frameInd) {
                 getline(fileInput, line);
                 lineSeg = SplitByWhiteSpace(line);
-                vector<vector3> jointPositions = skeleton.joint_offset;
-                poses[frameInd].skeleton = &this->skeleton;
+                vector<vector3> jointPositions = skel.joint_offset;
+                poses[frameInd].skel = &this->skel;
                 poses[frameInd].joint_local_rot.resize(jointNumber,
                                                       quat::Identity());
                 int segInd = 0;
@@ -254,13 +253,13 @@ inline void BVHPadding(std::ostream &out, int depth) {
 bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
   // apply the initial rotations of skeleton joints
   // the motion data remains unchanged
-  auto restPose = skeleton.get_rest_pose();
-  int jointNumber = skeleton.get_num_joints();
+  auto restPose = skel.get_rest_pose();
+  int jointNumber = skel.get_num_joints();
   vector<quat> globalJointOrien;
   auto globalJointPositions = restPose.fk(globalJointOrien);
   auto flattenJointOffset = globalJointPositions;
-  for (int i = 0; i < skeleton.get_num_joints(); ++i) {
-    int parentInd = skeleton.joint_parent[i];
+  for (int i = 0; i < skel.get_num_joints(); ++i) {
+    int parentInd = skel.joint_parent[i];
     if (parentInd != -1) {
       flattenJointOffset[i] -= globalJointPositions[parentInd];
     }
@@ -276,17 +275,17 @@ bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
     // write the skeleton hierarchy
     std::set<int> incorrectNamedEE;
     int depth = 0;
-    for (int jointInd = 0; jointInd < skeleton.get_num_joints(); ++jointInd) {
+    for (int jointInd = 0; jointInd < skel.get_num_joints(); ++jointInd) {
       BVHPadding(fileOutput, depth);
-      if (skeleton.joint_children[jointInd].size() == 0) {
-        if (endswith(skeleton.joint_names[jointInd], "_End") ||
+      if (skel.joint_children[jointInd].size() == 0) {
+        if (endswith(skel.joint_names[jointInd], "_End") ||
             !keepJointNames) {
           // force rename end effector
           fileOutput << "End Site\n";
         } else {
           incorrectNamedEE.insert(jointInd);
           fileOutput << "JOINT "
-                     << replace(skeleton.joint_names[jointInd], " ", "_")
+                     << replace(skel.joint_names[jointInd], " ", "_")
                      << "\n";
         }
         BVHPadding(fileOutput, depth++);
@@ -311,29 +310,29 @@ bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
         BVHPadding(fileOutput, --depth);
         fileOutput << "}\n";
         // find the direct parent of the next joint (if exists)
-        if (jointInd == skeleton.get_num_joints() - 1) {
+        if (jointInd == skel.get_num_joints() - 1) {
           // flush until depth is 0
           while (depth > 0) {
             BVHPadding(fileOutput, --depth);
             fileOutput << "}\n";
           }
         } else {
-          int parentOfNext = skeleton.joint_parent[jointInd + 1];
-          int cur = skeleton.joint_parent[jointInd];
+          int parentOfNext = skel.joint_parent[jointInd + 1];
+          int cur = skel.joint_parent[jointInd];
           while (cur != parentOfNext) {
             BVHPadding(fileOutput, --depth);
             fileOutput << "}\n";
-            cur = skeleton.joint_parent[cur];
+            cur = skel.joint_parent[cur];
           }
         }
       } else {
-        if (skeleton.joint_parent[jointInd] == -1)
+        if (skel.joint_parent[jointInd] == -1)
           fileOutput << "ROOT "
-                     << replace(skeleton.joint_names[jointInd], " ", "_")
+                     << replace(skel.joint_names[jointInd], " ", "_")
                      << "\n";
         else
           fileOutput << "JOINT "
-                     << replace(skeleton.joint_names[jointInd], " ", "_")
+                     << replace(skel.joint_names[jointInd], " ", "_")
                      << "\n";
         BVHPadding(fileOutput, depth++);
         fileOutput << "{\n";
@@ -342,7 +341,7 @@ bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
                    << " " << flattenJointOffset[jointInd].y() * scale << " "
                    << flattenJointOffset[jointInd].z() * scale << "\n";
         BVHPadding(fileOutput, depth);
-        if (skeleton.joint_parent[jointInd] != -1) {
+        if (skel.joint_parent[jointInd] != -1) {
           fileOutput << "CHANNELS 3 Zrotation Yrotation Xrotation\n";
         } else {
           fileOutput << "CHANNELS 6 Xposition Yposition Zposition Zrotation "
@@ -365,7 +364,7 @@ bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
       // oldOrien is the ground truth rotation we need
       poses[frameInd].fk(oldOrien);
       for (int jointInd = 0; jointInd < jointNumber; ++jointInd) {
-        int parentInd = skeleton.joint_parent[jointInd];
+        int parentInd = skel.joint_parent[jointInd];
         // `newOrien` is the delta rotation in each frame
         // oldOrien = newOrien * globalJointOrien
         // meaning that we can get the ground truth rotation with the skeleton
@@ -382,7 +381,7 @@ bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
         }
       }
       for (int jointInd = 0; jointInd < jointNumber; ++jointInd) {
-        if (skeleton.joint_children[jointInd].size() != 0) {
+        if (skel.joint_children[jointInd].size() != 0) {
           vector3 euler =
               toolkit::math::quat_to_euler(frameJointRot[jointInd]);
           vector3 eulerDegree = toolkit::math::rad_to_deg(euler);
@@ -404,7 +403,7 @@ bool bvh_motion::save(string filename, bool keepJointNames, float scale) {
 
 vector<vector3> pose::fk(vector<quat> &orientations) {
   orientations.clear();
-  int jointNum = skeleton->get_num_joints();
+  int jointNum = skel->get_num_joints();
   orientations = vector<quat>(jointNum, quat::Identity());
   vector<vector3> positions(jointNum, vector3::Zero());
   if (jointNum != joint_local_rot.size()) {
@@ -417,7 +416,7 @@ vector<vector3> pose::fk(vector<quat> &orientations) {
   // start traversaling the joints
   for (int curJoint = 0; curJoint < jointNum; ++curJoint) {
     // compute the orientation
-    int parentInd = skeleton->joint_parent[curJoint];
+    int parentInd = skel->joint_parent[curJoint];
     if (parentInd == -1) {
       parentOrientation = orientations[0];
       parentPosition = vector3::Zero();
@@ -427,7 +426,7 @@ vector<vector3> pose::fk(vector<quat> &orientations) {
     }
     orientations[curJoint] = parentOrientation * joint_local_rot[curJoint];
     positions[curJoint] =
-        parentPosition + parentOrientation * skeleton->joint_offset[curJoint];
+        parentPosition + parentOrientation * skel->joint_offset[curJoint];
     if (parentInd == -1)
       positions[curJoint] = root_local_pos;
   }
@@ -448,12 +447,12 @@ pose bvh_motion::at(float frame) {
   unsigned int end = start + 1;
   float alpha = frame - start;
   pose result;
-  result.skeleton = &skeleton;
+  result.skel = &skel;
   result.joint_local_rot =
-      vector<quat>(skeleton.get_num_joints(), quat::Identity());
+      vector<quat>(skel.get_num_joints(), quat::Identity());
   result.root_local_pos = poses[start].root_local_pos * (1.0f - alpha) +
                              poses[end].root_local_pos * alpha;
-  for (auto jointInd = 0; jointInd < skeleton.get_num_joints(); ++jointInd) {
+  for (auto jointInd = 0; jointInd < skel.get_num_joints(); ++jointInd) {
     result.joint_local_rot[jointInd] =
         poses[start].joint_local_rot[jointInd].slerp(
             alpha, poses[end].joint_local_rot[jointInd]);
@@ -463,7 +462,7 @@ pose bvh_motion::at(float frame) {
 
 pose skeleton::get_rest_pose() {
   pose p;
-  p.skeleton = this;
+  p.skel = this;
   p.root_local_pos = joint_offset[0];
   int jointNum = get_num_joints();
   p.joint_local_rot.resize(jointNum, quat::Identity());
@@ -476,9 +475,9 @@ pose skeleton::get_rest_pose() {
 void skeleton::export_as_bvh(std::string filepath, bool keep_joint_names) {
   int jointNum = get_num_joints();
   pose emptyPose = get_rest_pose();
-  emptyPose.skeleton = this;
+  emptyPose.skel = this;
   bvh_motion tmpMotion;
-  tmpMotion.skeleton = *this;
+  tmpMotion.skel = *this;
   tmpMotion.fps = 30;
   tmpMotion.poses.push_back(emptyPose);
   tmpMotion.save(filepath, keep_joint_names);
@@ -493,13 +492,10 @@ vector3 pose::get_facing_dir(vector3 restFacing) {
 }
 
 void skeleton::as_empty(int jointNum) {
-  path = "";
-  name = "";
   joint_names.resize(jointNum, "");
   joint_offset.resize(jointNum, math::vector3::Zero());
   joint_rotation.resize(jointNum, math::quat::Identity());
   joint_scale.resize(jointNum, math::vector3::Ones());
-  offset_matrices.resize(jointNum, math::matrix4::Identity());
   joint_parent.resize(jointNum, -1);
   joint_children.resize(jointNum, std::vector<int>());
 }

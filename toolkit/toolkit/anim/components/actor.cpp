@@ -56,7 +56,7 @@ entt::entity create_bvh_actor(entt::registry &registry, std::string filepath) {
   container_trans.name = std::filesystem::path(filepath).filename().string();
   assets::bvh_motion motion_data;
   motion_data.load(filepath);
-  create_actor_with_skeleton(registry, container, motion_data.skeleton);
+  create_actor_with_skeleton(registry, container, motion_data.skel);
   return container;
 }
 
@@ -115,6 +115,98 @@ estimate_actor_bone_hierarchy(entt::registry &registry, actor &actor_comp,
   }
 
   return {parent, children, roots};
+}
+
+std::string padding_tabs(int n) {
+  std::string tabs = "";
+  for (int i = 0; i < n; i++)
+    tabs += "\t";
+  return tabs;
+}
+
+std::string get_joint_string(entt::registry &registry, actor &actor_comp,
+                             int level, int boneid, std::vector<int> &parent,
+                             std::vector<std::vector<int>> &children) {
+  auto &bone_trans =
+      registry.get<transform>(actor_comp.ordered_entities[boneid]);
+  auto &parent_trans =
+      registry.get<transform>(actor_comp.ordered_entities[parent[boneid]]);
+  math::vector3 offset =
+      bone_trans.local_pos().array() * bone_trans.world_scl().array();
+  std::string result =
+      padding_tabs(level) + "JOINT " + bone_trans.name + "\n" +
+      padding_tabs(level) + "{\n" + padding_tabs(level) + "\tOFFSET\t" +
+      str_format("%.6f\t%.6f\t%.6f", offset.x(), offset.y(), offset.z()) +
+      "\n" + padding_tabs(level) +
+      "\tCHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation "
+      "Xrotation\n";
+  if (children[boneid].size() > 0) {
+    for (auto childid : children[boneid])
+      result += get_joint_string(registry, actor_comp, level + 1, childid,
+                                 parent, children);
+  } else {
+    result += padding_tabs(level + 1) + "End Site\n" + padding_tabs(level + 1) +
+              "{\n" + padding_tabs(level + 1) + "\tOFFSET\t 0\t0\t0 \n" +
+              padding_tabs(level + 1) + "}\n";
+  }
+  result += padding_tabs(level) + "}\n";
+  return result;
+}
+std::string get_joint_6dof_string(entt::registry &registry, actor &actor_comp,
+                                  int boneid,
+                                  std::vector<std::vector<int>> &children) {
+  auto &bone_trans =
+      registry.get<transform>(actor_comp.ordered_entities[boneid]);
+  auto angles = math::rad_to_deg(math::quat_to_euler(bone_trans.local_rot()));
+  math::vector3 offset =
+      bone_trans.local_pos().array() * bone_trans.world_scl().array();
+  std::string result =
+      str_format("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t", offset.x(), offset.y(),
+                 offset.z(), angles.z(), angles.y(), angles.x());
+  for (auto childid : children[boneid])
+    result += get_joint_6dof_string(registry, actor_comp, childid, children);
+  return result;
+}
+std::vector<std::string> make_current_pose_bvh(entt::registry &registry,
+                                               actor &actor_comp) {
+  std::vector<std::string> results;
+  auto [parent, children, roots] =
+      estimate_actor_bone_hierarchy(registry, actor_comp, false);
+  for (auto root : roots) {
+    std::string result = "";
+    auto &root_trans =
+        registry.get<transform>(actor_comp.ordered_entities[root]);
+    auto root_rot = root_trans.world_rot();
+    root_trans.set_world_rot(math::quat::Identity());
+    root_trans.force_update_hierarchy();
+
+    result = result + "HIERARCHY\nROOT " + root_trans.name +
+             "\n{\n\tOFFSET\t0.00\t0.00\t0.00\n\tCHANNELS 6 Xposition "
+             "Yposition Zposition Zrotation Yrotation Xrotation\n";
+
+    for (auto childid : children[root])
+      result +=
+          get_joint_string(registry, actor_comp, 1, childid, parent, children);
+    result += "}\n";
+
+    root_trans.set_world_rot(root_rot);
+    root_trans.force_update_hierarchy();
+
+    result +=
+        str_format("\nMOTION\nFrames: %d\nFrame Time: %6f\n", 1, 1.0f / 30.0f);
+    auto root_angles =
+        math::rad_to_deg(math::quat_to_euler(root_trans.world_rot()));
+    result += str_format("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t",
+                         root_trans.world_pos().x(), root_trans.world_pos().y(),
+                         root_trans.world_pos().z(), root_angles.z(),
+                         root_angles.y(), root_angles.x());
+    for (auto childid : children[root])
+      result += get_joint_6dof_string(registry, actor_comp, childid, children);
+    result += "\n";
+
+    results.emplace_back(result);
+  }
+  return results;
 }
 
 }; // namespace toolkit::anim

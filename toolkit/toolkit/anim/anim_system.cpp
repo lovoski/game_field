@@ -14,6 +14,19 @@ void anim_system::draw_gui(entt::registry &registry, entt::entity entity) {
         draw_skeleton_gui(registry, entity);
         ImGui::TreePop();
       }
+      if (ImGui::Button("Export Current Pose", {-1, 30})) {
+        auto skels = make_current_pose_bvh(registry, *ptr);
+        for (auto &skel : skels) {
+          std::string save_filepath;
+          if (save_file_dialog(str_format("Save .bvh pose"), {"*.bvh"}, "*.bvh",
+                               save_filepath)) {
+            std::ofstream output(save_filepath);
+            if (output.is_open())
+              output << skel;
+            output.close();
+          }
+        }
+      }
     }
   }
 }

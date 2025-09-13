@@ -24,6 +24,13 @@ void create_actor_with_skeleton(entt::registry &registry,
                                 entt::entity container, assets::skeleton &skel);
 
 /**
+ * Each actor component could potentially have multiple skeletons, so the poses
+ * are returnsed as an array.
+ */
+std::vector<std::string> make_current_pose_bvh(entt::registry &registry,
+                                               actor &actor_comp);
+
+/**
  * We assume at default state, there's only one root node in the provided actor
  * component, by default, we assume it to be actor_comp.ordered_entities[0].
  *

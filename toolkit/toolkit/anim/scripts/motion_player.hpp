@@ -16,8 +16,8 @@ public:
   void lateupdate(iapp *app, float dt) override {
     auto actor_comp = registry->try_get<anim::actor>(entity);
     if (actor_comp != nullptr && motion_loaded) {
-      for (int i = 0; i < motion.skeleton.get_num_joints(); i++) {
-        auto bvh_joint_name = motion.skeleton.joint_names[i];
+      for (int i = 0; i < motion.skel.get_num_joints(); i++) {
+        auto bvh_joint_name = motion.skel.joint_names[i];
         if (actor_comp->name_to_entity.find(bvh_joint_name) !=
             actor_comp->name_to_entity.end()) {
           auto &joint_trans = registry->get<transform>(

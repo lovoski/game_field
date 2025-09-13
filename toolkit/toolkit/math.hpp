@@ -42,9 +42,9 @@ extern vector3 world_up;
 extern vector3 world_left;
 extern vector3 world_forward;
 
-// Convert a quaternion to (pitch, yaw, roll) in radians
+// Convert a quaternion to euler angles (xyz) in radians
 vector3 quat_to_euler(const quat &q);
-// Build a quaternion from euler angles (pitch, yaw, roll), in radians.
+// Build a quaternion from euler angles (xyz) to quaternion from radians.
 quat euler_to_quat(const vector3 &a);
 
 // Decompose q into q2 * q1, q1 is the rotation along given axis

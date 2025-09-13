@@ -29,7 +29,6 @@ struct bvh_motion;
 
 // The parent joint has a lower index than all its children
 struct skeleton {
-  std::string name;
   std::vector<std::string> joint_names;
   // local position to joints' parent
   std::vector<toolkit::math::vector3> joint_offset;
@@ -37,13 +36,8 @@ struct skeleton {
   std::vector<toolkit::math::quat> joint_rotation;
   // local scale to joints' parent
   std::vector<toolkit::math::vector3> joint_scale;
-  // offset matrics for skinning
-  std::vector<toolkit::math::matrix4> offset_matrices;
   std::vector<int> joint_parent;
   std::vector<std::vector<int>> joint_children;
-
-  // file containing the data
-  std::string path;
 
   // Reset current skeleton as an empty skeleton with desired number of joints.
   void as_empty(int jointNum);
@@ -61,19 +55,19 @@ struct skeleton {
 
   const int get_num_joints() { return joint_names.size(); }
 };
-REFLECT(skeleton, name, joint_names, joint_offset, joint_rotation, joint_scale,
-        offset_matrices, joint_parent, joint_children, path)
+REFLECT(skeleton, joint_names, joint_offset, joint_rotation, joint_scale,
+        joint_parent, joint_children)
 
 // By default, the up direction is y-axis (0, 1, 0)
 struct pose {
   pose() = default;
   ~pose() {
-    skeleton = nullptr;
+    skel = nullptr;
     joint_local_rot.clear();
     root_local_pos = toolkit::math::vector3::Zero();
   }
 
-  skeleton *skeleton = nullptr;
+  skeleton *skel = nullptr;
 
   // // local positions of all joints
   // std::vector<toolkit::math::Vector3> jointPositions;
@@ -107,10 +101,8 @@ struct bvh_motion {
   bvh_motion() {}
   ~bvh_motion() {}
   int fps;
-  skeleton skeleton;
+  skeleton skel;
   std::vector<pose> poses;
-  // file containing the data
-  std::string path;
 
   // We assume that the root's position channels always has the order XYZ,
   // while the rotation channels can have arbitrary orders,
@@ -129,7 +121,7 @@ struct bvh_motion {
   // an `End Site` with offset `0 0 0` will be automatically added.
   // Otherwise, this joint itself will be renamed to `End Site`.
   bool save(std::string filename, bool keep_joint_names = true,
-                   float scale = 1.0f);
+            float scale = 1.0f);
 
   // Takes a float value as paramter, returns the slerp interpolated value.
   // If the frame is not valid (out of [0, nframe) range), returns the first
