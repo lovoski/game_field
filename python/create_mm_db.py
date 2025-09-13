@@ -18,7 +18,7 @@ def build_motion_db(files):
             bvhData = bvh.load(filename)
 
             pos = bvhData["positions"][start:stop].copy()
-            rot = bvhData['rotations'][start:stop].copy()
+            rot = bvhData["rotations"][start:stop].copy()
 
             # First compute world space positions/rotations
             gloRot, gloPos = bvh.fk(rot, pos, bvhData["parents"])
@@ -200,24 +200,31 @@ def compute_db_features(
 
 
 if __name__ == "__main__":
+    import os
+    base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_to_smpl_processed'
+    filenames = os.listdir(base_dir)
+    files = []
+    for fn in filenames:
+        files.append((os.path.join(base_dir, fn), 0, -1))
+    # files = [
+    #     (
+    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/pushAndStumble1_subject5.bvh",
+    #         397,
+    #         706,
+    #     ),
+    #     (
+    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/run1_subject5.bvh",
+    #         172,
+    #         14136,
+    #     ),
+    #     (
+    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/walk1_subject5.bvh",
+    #         160,
+    #         15518,
+    #     ),
+    # ]
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
-        [
-            (
-                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/pushAndStumble1_subject5.bvh",
-                397,
-                706,
-            ),
-            (
-                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/run1_subject5.bvh",
-                172,
-                14136,
-            ),
-            (
-                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/walk1_subject5.bvh",
-                160,
-                15518,
-            ),
-        ]
+        files
     )
     X, Xoffset, Xscale = compute_db_features(
         Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names
