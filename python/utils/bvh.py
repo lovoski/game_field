@@ -245,118 +245,93 @@ def to_euler(x, order='xyz'):
     Raises:
         NotImplementedError: If the provided `order` is not supported.
     """
+    # Get rotation matrix from quaternion
+    R = to_xform(x)
     
-    # Extract quaternion components for clarity
-    # Slicing with [..., i:i+1] keeps the dimension for broadcasting
-    q0 = x[..., 0:1]  # w, the scalar part
-    q1 = x[..., 1:2]  # x, the first vector part
-    q2 = x[..., 2:3]  # y, the second vector part
-    q3 = x[..., 3:4]  # z, the third vector part
-
-    # Pre-calculate squared components
-    q1q1 = q1 * q1
-    q2q2 = q2 * q2
-    q3q3 = q3 * q3
-    
-    # --- Tait-Bryan Angles (axes are all different) ---
-    
+    # Extract Euler angles based on rotation order
     if order == 'xyz':
-        # roll (x), pitch (y), yaw (z)
-        angle1 = np.arctan2(2 * (q0 * q1 + q2 * q3), 1 - 2 * (q1q1 + q2q2))
-        angle2_sin = (2 * (q0 * q2 - q3 * q1)).clip(-1, 1) # Clip for numerical stability
-        angle2 = np.arcsin(angle2_sin)
-        angle3 = np.arctan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q2q2 + q3q3))
-        
-    elif order == 'xzy':
-        # roll (x), yaw (z), pitch (y)
-        angle1 = np.arctan2(2 * (q0 * q1 - q2 * q3), 1 - 2 * (q1q1 + q3q3))
-        angle2_sin = (2 * (q0 * q3 + q1 * q2)).clip(-1, 1)
-        angle2 = np.arcsin(angle2_sin)
-        angle3 = np.arctan2(2 * (q0 * q2 - q1 * q3), 1 - 2 * (q2q2 + q3q3))
-
-    elif order == 'yxz':
-        # pitch (y), roll (x), yaw (z)
-        angle1_sin = (2 * (q0 * q1 + q2 * q3)).clip(-1, 1)
-        angle1 = np.arcsin(angle1_sin)
-        angle2 = np.arctan2(2 * (q0 * q2 - q1 * q3), 1 - 2 * (q1q1 + q2q2))
-        angle3 = np.arctan2(2 * (q0 * q3 - q1 * q2), 1 - 2 * (q1q1 + q3q3))
-
-    elif order == 'yzx':
-        # pitch (y), yaw (z), roll (x)
-        angle1 = np.arctan2(2 * (q0 * q2 - q1 * q3), 1 - 2 * (q2q2 + q3q3))
-        angle2 = np.arctan2(2 * (q0 * q3 - q1 * q2), 1 - 2 * (q3q3 + q1q1))
-        angle3_sin = (2 * (q0 * q1 + q2 * q3)).clip(-1, 1)
-        angle3 = np.arcsin(angle3_sin)
-
-    elif order == 'zxy':
-        # yaw (z), roll (x), pitch (y)
-        angle1_sin = (2 * (q0 * q1 - q2 * q3)).clip(-1, 1)
-        angle1 = np.arcsin(angle1_sin)
-        angle2 = np.arctan2(2 * (q0 * q2 + q1 * q3), 1 - 2 * (q2q2 + q1q1))
-        angle3 = np.arctan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q3q3 + q1q1))
-
+        y = np.arctan2(-R[..., 2, 0], np.sqrt(R[..., 0, 0]**2 + R[..., 1, 0]**2))
+        x = np.arctan2(R[..., 2, 1], R[..., 2, 2])
+        z = np.arctan2(R[..., 1, 0], R[..., 0, 0])
+        return np.stack([x, y, z], axis=-1)
+    
     elif order == 'zyx':
-        # yaw (z), pitch (y), roll (x)
-        angle1 = np.arctan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q2q2 + q3q3))
-        angle2_sin = (2 * (q0 * q2 - q1 * q3)).clip(-1, 1)
-        angle2 = np.arcsin(angle2_sin)
-        angle3 = np.arctan2(2 * (q0 * q1 + q2 * q3), 1 - 2 * (q1q1 + q2q2))
-
-    # --- Proper Euler Angles (first and third axes are the same) ---
-        
+        y = np.arcsin(np.clip(R[..., 0, 2], -1, 1))
+        x = np.arctan2(-R[..., 1, 2], R[..., 2, 2])
+        z = np.arctan2(-R[..., 0, 1], R[..., 0, 0])
+        return np.stack([z, y, x], axis=-1)
+    
+    elif order == 'zxy':
+        x = np.arcsin(-np.clip(R[..., 1, 2], -1, 1))
+        z = np.arctan2(R[..., 1, 0], R[..., 1, 1])
+        y = np.arctan2(R[..., 0, 2], R[..., 2, 2])
+        return np.stack([z, x, y], axis=-1)
+    
+    elif order == 'xzy':
+        z = np.arcsin(-np.clip(R[..., 0, 1], -1, 1))
+        x = np.arctan2(R[..., 2, 1], R[..., 1, 1])
+        y = np.arctan2(R[..., 0, 2], R[..., 0, 0])
+        return np.stack([x, z, y], axis=-1)
+    
+    elif order == 'yxz':
+        x = np.arcsin(-np.clip(R[..., 2, 1], -1, 1))
+        y = np.arctan2(R[..., 2, 0], R[..., 2, 2])
+        z = np.arctan2(R[..., 0, 1], R[..., 1, 1])
+        return np.stack([y, x, z], axis=-1)
+    
+    elif order == 'yzx':
+        z = np.arcsin(np.clip(R[..., 1, 0], -1, 1))
+        y = np.arctan2(-R[..., 2, 0], R[..., 0, 0])
+        x = np.arctan2(-R[..., 1, 2], R[..., 1, 1])
+        return np.stack([y, z, x], axis=-1)
+    
+    # Proper Euler angles
     elif order == 'zxz':
-        angle1 = np.arctan2(q1 * q3 - q0 * q2, q0 * q1 + q2 * q3)
-        angle2_cos = (1 - 2 * (q1q1 + q2q2)).clip(-1, 1)
-        angle2 = np.arccos(angle2_cos)
-        angle3 = np.arctan2(q1 * q3 + q0 * q2, -(q0 * q1 - q2 * q3))
-        
+        x = np.arccos(np.clip(R[..., 2, 2], -1, 1))
+        z1 = np.arctan2(R[..., 0, 2], -R[..., 1, 2])
+        z2 = np.arctan2(R[..., 2, 0], R[..., 2, 1])
+        return np.stack([z1, x, z2], axis=-1)
+    
     elif order == 'zyz':
-        angle1 = np.arctan2(q2 * q3 + q0 * q1, q0 * q2 - q1 * q3)
-        angle2_cos = (1 - 2 * (q1q1 + q2q2)).clip(-1, 1)
-        angle2 = np.arccos(angle2_cos)
-        angle3 = np.arctan2(q2 * q3 - q0 * q1, q0 * q2 + q1 * q3)
-
-    elif order == 'xyx':
-        angle1 = np.arctan2(q1 * q2 - q0 * q3, q0 * q1 + q2 * q3)
-        angle2_cos = (1 - 2 * (q2q2 + q3q3)).clip(-1, 1)
-        angle2 = np.arccos(angle2_cos)
-        angle3 = np.arctan2(q1 * q2 + q0 * q3, -(q0 * q1 - q2 * q3))
-        
-    elif order == 'xzx':
-        angle1 = np.arctan2(q1 * q3 + q0 * q2, q0 * q1 - q2 * q3)
-        angle2_cos = (1 - 2 * (q2q2 + q3q3)).clip(-1, 1)
-        angle2 = np.arccos(angle2_cos)
-        angle3 = np.arctan2(q1 * q3 - q0 * q2, q0 * q1 + q2 * q3)
-
+        y = np.arccos(np.clip(R[..., 2, 2], -1, 1))
+        z1 = np.arctan2(R[..., 1, 2], R[..., 0, 2])
+        z2 = np.arctan2(R[..., 2, 1], -R[..., 2, 0])
+        return np.stack([z1, y, z2], axis=-1)
+    
     elif order == 'yxy':
-        angle1 = np.arctan2(q1 * q2 + q0 * q3, q0 * q2 - q1 * q3)
-        angle2_cos = (1 - 2 * (q1q1 + q3q3)).clip(-1, 1)
-        angle2 = np.arccos(angle2_cos)
-        angle3 = np.arctan2(q1 * q2 - q0 * q3, q0 * q2 + q1 * q3)
-        
+        x = np.arccos(np.clip(R[..., 1, 1], -1, 1))
+        y1 = np.arctan2(R[..., 0, 1], R[..., 2, 1])
+        y2 = np.arctan2(R[..., 1, 0], -R[..., 1, 2])
+        return np.stack([y1, x, y2], axis=-1)
+    
     elif order == 'yzy':
-        angle1 = np.arctan2(q2 * q3 - q0 * q1, q0 * q2 + q1 * q3)
-        angle2_cos = (1 - 2 * (q1q1 + q3q3)).clip(-1, 1)
-        angle2 = np.arccos(angle2_cos)
-        angle3 = np.arctan2(q2 * q3 + q0 * q1, -(q0 * q2 - q1 * q3))
-
+        z = np.arccos(np.clip(R[..., 1, 1], -1, 1))
+        y1 = np.arctan2(R[..., 2, 1], -R[..., 0, 1])
+        y2 = np.arctan2(R[..., 1, 2], R[..., 1, 0])
+        return np.stack([y1, z, y2], axis=-1)
+    
+    elif order == 'xyx':
+        y = np.arccos(np.clip(R[..., 0, 0], -1, 1))
+        x1 = np.arctan2(R[..., 1, 0], -R[..., 2, 0])
+        x2 = np.arctan2(R[..., 0, 1], R[..., 0, 2])
+        return np.stack([x1, y, x2], axis=-1)
+    
+    elif order == 'xzx':
+        z = np.arccos(np.clip(R[..., 0, 0], -1, 1))
+        x1 = np.arctan2(R[..., 2, 0], R[..., 1, 0])
+        x2 = np.arctan2(R[..., 0, 2], -R[..., 0, 1])
+        return np.stack([x1, z, x2], axis=-1)
+    
     else:
-        raise NotImplementedError('Cannot convert from ordering %s' % order)
-        
-    # For orders where arcsin/arccos was used for the first or third angle
-    if 'angle1' not in locals(): angle1 = np.arcsin(angle1_sin)
-    if 'angle2' not in locals(): angle2 = np.arcsin(angle2_sin)
-    if 'angle3' not in locals(): angle3 = np.arcsin(angle3_sin)
-        
-    return np.concatenate([angle1, angle2, angle3], axis=-1)
+        raise NotImplementedError(f"Rotation order {order} not implemented")
+
 
 def load(filename, order=None):
     """
     Load bvh motion data file.
 
     returns:
-        rot_eulers: rotation in euler angle degrees, order specified in order
-        rot_quats: rotation in wxyz quaternion, be reminded scipy rotation use xyzw order
+        rotations: rotation in wxyz quaternion, be reminded scipy rotation use xyzw order
         positions: one joint's local position to its parent
         offsets: one joint's local position defined in hierarchy section, use positions instead
         parents: numpy array for one joint's parent index
@@ -377,6 +352,9 @@ def load(filename, order=None):
 
     # Parse the  file, line by line
     for line in f:
+        
+        if line == '\n':
+            continue
         
         if "HIERARCHY" in line: continue
         if "MOTION" in line: continue
@@ -442,7 +420,8 @@ def load(filename, order=None):
             frametime = float(fmatch.group(1))
             continue
 
-        dmatch = line.strip().split(' ')
+        # split by all posible intervals
+        dmatch = line.strip().split()
         if dmatch:
             data_block = np.array(list(map(float, dmatch)))
             N = len(parents)
@@ -467,13 +446,11 @@ def load(filename, order=None):
     f.close()
 
     return {
-        'rot_eulers': rotations,
-        'rot_quats': unroll(from_euler(np.radians(rotations), order=order)),
+        'rotations': unroll(from_euler(np.radians(rotations), order=order)),
         'positions': positions,
         'offsets': offsets,
         'parents': parents,
         'names': names,
-        'order': order,
         'frametime': frametime
     }
     
@@ -516,8 +493,8 @@ def save_joint(f, data, t, i, save_order, order='zyx', save_positions=False):
     return t
     
 
-def save(filename, data, save_positions=False, use_euler_rot=False):
-    order = data['order']
+def save(filename, data, save_positions=False):
+    order = 'zyx'
     frametime = data['frametime']
     
     with open(filename, 'w') as f:
@@ -541,7 +518,7 @@ def save(filename, data, save_positions=False, use_euler_rot=False):
         t = t[:-1]
         f.write("%s}\n" % t)
 
-        rots, poss = data['rot_eulers'] if use_euler_rot else to_euler(data['rot_quats'], order) , data['positions']
+        rots, poss = 180.0/np.pi*to_euler(data['rotations'], order[::-1]) , data['positions']
 
         f.write("MOTION\n")
         f.write("Frames: %i\n" % len(rots));
@@ -562,7 +539,6 @@ def save(filename, data, save_positions=False, use_euler_rot=False):
                         rots[i,j,ordermap[order[0]]], rots[i,j,ordermap[order[1]]], rots[i,j,ordermap[order[2]]]))
 
             f.write("\n")
-    
-    
 
-    
+
+

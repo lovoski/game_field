@@ -1,5 +1,5 @@
 import numpy as np
-from utils import bvh, quat
+from utils import bvh
 import scipy.signal as signal
 
 
@@ -17,41 +17,37 @@ def build_motion_db(files):
 
             bvhData = bvh.load(filename)
 
-            pos = 0.01 * bvhData["positions"][start:stop].copy().astype(np.float32)
-            rot = quat.unroll(
-                quat.from_euler(
-                    np.radians(bvhData["rotations"][start:stop]), order=bvhData["order"]
-                )
-            )
+            pos = bvhData["positions"][start:stop].copy()
+            rot = bvhData['rotations'][start:stop].copy()
 
             # First compute world space positions/rotations
-            gloRot, gloPos = quat.fk(rot, pos, bvhData["parents"])
+            gloRot, gloPos = bvh.fk(rot, pos, bvhData["parents"])
 
             if mirrored:
 
                 mirror_bones = []
                 for ni, n in enumerate(bvhData["names"]):
-                    if "Right" in n and n.replace("Right", "Left") in bvhData["names"]:
+                    if "right" in n and n.replace("right", "left") in bvhData["names"]:
                         mirror_bones.append(
-                            bvhData["names"].index(n.replace("Right", "Left"))
+                            bvhData["names"].index(n.replace("right", "left"))
                         )
-                    elif "Left" in n and n.replace("Left", "Right") in bvhData["names"]:
+                    elif "left" in n and n.replace("left", "right") in bvhData["names"]:
                         mirror_bones.append(
-                            bvhData["names"].index(n.replace("Left", "Right"))
+                            bvhData["names"].index(n.replace("left", "right"))
                         )
                     else:
                         mirror_bones.append(ni)
 
                 mirror_bones = np.array(mirror_bones)
 
-                gloRot, gloPos = quat.fk(rot, pos, bvhData["parents"])
+                gloRot, gloPos = bvh.fk(rot, pos, bvhData["parents"])
                 gloPos = np.array([-1, 1, 1]) * gloPos[:, mirror_bones]
                 gloRot = np.array([1, 1, -1, -1]) * gloRot[:, mirror_bones]
-                rot, pos = quat.ik(gloRot, gloPos, bvhData["parents"])
+                rot, pos = bvh.ik(gloRot, gloPos, bvhData["parents"])
 
             # Specify joints to use for simulation bone
-            simPosJoint = bvhData["names"].index("Spine2")
-            simRotJoint = bvhData["names"].index("Hips")
+            simPosJoint = bvhData["names"].index("spine2")
+            simRotJoint = bvhData["names"].index("pelvis")
 
             # Position comes from spine joint
             simPos = (
@@ -60,7 +56,7 @@ def build_motion_db(files):
             simPos = signal.savgol_filter(simPos, 31, 3, axis=0, mode="interp")
 
             # Direction comes from projected hip forward direction
-            simDir = np.array([1.0, 0.0, 1.0]) * quat.mul_vec(
+            simDir = np.array([1.0, 0.0, 1.0]) * bvh.mul_vec(
                 gloRot[:, simRotJoint : simRotJoint + 1], np.array([0.0, 0.0, 1.0])
             )
 
@@ -74,11 +70,11 @@ def build_motion_db(files):
             )
 
             # Extract rotation from direction
-            simRot = quat.normalize(quat.between(np.array([0, 0, 1]), simDir))
+            simRot = bvh.normalize(bvh.between(np.array([0, 0, 1]), simDir))
 
             # Transform first joints to be local to sim and append sim as root bone
-            pos[:, 0:1] = quat.mul_vec(quat.inv(simRot), pos[:, 0:1] - simPos)
-            rot[:, 0:1] = quat.mul(quat.inv(simRot), rot[:, 0:1])
+            pos[:, 0:1] = bvh.mul_vec(bvh.inv(simRot), pos[:, 0:1] - simPos)
+            rot[:, 0:1] = bvh.mul(bvh.inv(simRot), rot[:, 0:1])
 
             pos = np.concatenate([simPos, pos], axis=1)
             rot = np.concatenate([simRot, rot], axis=1)
@@ -98,10 +94,10 @@ def build_motion_db(files):
             ang = np.zeros_like(pos)
             ang[1:-1] = (
                 0.5
-                * quat.to_scaled_angle_axis(quat.abs(quat.mul_inv(rot[2:], rot[1:-1])))
+                * bvh.to_scaled_angle_axis(bvh.abs(bvh.mul_inv(rot[2:], rot[1:-1])))
                 * 60.0
                 + 0.5
-                * quat.to_scaled_angle_axis(quat.abs(quat.mul_inv(rot[1:-1], rot[:-2])))
+                * bvh.to_scaled_angle_axis(bvh.abs(bvh.mul_inv(rot[1:-1], rot[:-2])))
                 * 60.0
             )
             ang[0] = ang[1] - (ang[3] - ang[2])
@@ -128,10 +124,10 @@ def build_motion_db(files):
     YrangeStops = np.array(YrangeStops)
 
     return (
-        Ypos.astype(np.float32),
-        Yrot.astype(np.float32),
-        Yvel.astype(np.float32),
-        Yang.astype(np.float32),
+        Ypos,
+        Yrot,
+        Yvel,
+        Yang,
         YrangeStarts.astype(np.int32),
         YrangeStops.astype(np.int32),
         parents.astype(np.int32),
@@ -142,18 +138,18 @@ def build_motion_db(files):
 def compute_db_features(
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names
 ):
-    posJoints = np.array([names.index(n) for n in ["LeftToeBase", "RightToeBase"]])
+    posJoints = np.array([names.index(n) for n in ["left_foot", "right_foot"]])
     velJoints = np.array(
-        [names.index(n) for n in ["LeftToeBase", "RightToeBase", "Hips"]]
+        [names.index(n) for n in ["left_foot", "right_foot", "pelvis"]]
     )
 
-    YgloRot, YgloPos, YgloAng, YgloVel = quat.fk_vel(Yrot, Ypos, Yang, Yvel, parents)
-    YrootDir = quat.mul_vec(YgloRot[:, 0], np.array([0, 0, 1]))
+    YgloRot, YgloPos, YgloAng, YgloVel = bvh.fk_vel(Yrot, Ypos, Yang, Yvel, parents)
+    YrootDir = bvh.mul_vec(YgloRot[:, 0], np.array([0, 0, 1]))
 
-    Xpos = quat.inv_mul_vec(
+    Xpos = bvh.inv_mul_vec(
         YgloRot[:, 0:1], YgloPos[:, posJoints] - YgloPos[:, 0:1]
     ).reshape([len(Ypos), 6])
-    Xvel = quat.inv_mul_vec(YgloRot[:, 0:1], YgloVel[:, velJoints]).reshape(
+    Xvel = bvh.inv_mul_vec(YgloRot[:, 0:1], YgloVel[:, velJoints]).reshape(
         [len(Ypos), 9]
     )
 
@@ -164,23 +160,23 @@ def compute_db_features(
         ft1 = np.clip(np.arange(rs, re) + 40, rs, re - 1)
         ft2 = np.clip(np.arange(rs, re) + 60, rs, re - 1)
 
-        XtrajPos[rs:re, 0:2] = quat.inv_mul_vec(
+        XtrajPos[rs:re, 0:2] = bvh.inv_mul_vec(
             YgloRot[rs:re, 0], YgloPos[ft0, 0] - YgloPos[rs:re, 0]
         )[:, np.array([0, 2])]
-        XtrajPos[rs:re, 2:4] = quat.inv_mul_vec(
+        XtrajPos[rs:re, 2:4] = bvh.inv_mul_vec(
             YgloRot[rs:re, 0], YgloPos[ft1, 0] - YgloPos[rs:re, 0]
         )[:, np.array([0, 2])]
-        XtrajPos[rs:re, 4:6] = quat.inv_mul_vec(
+        XtrajPos[rs:re, 4:6] = bvh.inv_mul_vec(
             YgloRot[rs:re, 0], YgloPos[ft2, 0] - YgloPos[rs:re, 0]
         )[:, np.array([0, 2])]
 
-        XtrajDir[rs:re, 0:2] = quat.inv_mul_vec(YgloRot[rs:re, 0], YrootDir[ft0])[
+        XtrajDir[rs:re, 0:2] = bvh.inv_mul_vec(YgloRot[rs:re, 0], YrootDir[ft0])[
             :, np.array([0, 2])
         ]
-        XtrajDir[rs:re, 2:4] = quat.inv_mul_vec(YgloRot[rs:re, 0], YrootDir[ft1])[
+        XtrajDir[rs:re, 2:4] = bvh.inv_mul_vec(YgloRot[rs:re, 0], YrootDir[ft1])[
             :, np.array([0, 2])
         ]
-        XtrajDir[rs:re, 4:6] = quat.inv_mul_vec(YgloRot[rs:re, 0], YrootDir[ft2])[
+        XtrajDir[rs:re, 4:6] = bvh.inv_mul_vec(YgloRot[rs:re, 0], YrootDir[ft2])[
             :, np.array([0, 2])
         ]
 
@@ -200,24 +196,24 @@ def compute_db_features(
 
     X = (X - Xoffset) / Xscale
 
-    return X.astype(np.float32), Xoffset.astype(np.float32), Xscale.astype(np.float32)
+    return X, Xoffset, Xscale
 
 
 if __name__ == "__main__":
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
         [
             (
-                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/pushAndStumble1_subject5.bvh",
+                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/pushAndStumble1_subject5.bvh",
                 397,
                 706,
             ),
             (
-                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/run1_subject5.bvh",
+                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/run1_subject5.bvh",
                 172,
                 14136,
             ),
             (
-                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/walk1_subject5.bvh",
+                r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/walk1_subject5.bvh",
                 160,
                 15518,
             ),
@@ -236,14 +232,14 @@ if __name__ == "__main__":
 
     np.savez(
         "db.npz",
-        Ypos=Ypos,
-        Yrot=Yrot,
-        Yvel=Yvel,
-        Yang=Yang,
+        Ypos=Ypos.astype(np.float32),
+        Yrot=Yrot.astype(np.float32),
+        Yvel=Yvel.astype(np.float32),
+        Yang=Yang.astype(np.float32),
         YrangeStarts=YrangeStarts,
         YrangeStops=YrangeStops,
         parents=parents,
-        X=X,
-        Xoffset=Xoffset,
-        Xscale=Xscale,
+        X=X.astype(np.float32),
+        Xoffset=Xoffset.astype(np.float32),
+        Xscale=Xscale.astype(np.float32),
     )

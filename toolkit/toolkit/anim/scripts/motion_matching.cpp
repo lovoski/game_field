@@ -95,11 +95,11 @@ void motion_matching::update(iapp *app, float dt) {
 }
 void motion_matching::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
-  if (xnpz_loaded && ynpz_loaded && mapping_loaded && (actor_comp != nullptr)) {
+  if (db_loaded && mapping_loaded && (actor_comp != nullptr)) {
     // input and trajectory
     auto [left_stick, right_stick] =
         query_left_right_joystick(joystick_deadzone);
-    desired_vel = 5.0f * left_stick;
+    desired_vel = 5 * left_stick;
     if (left_stick.norm() > 0.01f)
       desired_dir = left_stick.normalized();
     if (right_stick.norm() > 0.01f)
@@ -164,7 +164,7 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
       }
       search_timer = search_time;
     }
-    anim_frame = std::clamp(anim_frame + 2.0f,
+    anim_frame = std::clamp(anim_frame + 1.0f,
                             static_cast<float>(YrangeStarts[anim_range]),
                             static_cast<float>(YrangeStops[anim_range] - 1));
     search_timer -= dt;
@@ -302,7 +302,7 @@ void motion_matching::draw_to_scene(iapp *app) {
 
     // opengl::draw_wire_spheres(data_joints_world_pos, cam_comp.vp, 0.1f,
     //                           opengl::Purple);
-    if (ynpz_loaded && xnpz_loaded && data_joints_world_pos.size() > 0) {
+    if (db_loaded && data_joints_world_pos.size() > 0) {
       std::vector<std::pair<math::vector3, math::vector3>> bone_pairs;
       for (int i = 0; i < parents.size(); i++) {
         if (parents[i] == -1 || parents[i] == 0)
@@ -323,48 +323,66 @@ void motion_matching::draw_to_scene(iapp *app) {
 }
 
 void motion_matching::draw_gui(iapp *app) {
-  ImGui::Text(str_format("Database X: %s", x_filepath.c_str()).c_str());
-  ImGui::Text(str_format("Database Y: %s", y_filepath.c_str()).c_str());
+  ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());
-  if (ImGui::Button("Select Database X", {-1, 30}))
-    if (open_file_dialog("Select Database X", {"*.npz"}, "*.npz", x_filepath)) {
-      auto xdata = cnpy::npz_load(x_filepath);
-      int num_features = xdata["X"].shape[0];
-      if (xdata["X"].word_size == 4)
-        load_x_npz(xdata["X"].as_vec<float>(), num_features);
-      else if (xdata["X"].word_size == 8)
-        load_x_npz(xdata["X"].as_vec<double>(), num_features);
-      if (xdata["Xoffset"].word_size == 4) {
-        auto xoffset_data = xdata["Xoffset"].as_vec<float>();
-        for (int i = 0; i < MM_FEATURE_DIM; i++)
-          Xoffset[i] = xoffset_data[i];
-      } else if (xdata["Xoffset"].word_size == 8) {
-        auto xoffset_data = xdata["Xoffset"].as_vec<double>();
-        for (int i = 0; i < MM_FEATURE_DIM; i++)
-          Xoffset[i] = xoffset_data[i];
-      }
-      if (xdata["Xscale"].word_size == 4) {
-        auto xscale_data = xdata["Xscale"].as_vec<float>();
-        for (int i = 0; i < MM_FEATURE_DIM; i++)
-          Xscale[i] = xscale_data[i];
-      } else if (xdata["Xscale"].word_size == 8) {
-        auto xscale_data = xdata["Xscale"].as_vec<double>();
-        for (int i = 0; i < MM_FEATURE_DIM; i++)
-          Xscale[i] = xscale_data[i];
-      }
-      xnpz_loaded = true;
-    }
-  if (ImGui::Button("Select Database Y", {-1, 30}))
-    if (open_file_dialog("Select Database Y", {"*.npz"}, "*.npz", y_filepath)) {
-      auto ydata = cnpy::npz_load(y_filepath);
-      auto &ypos_data = ydata["Ypos"];
-      int num_features = ypos_data.shape[0];
+  if (ImGui::Button("Select Database", {-1, 30}))
+    if (open_file_dialog("Select Database", {"*.npz"}, "*.npz", db_filepath)) {
+      auto data = cnpy::npz_load(db_filepath);
+      int num_features = data["X"].shape[0];
+      auto xarr = data["X"].as_vec<float>();
+      auto xoffset_arr = data["Xoffset"].as_vec<float>();
+      auto xscale_arr = data["Xscale"].as_vec<float>();
+      X.resize(num_features);
+      for (int i = 0; i < num_features; i++)
+        for (int j = 0; j < MM_FEATURE_DIM; j++)
+          X[i][j] = xarr[i * MM_FEATURE_DIM + j];
+      for (int i = 0; i < MM_FEATURE_DIM; i++)
+        Xoffset[i] = xoffset_arr[i];
+      for (int i = 0; i < MM_FEATURE_DIM; i++)
+        Xscale[i] = xscale_arr[i];
+      auto &ypos_data = data["Ypos"];
       int num_joints = ypos_data.shape[1];
-      if (ypos_data.word_size == 4)
-        load_y_npz<float>(ydata, num_features, num_joints);
-      else if (ypos_data.word_size == 8)
-        load_y_npz<double>(ydata, num_features, num_joints);
-      ynpz_loaded = true;
+
+      auto ypos_arr = data["Ypos"].as_vec<float>();
+      auto yrot_arr = data["Yrot"].as_vec<float>();
+      auto yvel_arr = data["Yvel"].as_vec<float>();
+      auto yang_arr = data["Yang"].as_vec<float>();
+      Ypos.resize(num_features);
+      Yvel.resize(num_features);
+      Yang.resize(num_features);
+      Yrot.resize(num_features);
+      for (int i = 0; i < num_features; i++) {
+        Ypos[i].resize(num_joints);
+        Yvel[i].resize(num_joints);
+        Yang[i].resize(num_joints);
+        Yrot[i].resize(num_joints);
+        for (int j = 0; j < num_joints; j++) {
+          Ypos[i][j] << ypos_arr[i * num_joints * 3 + j * 3 + 0],
+              ypos_arr[i * num_joints * 3 + j * 3 + 1],
+              ypos_arr[i * num_joints * 3 + j * 3 + 2];
+          Yvel[i][j] << yvel_arr[i * num_joints * 3 + j * 3 + 0],
+              yvel_arr[i * num_joints * 3 + j * 3 + 1],
+              yvel_arr[i * num_joints * 3 + j * 3 + 2];
+          Yang[i][j] << yang_arr[i * num_joints * 3 + j * 3 + 0],
+              yang_arr[i * num_joints * 3 + j * 3 + 1],
+              yang_arr[i * num_joints * 3 + j * 3 + 2];
+          Yrot[i][j].w() = yrot_arr[i * num_joints * 4 + j * 4 + 0];
+          Yrot[i][j].x() = yrot_arr[i * num_joints * 4 + j * 4 + 1];
+          Yrot[i][j].y() = yrot_arr[i * num_joints * 4 + j * 4 + 2];
+          Yrot[i][j].z() = yrot_arr[i * num_joints * 4 + j * 4 + 3];
+          Yrot[i][j].normalize();
+        }
+      }
+      YrangeStarts = data["YrangeStarts"].as_vec<int>();
+      YrangeStops = data["YrangeStops"].as_vec<int>();
+      parents = data["parents"].as_vec<int>();
+
+      off_rot.resize(parents.size(), math::quat::Identity());
+      off_pos.resize(parents.size(), math::vector3::Zero());
+      off_vel.resize(parents.size(), math::vector3::Zero());
+      off_ang.resize(parents.size(), math::vector3::Zero());
+
+      db_loaded = true;
     }
   if (ImGui::Button("Select Joint Mapping", {-1, 30}))
     if (open_file_dialog("Select Joint Mapping", {"*.json"}, "*.json",

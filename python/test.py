@@ -11,7 +11,7 @@ def forward_kinematics_trans(data):
     for joint in range(njoints):
       # construct T*R homogeneous transform matrix
       local_trans[frame, joint, 3, 3] = 1
-      local_trans[frame, joint, :3, :3] = Rotation.from_quat(data['rot_quats'][frame, joint, [1,2,3,0]]).as_matrix()
+      local_trans[frame, joint, :3, :3] = Rotation.from_quat(data['rotations'][frame, joint, [1,2,3,0]]).as_matrix()
       local_trans[frame, joint, :3, 3] = data['positions'][frame, joint]
     for joint_idx, parent_idx in enumerate(data['parents']):
       # build up transform matrix chain
@@ -29,10 +29,10 @@ def forward_kinematics_direct(data):
   for frame in range(nframes):
     for joint_idx, parent_idx in enumerate(data['parents']):
       if parent_idx == -1:
-        grot[frame, joint_idx] = data['rot_quats'][frame, joint_idx]
+        grot[frame, joint_idx] = data['rotations'][frame, joint_idx]
         gpos[frame, joint_idx] = data['positions'][frame, joint_idx]
       else:
-        grot[frame, joint_idx] = (Rotation.from_quat(grot[frame,parent_idx,[1,2,3,0]])*Rotation.from_quat(data['rot_quats'][frame,joint_idx,[1,2,3,0]])).as_quat()[3,0,1,2]
+        grot[frame, joint_idx] = (Rotation.from_quat(grot[frame,parent_idx,[1,2,3,0]])*Rotation.from_quat(data['rotations'][frame,joint_idx,[1,2,3,0]])).as_quat()[[3,0,1,2]]
         gpos[frame, joint_idx] = gpos[frame, parent_idx] + Rotation.from_quat(grot[frame, joint_idx, [1,2,3,0]]).apply(data['positions'][frame, joint_idx])
   return gpos, grot
 
@@ -48,19 +48,37 @@ def decompose_transform_trs(trans):
   rot[:,2] /= scl[2]
   return pos, rot, scl
 
-def make_first_frame_rest_pose(data):
-  gpos, grot = forward_kinematics_direct(data)
-  
-  
-
 if __name__ == '__main__':
   base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion'
+  save_dir = base_dir.replace('lafan_motion', 'lafan_motion_formalized')
+  os.makedirs(save_dir, exist_ok=True)
   # base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_motion'
 
-  for filename in os.listdir(base_dir):
-    if not filename.endswith('.bvh'):
-      continue
-    data = bvh.load(os.path.join(base_dir, filename))
-    data = make_first_frame_rest_pose(data)
-    bvh.save('test.bvh', data)
-    break
+  # for filename in os.listdir(base_dir):
+  #   if not filename.endswith('.bvh'):
+  #     continue
+  #   data = bvh.load(os.path.join(base_dir, filename))
+  #   gpos, grot = forward_kinematics_direct(data)
+  #   init_root_trans = gpos[0, 0]
+  #   init_root_trans[1] = 0
+  #   data['positions'][:,0] -= init_root_trans
+  #   bvh.save(os.path.join(save_dir, filename), data)
+  
+  # template_filepath = '/mnt/d/repo/GenoViewPython-MotionMatching/smpl.bvh'
+  # data = bvh.load(template_filepath)
+  # data['offsets'] *= 100
+  # data['positions'] *= 100
+  # bvh.save('/mnt/d/repo/GenoViewPython-MotionMatching/smpl_formalized.bvh', data)
+  
+  retarget_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl'
+  processed_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed'
+  os.makedirs(processed_dir, exist_ok=True)
+  for file in os.listdir(retarget_dir):
+    data = bvh.load(os.path.join(retarget_dir, file))
+    gpos, grot = forward_kinematics_direct(data)
+    init_root_pos = data['offsets'][0]
+    data['offsets'][0] = 0
+    data['positions'][:,0] += init_root_pos
+    data['offsets'] *= 0.01
+    data['positions'] *= 0.01
+    bvh.save(os.path.join(processed_dir, file), data)

@@ -16,6 +16,14 @@ static const std::vector<std::string> SMPL_JOINT_NAMES = {
     "left_shoulder", "right_shoulder", "left_elbow",   "right_elbow",
     "left_wrist",    "right_wrist",    "left_hand",    "right_hand",
 };
+// static const std::vector<std::string> SMPL_JOINT_NAMES = {
+//     "Hips",      "LeftUpLeg",    "RightUpLeg",    "Spine",
+//     "LeftLeg",   "RightLeg",     "Spine1",        "LeftFoot",
+//     "RightFoot", "Spine2",       "LeftToeBase",   "RightToeBase",
+//     "Spine3",    "LeftShoulder", "RightShoulder", "Neck",
+//     "LeftArm",   "RightArm",     "LeftForeArm",   "RightForeArm",
+//     "LeftHand",  "RightHand",    "LeftHand_End",  "RightHand_End",
+// };
 static const std::vector<int> SMPL_JOINT_PARENTS = {
     -1, 0, 0, 0,  1,  2,  3,  4,  5,  6,  7,  8,
     9,  9, 9, 12, 13, 14, 16, 17, 18, 19, 20, 21};
