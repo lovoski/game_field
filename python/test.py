@@ -43,9 +43,9 @@ def decompose_transform_trs(trans):
     np.linalg.norm(trans[...,:3,1], axis=-1),
     np.linalg.norm(trans[...,:3,2], axis=-1)])
   rot = trans[...,:3,:3]
-  rot[:,0] /= scl[0]
-  rot[:,1] /= scl[1]
-  rot[:,2] /= scl[2]
+  rot[...,:,0] /= scl[0]
+  rot[...,:,1] /= scl[1]
+  rot[...,:,2] /= scl[2]
   return pos, rot, scl
 
 if __name__ == '__main__':

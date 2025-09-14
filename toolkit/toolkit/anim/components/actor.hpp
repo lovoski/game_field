@@ -23,12 +23,11 @@ DECLARE_COMPONENT(bone_node, data, name, offset_matrix)
 void create_actor_with_skeleton(entt::registry &registry,
                                 entt::entity container, assets::skeleton &skel);
 
-/**
- * Each actor component could potentially have multiple skeletons, so the poses
- * are returnsed as an array.
- */
-std::vector<std::string> make_current_pose_bvh(entt::registry &registry,
-                                               actor &actor_comp);
+std::string make_current_pose_bvh(entt::registry &registry, transform &root);
+std::string trans_hierarchy_as_bvh_skel(entt::registry &registry,
+                                        transform &root);
+std::string trans_hierarchy_as_bvh_frame(entt::registry &registry,
+                                         transform &root);
 
 /**
  * We assume at default state, there's only one root node in the provided actor
