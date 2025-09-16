@@ -214,7 +214,7 @@ void process_mesh(entt::registry &registry, entt::entity container,
     blend_shape shape;
     shape.weight = 0.0f;
     shape.name = anim_mesh->mName.C_Str();
-    shape.data.resize(mesh->mNumVertices);
+    shape.verts.resize(mesh->mNumVertices);
     for (unsigned int i = 0; i < anim_mesh->mNumVertices; i++) {
       blend_shape_vertex bsv;
       if (anim_mesh->HasPositions()) {
@@ -227,9 +227,9 @@ void process_mesh(entt::registry &registry, entt::entity container,
         bsv.offset_normal = {offset_n.x, offset_n.y, offset_n.z, 0.0f};
         bsv.offset_normal = pretrans * bsv.offset_normal;
       }
-      shape.data[i] = bsv;
+      shape.verts[i] = bsv;
     }
-    mesh_data.blend_shapes.push_back(shape);
+    mesh_data.blendshapes.push_back(shape);
   }
 
   opengl::init_opengl_buffers(mesh_data);

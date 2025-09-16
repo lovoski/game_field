@@ -14,12 +14,14 @@ namespace toolkit::opengl {
 class smplx : public scriptable {
 public:
   void start() override;
+  void init1() override;
   void destroy() override;
 
   void draw_gui(iapp *app) override;
   void draw_to_scene(iapp *app) override;
 
-  // Change the body shape and skeleton of SMPL
+  // Modify the weights of shape0-9 blendshapes, change the offset matrices and
+  // transforms of joint entity transforms
   void apply_smpl_betas(std::vector<float> betas);
   // Change the body shape and skeleton of SMPLX
   void apply_smplx_betas(std::vector<float> betas);
@@ -27,7 +29,8 @@ public:
   void preupdate(iapp *app, float dt) override;
 
 private:
-  int model_index = 0, gender_index = 0;
+  int model_index = 0, gender_index = 0, num_betas = 10;
+  std::vector<float> beta_cache;
   std::string model_path = "", model_type = "smpl", gender_type = "NEUTRAL";
   std::vector<entt::entity> bone_entities;
   std::vector<math::vector3> joint_rest_world_pos;
@@ -38,6 +41,7 @@ private:
 
   REFLECT_PRIVATE(smplx)
 };
-DECLARE_SCRIPT(smplx, utils, model_index, gender_index, model_type, gender_type)
+DECLARE_SCRIPT(smplx, utils, model_index, gender_index, model_type, gender_type,
+               num_betas, beta_cache, bone_entities)
 
 }; // namespace toolkit::opengl

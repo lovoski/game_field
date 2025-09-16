@@ -89,3 +89,4 @@ if __name__ == '__main__':
     data['offsets'] *= 0.01
     data['positions'] *= 0.01
     bvh.save(os.path.join(processed_dir, file), data)
+  

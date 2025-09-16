@@ -22,13 +22,11 @@ struct blend_shape_vertex {
   toolkit::math::vector4 offset_pos;
   toolkit::math::vector4 offset_normal;
 };
-REFLECT(blend_shape_vertex, offset_pos, offset_normal)
 struct blend_shape {
   float weight;
   std::string name;
-  std::vector<blend_shape_vertex> data;
+  std::vector<blend_shape_vertex> verts;
 };
-REFLECT(blend_shape, weight, name, data)
 struct mesh_vertex {
   toolkit::math::vector4 position;
   toolkit::math::vector4 normal;
@@ -37,8 +35,6 @@ struct mesh_vertex {
   std::array<int, 4> bone_indices;
   std::array<float, 4> bone_weights;
 };
-REFLECT(mesh_vertex, position, normal, tex_coords, color, bone_indices,
-        bone_weights)
 struct mesh {
   std::string name;
   std::vector<unsigned int> indices;

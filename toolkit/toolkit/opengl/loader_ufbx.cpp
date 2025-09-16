@@ -305,17 +305,17 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
           auto blend_deformer = mesh->blend_deformers.data[0];
           uint32_t vert_id = mesh->vertex_indices[index];
           size_t num_blends = blend_deformer->channels.count;
-          mesh_comp.blend_shapes.resize(num_blends);
+          mesh_comp.blendshapes.resize(num_blends);
           for (int bsi = 0; bsi < num_blends; bsi++) {
             ufbx_blend_channel *channel = blend_deformer->channels[bsi];
             ufbx_blend_shape *shape = channel->target_shape;
-            mesh_comp.blend_shapes[bsi].name = shape->name.data;
+            mesh_comp.blendshapes[bsi].name = shape->name.data;
             blend_shape_vertex bs_vertex;
             bs_vertex.offset_pos << ufbx_to_vec3(
                 ufbx_get_blend_shape_vertex_offset(shape, vert_id)),
                 0.0f;
             bs_vertex.offset_normal = math::vector4::Zero();
-            mesh_comp.blend_shapes[bsi].data.emplace_back(bs_vertex);
+            mesh_comp.blendshapes[bsi].verts.emplace_back(bs_vertex);
           }
         }
         mesh_comp.vertices.push_back(vertex);
@@ -326,14 +326,14 @@ void read_mesh(entt::registry &registry, ufbx_mesh *mesh,
     assert(mesh_comp.vertices.size() == mesh_part->num_triangles * 3);
 
     ufbx_vertex_stream streams[1000];
-    int num_streams = mesh_comp.blend_shapes.size() == 0
+    int num_streams = mesh_comp.blendshapes.size() == 0
                           ? 1
-                          : 1 + mesh_comp.blend_shapes.size();
+                          : 1 + mesh_comp.blendshapes.size();
     streams[0].data = mesh_comp.vertices.data();
     streams[0].vertex_count = num_indices;
     streams[0].vertex_size = sizeof(assets::mesh_vertex);
-    for (int i = 1; i < mesh_comp.blend_shapes.size() + 1; i++) {
-      streams[i].data = mesh_comp.blend_shapes[i - 1].data.data();
+    for (int i = 1; i < mesh_comp.blendshapes.size() + 1; i++) {
+      streams[i].data = mesh_comp.blendshapes[i - 1].verts.data();
       streams[i].vertex_count = num_indices;
       streams[i].vertex_size = sizeof(assets::blend_shape_vertex);
     }

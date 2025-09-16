@@ -390,7 +390,7 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
   mesh_data_entities.each([&](entt::entity entity, transform &trans,
                               mesh_data &data) {
     int bs_count = 0;
-    for (auto &bs : data.blend_shapes) {
+    for (auto &bs : data.blendshapes) {
       if (bs.weight != 0.0f) {
         bs_count++;
       }
@@ -418,8 +418,8 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
     for (auto ent : mesh_with_active_bs) {
       auto &data = mesh_data_entities.get<mesh_data>(ent);
 
-      for (int i = 0; i < data.blend_shapes.size(); i++) {
-        if (data.blend_shapes[i].weight == 0.0f) {
+      for (int i = 0; i < data.blendshapes.size(); i++) {
+        if (data.blendshapes[i].weight == 0.0f) {
           continue; // skip inactive blend shapes
         }
         scene_buffer_apply_blendshape_program
@@ -430,7 +430,7 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
         scene_buffer_apply_blendshape_program.set_int("gVertexOffset",
                                                       data.scene_vertex_offset);
         scene_buffer_apply_blendshape_program.set_float(
-            "gWeightValue", data.blend_shapes[i].weight);
+            "gWeightValue", data.blendshapes[i].weight);
         scene_buffer_apply_blendshape_program.dispatch(
             (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
             1);
@@ -505,6 +505,8 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
       [&](entt::entity entity, skinned_mesh_bundle &bundle_data) {
         // create aabb for each of its mesh component, then merge these aabb
         // into one uniform bounding box
+        if (bundle_data.mesh_entities.size() == 0)
+          return;
         for (auto mesh_ent : bundle_data.mesh_entities) {
           auto &mesh_comp = registry.get<mesh_data>(mesh_ent);
           auto [bb_min, bb_max] = per_mesh_global_aabb_program(

@@ -85,19 +85,19 @@ void prepare_plain_data(mesh_data &data, std::vector<_render_vertex> &vertices,
     std::memcpy(vertices[i].bone_weights, data.vertices[i].bone_weights.data(),
                 4 * sizeof(float));
   }
-  blendshapes.resize(data.blend_shapes.size());
-  for (int i = 0; i < data.blend_shapes.size(); i++) {
-    blendshapes[i].vertices.resize(data.blend_shapes[i].data.size());
-    for (int j = 0; j < data.blend_shapes[i].data.size(); j++) {
+  blendshapes.resize(data.blendshapes.size());
+  for (int i = 0; i < data.blendshapes.size(); i++) {
+    blendshapes[i].vertices.resize(data.blendshapes[i].verts.size());
+    for (int j = 0; j < data.blendshapes[i].verts.size(); j++) {
       std::memcpy(blendshapes[i].vertices[j].offset_pos,
-                  data.blend_shapes[i].data[j].offset_pos.data(),
+                  data.blendshapes[i].verts[j].offset_pos.data(),
                   4 * sizeof(float));
       std::memcpy(blendshapes[i].vertices[j].offset_normal,
-                  data.blend_shapes[i].data[j].offset_normal.data(),
+                  data.blendshapes[i].verts[j].offset_normal.data(),
                   4 * sizeof(float));
     }
-    blendshapes[i].weight = data.blend_shapes[i].weight;
-    std::strcpy(blendshapes[i].name, data.blend_shapes[i].name.c_str());
+    blendshapes[i].weight = data.blendshapes[i].weight;
+    std::strcpy(blendshapes[i].name, data.blendshapes[i].name.c_str());
   }
 }
 
@@ -145,9 +145,9 @@ void mesh_data::draw_gui(iapp *app) {
 
     ImGui::EndTable();
   }
-  if (blend_shapes.size() > 0) {
+  if (blendshapes.size() > 0) {
     if (ImGui::TreeNode("Blend Shapes")) {
-      for (auto &blend : blend_shapes) {
+      for (auto &blend : blendshapes) {
         ImGui::DragFloat(blend.name.c_str(), &(blend.weight), 0.001f, -1e5,
                          1e5);
       }
@@ -187,18 +187,18 @@ void mesh_data::init1() {
       std::memcpy(vertices[i].bone_weights.data(),
                   data_vertices[i].bone_weights, 4 * sizeof(float));
     }
-    blend_shapes.resize(data_blendshapes.size());
+    blendshapes.resize(data_blendshapes.size());
     for (int i = 0; i < data_blendshapes.size(); i++) {
-      blend_shapes[i].weight = data_blendshapes[i].weight;
-      blend_shapes[i].name = data_blendshapes[i].name;
-      blend_shapes[i].data.resize(data_blendshapes[i].vertices.size());
+      blendshapes[i].weight = data_blendshapes[i].weight;
+      blendshapes[i].name = data_blendshapes[i].name;
+      blendshapes[i].verts.resize(data_blendshapes[i].vertices.size());
       for (int j = 0; j < data_blendshapes[i].vertices.size(); j++) {
-        blend_shapes[i].data[j].offset_pos
+        blendshapes[i].verts[j].offset_pos
             << data_blendshapes[i].vertices[j].offset_pos[0],
             data_blendshapes[i].vertices[j].offset_pos[1],
             data_blendshapes[i].vertices[j].offset_pos[2],
             data_blendshapes[i].vertices[j].offset_pos[3];
-        blend_shapes[i].data[j].offset_normal
+        blendshapes[i].verts[j].offset_normal
             << data_blendshapes[i].vertices[j].offset_normal[0],
             data_blendshapes[i].vertices[j].offset_normal[1],
             data_blendshapes[i].vertices[j].offset_normal[2],

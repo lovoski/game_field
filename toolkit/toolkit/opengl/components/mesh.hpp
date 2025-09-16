@@ -11,7 +11,7 @@ struct mesh_data : public icomponent {
   std::string mesh_name, model_name;
   std::vector<assets::mesh_vertex> vertices;
   std::vector<uint32_t> indices;
-  std::vector<assets::blend_shape> blend_shapes;
+  std::vector<assets::blend_shape> blendshapes;
 
   vao vertex_array;
   buffer vertex_buffer, index_buffer;

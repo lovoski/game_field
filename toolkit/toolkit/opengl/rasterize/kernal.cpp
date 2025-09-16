@@ -104,8 +104,8 @@ void main() {
 
   _packed_vertex vertex = gSceneVertices[gVertexOffset+gid];
 
-  vertex.position = gWeightValue * gBlendShapeVertices[gid].position + vertex.position;
-  vertex.normal = gWeightValue * gBlendShapeVertices[gid].normal + vertex.normal;
+  vertex.position.xyz = gWeightValue * gBlendShapeVertices[gid].position.xyz + vertex.position.xyz;
+  vertex.normal.xyz = gWeightValue * gBlendShapeVertices[gid].normal.xyz + vertex.normal.xyz;
 
   gSceneVertices[gVertexOffset+gid] = vertex;
 }
@@ -155,7 +155,7 @@ void main() {
   _render_vertex original_vertex = gOriginalVertices[gid];
   _packed_vertex scene_vertex = gSceneVertices[gid+gVertexOffset];
   _packed_vertex new_vertex;
-  new_vertex.position = vec4(0.0);
+  new_vertex.position = vec4(0.0, 0.0, 0.0, 1.0);
   new_vertex.normal = vec4(0.0);
 
   vec4 bind_position = original_vertex.position, bind_normal = original_vertex.normal;
@@ -169,7 +169,7 @@ void main() {
     if (bone_weight > 0.0) {
       _bone_matrix_block bone_mat_block = gBoneMatrices[bone_id];
       mat4 bone_mat = bone_mat_block.model_mat * bone_mat_block.offset_mat;
-      new_vertex.position += bone_mat * bind_position * bone_weight;
+      new_vertex.position.xyz += (bone_mat * bind_position * bone_weight).xyz;
       mat3 normal_matrix = mat3(bone_mat);
       new_vertex.normal.xyz += normal_matrix * bind_normal.xyz * bone_weight;
     }
