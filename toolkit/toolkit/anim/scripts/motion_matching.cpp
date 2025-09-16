@@ -317,7 +317,7 @@ void motion_matching::draw_to_scene(iapp *app) {
                        cam_comp.vp, opengl::Blue);
     opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_up,
                        cam_comp.vp, opengl::Green);
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_left,
+    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_right,
                        cam_comp.vp, opengl::Red);
   });
 }

@@ -36,7 +36,7 @@ public:
   math::vector3 local_euler_degrees() const { return m_local_euler; }
   math::vector3 local_up() const { return m_local_up; }
   math::vector3 local_forward() const { return m_local_forward; }
-  math::vector3 local_left() const { return m_local_left; }
+  math::vector3 local_right() const { return m_local_right; }
 
   transform *parent() const;
   std::vector<transform *> children() const;
@@ -67,7 +67,7 @@ public:
   const math::vector3 local_to_world(math::vector3 local);
 
   void parent_local_axes(math::vector3 &p_local_forward,
-                         math::vector3 &p_local_left,
+                         math::vector3 &p_local_right,
                          math::vector3 &p_local_up);
 
   const math::vector3 parent_position() const;
@@ -85,7 +85,7 @@ private:
   math::vector3 m_local_euler = math::vector3::Zero();
   math::vector3 m_local_up = math::world_up,
                 m_local_forward = math::world_forward,
-                m_local_left = math::world_left;
+                m_local_right = math::world_right;
   math::matrix4 m_matrix = math::matrix4::Identity();
 
   // ---------- actual data for hierarchy update ----------

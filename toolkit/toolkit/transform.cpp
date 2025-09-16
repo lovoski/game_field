@@ -43,7 +43,7 @@ void transform::reset() {
   m_local_euler << 0.0, 0.0, 0.0;
   m_matrix = math::matrix4::Identity();
   m_local_up << math::world_up;
-  m_local_left << math::world_left;
+  m_local_right << math::world_right;
   m_local_forward << math::world_forward;
   dirty = true;
 
@@ -212,7 +212,7 @@ bool transform::remove_parent() {
 void transform::update_local_axes() {
   math::quat q = parent_rotation() * m_local_rot;
   m_local_forward = q * math::world_forward;
-  m_local_left = q * math::world_left;
+  m_local_right = q * math::world_right;
   m_local_up = q * math::world_up;
 }
 
@@ -228,17 +228,17 @@ const math::vector3 transform::local_to_world(math::vector3 local) {
 }
 
 void transform::parent_local_axes(math::vector3 &pLocalForward,
-                                  math::vector3 &pLocalLeft,
+                                  math::vector3 &pLocalRight,
                                   math::vector3 &pLocalUp) {
   if (m_parent == entt::null) {
     pLocalForward = math::world_forward;
-    pLocalLeft = math::world_left;
+    pLocalRight = math::world_right;
     pLocalUp = math::world_up;
   } else {
     auto &pTrans = registry->get<transform>(m_parent);
     // parent->update_local_axes();
     pLocalForward = pTrans.m_local_forward;
-    pLocalLeft = pTrans.m_local_left;
+    pLocalRight = pTrans.m_local_right;
     pLocalUp = pTrans.m_local_up;
   }
 }

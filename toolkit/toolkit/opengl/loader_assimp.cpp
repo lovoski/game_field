@@ -251,7 +251,7 @@ build_node_mapping(entt::registry &registry, aiNode *node, const aiScene *scene,
   return ent;
 }
 
-void open_model_assimp(entt::registry &registry, std::string filepath) {
+entt::entity open_model_assimp(entt::registry &registry, std::string filepath) {
   Assimp::Importer importer;
   const aiScene *scene = importer.ReadFile(
       filepath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
@@ -261,7 +261,7 @@ void open_model_assimp(entt::registry &registry, std::string filepath) {
 
   if (!scene || !scene->mRootNode) {
     std::cerr << "Assimp failed: " << importer.GetErrorString() << std::endl;
-    return;
+    return entt::null;
   }
 
 #ifdef _WIN32
@@ -316,6 +316,8 @@ void open_model_assimp(entt::registry &registry, std::string filepath) {
 
   // handle animation track loading if any
   // ...
+
+  return root_entity;
 }
 
 }; // namespace toolkit::assets

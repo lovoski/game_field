@@ -400,9 +400,9 @@ void editor::active_camera_manipulate(float dt) {
         if (g_instance.is_key_pressed(GLFW_KEY_S))
           camera_movement += cam_trans->local_forward();
         if (g_instance.is_key_pressed(GLFW_KEY_A))
-          camera_movement -= cam_trans->local_left();
+          camera_movement -= cam_trans->local_right();
         if (g_instance.is_key_pressed(GLFW_KEY_D))
-          camera_movement += cam_trans->local_left();
+          camera_movement += cam_trans->local_right();
         camera_movement *= (cam_manip_data.fps_camera_speed * dt);
         cam_manip_data.camera_pivot += camera_movement;
         cam_trans->set_world_pos(cam_trans->world_pos() + camera_movement);
@@ -424,8 +424,8 @@ void editor::active_camera_manipulate(float dt) {
                 worldRayDir.dot(cam_manip_data.camera_pivot - cam_pos) *
                 worldRayDir;
             auto deltaPos =
-                worldRayDir.dot(cam_trans->local_left()) *
-                    cam_trans->local_left() +
+                worldRayDir.dot(cam_trans->local_right()) *
+                    cam_trans->local_right() +
                 worldRayDir.dot(cam_trans->local_up()) * cam_trans->local_up();
             cam_manip_data.camera_pivot += deltaPos;
             cam_trans->set_world_pos(cam_trans->world_pos() + deltaPos);
@@ -438,7 +438,7 @@ void editor::active_camera_manipulate(float dt) {
               math::angle_axis(math::deg_to_rad(-rotateOffset.x()),
                                math::world_up) *
                   math::angle_axis(math::deg_to_rad(-rotateOffset.y()),
-                                   cam_trans->local_left()) *
+                                   cam_trans->local_right()) *
                   (posVector - cam_manip_data.camera_pivot) +
               cam_manip_data.camera_pivot;
           cam_trans->set_world_pos(newPos);
@@ -448,7 +448,7 @@ void editor::active_camera_manipulate(float dt) {
     } else
       cam_manip_data.mouse_first_move = true;
 
-    math::vector3 lastLeft = cam_trans->local_left();
+    math::vector3 lastLeft = cam_trans->local_right();
     math::vector3 forward =
         (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
     math::vector3 up = math::world_up;
@@ -570,13 +570,20 @@ void editor::draw_main_menubar() {
                              {"*.fbx", "*.FBX", "*.obj", "*.OBJ", "*.pmx",
                               "*.PMX", "*.ply", "*.PLY"},
                              "*.fbx, *.obj, *.pmx, *.ply", filepath)) {
-          spdlog::info("Load model file {0}", filepath);
           // assets::open_model_assimp(registry, filepath);
           if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx") ||
-              endswith(filepath, ".OBJ") || endswith(filepath, ".obj"))
-            assets::open_model_ufbx(registry, filepath);
-          else
-            assets::open_model_assimp(registry, filepath);
+              endswith(filepath, ".OBJ") || endswith(filepath, ".obj")) {
+            auto root_entity = assets::open_model_ufbx(registry, filepath);
+            if (root_entity != entt::null)
+              spdlog::info("Load model file {0} with ufbx, mount at entity {1}",
+                           filepath, registry.get<transform>(root_entity).name);
+          } else {
+            auto root_entity = assets::open_model_assimp(registry, filepath);
+            if (root_entity != entt::null)
+              spdlog::info(
+                  "Load model file {0} with assimp, mount at entity {1}",
+                  filepath, registry.get<transform>(root_entity).name);
+          }
         }
       }
       // if (ImGui::MenuItem("Import   BVH")) {

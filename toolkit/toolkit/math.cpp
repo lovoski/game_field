@@ -4,7 +4,7 @@
 namespace toolkit::math {
 
 vector3 world_up = vector3(0.0, 1.0, 0.0);
-vector3 world_left = vector3(1.0, 0.0, 0.0);
+vector3 world_right = vector3(1.0, 0.0, 0.0);
 vector3 world_forward = vector3(0.0, 0.0, 1.0);
 
 vector3 quat_to_euler(const quat &q) {

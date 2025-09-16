@@ -12,43 +12,43 @@ void draw_view_frustom(toolkit::transform &trans, float fovy_deg, float znear,
   toolkit::math::vector3 base0 = trans.world_pos() - z0 * trans.local_forward();
   toolkit::math::vector3 base1 = trans.world_pos() - z1 * trans.local_forward();
   frustom_lines[0] = std::make_pair(
-      base0 + h0 * trans.local_up() + asp * h0 * trans.local_left(),
-      base0 + h0 * trans.local_up() - asp * h0 * trans.local_left());
+      base0 + h0 * trans.local_up() + asp * h0 * trans.local_right(),
+      base0 + h0 * trans.local_up() - asp * h0 * trans.local_right());
   frustom_lines[1] = std::make_pair(
-      base0 - h0 * trans.local_up() + asp * h0 * trans.local_left(),
-      base0 - h0 * trans.local_up() - asp * h0 * trans.local_left());
+      base0 - h0 * trans.local_up() + asp * h0 * trans.local_right(),
+      base0 - h0 * trans.local_up() - asp * h0 * trans.local_right());
   frustom_lines[2] = std::make_pair(
-      base0 + h0 * trans.local_up() + asp * h0 * trans.local_left(),
-      base0 - h0 * trans.local_up() + asp * h0 * trans.local_left());
+      base0 + h0 * trans.local_up() + asp * h0 * trans.local_right(),
+      base0 - h0 * trans.local_up() + asp * h0 * trans.local_right());
   frustom_lines[3] = std::make_pair(
-      base0 + h0 * trans.local_up() - asp * h0 * trans.local_left(),
-      base0 - h0 * trans.local_up() - asp * h0 * trans.local_left());
+      base0 + h0 * trans.local_up() - asp * h0 * trans.local_right(),
+      base0 - h0 * trans.local_up() - asp * h0 * trans.local_right());
 
   frustom_lines[4] = std::make_pair(
-      base1 + h1 * trans.local_up() + asp * h1 * trans.local_left(),
-      base1 + h1 * trans.local_up() - asp * h1 * trans.local_left());
+      base1 + h1 * trans.local_up() + asp * h1 * trans.local_right(),
+      base1 + h1 * trans.local_up() - asp * h1 * trans.local_right());
   frustom_lines[5] = std::make_pair(
-      base1 - h1 * trans.local_up() + asp * h1 * trans.local_left(),
-      base1 - h1 * trans.local_up() - asp * h1 * trans.local_left());
+      base1 - h1 * trans.local_up() + asp * h1 * trans.local_right(),
+      base1 - h1 * trans.local_up() - asp * h1 * trans.local_right());
   frustom_lines[6] = std::make_pair(
-      base1 + h1 * trans.local_up() + asp * h1 * trans.local_left(),
-      base1 - h1 * trans.local_up() + asp * h1 * trans.local_left());
+      base1 + h1 * trans.local_up() + asp * h1 * trans.local_right(),
+      base1 - h1 * trans.local_up() + asp * h1 * trans.local_right());
   frustom_lines[7] = std::make_pair(
-      base1 + h1 * trans.local_up() - asp * h1 * trans.local_left(),
-      base1 - h1 * trans.local_up() - asp * h1 * trans.local_left());
+      base1 + h1 * trans.local_up() - asp * h1 * trans.local_right(),
+      base1 - h1 * trans.local_up() - asp * h1 * trans.local_right());
 
   frustom_lines[8] = std::make_pair(
-      base0 + h0 * trans.local_up() + asp * h0 * trans.local_left(),
-      base1 + h1 * trans.local_up() + asp * h1 * trans.local_left());
+      base0 + h0 * trans.local_up() + asp * h0 * trans.local_right(),
+      base1 + h1 * trans.local_up() + asp * h1 * trans.local_right());
   frustom_lines[9] = std::make_pair(
-      base0 + h0 * trans.local_up() - asp * h0 * trans.local_left(),
-      base1 + h1 * trans.local_up() - asp * h1 * trans.local_left());
+      base0 + h0 * trans.local_up() - asp * h0 * trans.local_right(),
+      base1 + h1 * trans.local_up() - asp * h1 * trans.local_right());
   frustom_lines[10] = std::make_pair(
-      base0 - h0 * trans.local_up() + asp * h0 * trans.local_left(),
-      base1 - h1 * trans.local_up() + asp * h1 * trans.local_left());
+      base0 - h0 * trans.local_up() + asp * h0 * trans.local_right(),
+      base1 - h1 * trans.local_up() + asp * h1 * trans.local_right());
   frustom_lines[11] = std::make_pair(
-      base0 - h0 * trans.local_up() - asp * h0 * trans.local_left(),
-      base1 - h1 * trans.local_up() - asp * h1 * trans.local_left());
+      base0 - h0 * trans.local_up() - asp * h0 * trans.local_right(),
+      base1 - h1 * trans.local_up() - asp * h1 * trans.local_right());
 
   toolkit::opengl::draw_lines(frustom_lines, vp, color);
 }

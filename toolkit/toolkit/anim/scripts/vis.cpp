@@ -35,7 +35,7 @@ void vis_skeleton::draw_to_scene(iapp *app) {
           x_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
                                             joint_trans.world_pos() +
                                                 axes_length * avg_bone_length *
-                                                    joint_trans.local_left()));
+                                                    joint_trans.local_right()));
           y_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
                                             joint_trans.world_pos() +
                                                 axes_length * avg_bone_length *

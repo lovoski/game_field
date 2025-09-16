@@ -39,7 +39,7 @@ template <typename T1, typename T2> vector3 max3(T1 &&a, T2 &&b) {
 }
 
 extern vector3 world_up;
-extern vector3 world_left;
+extern vector3 world_right;
 extern vector3 world_forward;
 
 // Convert a quaternion to euler angles (xyz) in radians

@@ -18,8 +18,8 @@ namespace toolkit::assets {
 std::string wstring_to_string(const std::wstring &wstr);
 #endif
 
-void open_model_ufbx(entt::registry &registry, std::string filepath);
-void open_model_assimp(entt::registry &registry, std::string filepath);
+entt::entity open_model_ufbx(entt::registry &registry, std::string filepath);
+entt::entity open_model_assimp(entt::registry &registry, std::string filepath);
 
 }; // namespace toolkit::assets
 

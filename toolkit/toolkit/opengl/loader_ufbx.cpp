@@ -380,7 +380,7 @@ std::vector<entt::entity> create_skinned_mesh_bundle_data(
   return bone_entities;
 }
 
-void open_model_ufbx(entt::registry &registry, std::string filepath) {
+entt::entity open_model_ufbx(entt::registry &registry, std::string filepath) {
   ufbx_error error;
   ufbx_load_opts opts = {
       .load_external_files = true,
@@ -397,7 +397,7 @@ void open_model_ufbx(entt::registry &registry, std::string filepath) {
   ufbx_scene *scene = ufbx_load_file(filepath.c_str(), &opts, &error);
   if (!scene) {
     spdlog::error("Failed to load: {0}", error.description.data);
-    return;
+    return entt::null;
   }
 
 // create nodes
@@ -424,7 +424,10 @@ void open_model_ufbx(entt::registry &registry, std::string filepath) {
     read_mesh(registry, scene->meshes[i], ufbx_node_to_entity, scene, filename);
   }
 
+  auto root_entity = ufbx_node_to_entity[scene->root_node];
   ufbx_free_scene(scene);
+
+  return root_entity;
 }
 
 }; // namespace toolkit::assets
