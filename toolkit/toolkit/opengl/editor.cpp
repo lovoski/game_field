@@ -586,14 +586,14 @@ void editor::draw_main_menubar() {
           }
         }
       }
-      // if (ImGui::MenuItem("Import   BVH")) {
-      //   std::string filepath;
-      //   if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
-      //                        "*.bvh", filepath)) {
-      //     spdlog::info("Load motion file {0}", filepath);
-      //     anim::create_bvh_actor(registry, filepath);
-      //   }
-      // }
+      if (ImGui::MenuItem("Import   BVH")) {
+        std::string filepath;
+        if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
+                             "*.bvh", filepath)) {
+          spdlog::info("Load motion file {0}", filepath);
+          anim::create_bvh_actor(registry, filepath);
+        }
+      }
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Settings")) {

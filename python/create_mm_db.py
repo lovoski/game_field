@@ -27,13 +27,13 @@ def build_motion_db(files):
 
                 mirror_bones = []
                 for ni, n in enumerate(bvhData["names"]):
-                    if "right" in n and n.replace("right", "left") in bvhData["names"]:
+                    if "Right" in n and n.replace("Right", "Left") in bvhData["names"]:
                         mirror_bones.append(
-                            bvhData["names"].index(n.replace("right", "left"))
+                            bvhData["names"].index(n.replace("Right", "Left"))
                         )
-                    elif "left" in n and n.replace("left", "right") in bvhData["names"]:
+                    elif "Left" in n and n.replace("Left", "Right") in bvhData["names"]:
                         mirror_bones.append(
-                            bvhData["names"].index(n.replace("left", "right"))
+                            bvhData["names"].index(n.replace("Left", "Right"))
                         )
                     else:
                         mirror_bones.append(ni)
@@ -46,8 +46,8 @@ def build_motion_db(files):
                 rot, pos = bvh.ik(gloRot, gloPos, bvhData["parents"])
 
             # Specify joints to use for simulation bone
-            simPosJoint = bvhData["names"].index("spine2")
-            simRotJoint = bvhData["names"].index("pelvis")
+            simPosJoint = bvhData["names"].index("Spine1")
+            simRotJoint = bvhData["names"].index("Hips")
 
             # Position comes from spine joint
             simPos = (
@@ -138,9 +138,9 @@ def build_motion_db(files):
 def compute_db_features(
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names
 ):
-    posJoints = np.array([names.index(n) for n in ["left_foot", "right_foot"]])
+    posJoints = np.array([names.index(n) for n in ["LeftToeBase", "RightToeBase"]])
     velJoints = np.array(
-        [names.index(n) for n in ["left_foot", "right_foot", "pelvis"]]
+        [names.index(n) for n in ["LeftToeBase", "RightToeBase", "Hips"]]
     )
 
     YgloRot, YgloPos, YgloAng, YgloVel = bvh.fk_vel(Yrot, Ypos, Yang, Yvel, parents)
@@ -199,13 +199,51 @@ def compute_db_features(
     return X, Xoffset, Xscale
 
 
+def process_interact_data(base_dir, output_dir):
+    for file in os.listdir(base_dir):
+        filepath = os.path.join(base_dir, file)
+        data = bvh.load(filepath)
+        data['frametime'] = 1.0/60.0
+        data['positions'] = 0.01*data['positions']
+        data['offsets'] = 0.01*data['offsets']
+        nframes, njoints = data['rotations'].shape[0:2]
+        rotations = np.zeros((nframes*2, njoints, 4), dtype=data['rotations'].dtype)
+        positions = np.zeros((nframes*2, njoints, 3), dtype=data['positions'].dtype)
+        
+        for f in range(1, nframes):
+            rotations[2*f-2] = data['rotations'][f-1]
+            for j in range(njoints):
+                start_rot, end_rot = data['rotations'][f-1,j], data['rotations'][f,j]
+                if np.dot(start_rot, end_rot) < 0.0:
+                    end_rot *= -1
+                rotations[2*f-1, j] = 0.5*start_rot+0.5*end_rot
+                rotations[2*f-1, j] /= np.linalg.norm(rotations[2*f-1, j])
+            rotations[2*f] = data['rotations'][f]
+            
+            positions[2*f-2] = data['positions'][f-1]
+            positions[2*f-1] = data['positions'][f-1] * 0.5 + data['positions'][f] * 0.5
+            positions[2*f] = data['positions'][f]
+        
+        positions[1] = positions[2]
+        rotations[1] = rotations[2]
+        
+        data['offsets'][0] = 0
+        data['rotations'] = rotations
+        data['positions'] = positions
+        
+        bvh.save(os.path.join(output_dir, file), data)
+
+
 if __name__ == "__main__":
     import os
-    base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_to_smpl_processed'
-    filenames = os.listdir(base_dir)
+    # base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_to_smpl_processed'
+    base_dir = 'data/InterAct/bvh'
+    output_dir = 'data/InterAct/mm_processed'
+    os.makedirs(output_dir, exist_ok=True)
+    # process_interact_data(base_dir, output_dir)
     files = []
-    for fn in filenames:
-        files.append((os.path.join(base_dir, fn), 0, -1))
+    for fn in os.listdir(output_dir):
+        files.append((os.path.join(output_dir, fn), 0, -1))
     # files = [
     #     (
     #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/pushAndStumble1_subject5.bvh",

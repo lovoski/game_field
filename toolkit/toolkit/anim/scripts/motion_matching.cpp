@@ -295,6 +295,8 @@ void motion_matching::draw_to_scene(iapp *app) {
                                               transform &cam_trans,
                                               opengl::camera &cam_comp) {
     opengl::draw_wire_spheres(t_pos, cam_comp.vp, 0.1f);
+    opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
+                       opengl::Purple);
     for (int i = 0; i < 3; i++)
       opengl::draw_arrow(t_pos[i], t_pos[i] + t_dir[i], cam_comp.vp,
                          opengl::Green);
@@ -471,8 +473,8 @@ query_left_right_joystick(float deadzone) {
       }
       if (right_mag > deadzone) {
         float clip_mag = right_mag > 1.0 ? 1.0 : right_mag * right_mag;
-        right_stick.x() = axes[0] / right_mag * clip_mag;
-        right_stick.z() = axes[1] / right_mag * clip_mag;
+        right_stick.x() = axes[2] / right_mag * clip_mag;
+        right_stick.z() = axes[3] / right_mag * clip_mag;
       }
       break;
     }
