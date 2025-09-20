@@ -1,6 +1,7 @@
 #include "toolkit/anim/anim_system.hpp"
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/motion_matching.hpp"
+#include "toolkit/anim/scripts/traj_tracking.hpp"
 #include "toolkit/anim/scripts/motion_player.hpp"
 #include "toolkit/anim/scripts/tps_cam_controller.hpp"
 #include <spdlog/spdlog.h>

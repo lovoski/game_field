@@ -52,13 +52,13 @@ public:
     auto qt = target_trans.world_rot();
     if (q0.dot(qt) < 0.0f)
       qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
-    toolkit::math::vector3 q = toolkit::math::quat_to_so3(q0 * qt.inverse());
+    toolkit::math::vector3 q = toolkit::math::quat_to_rot_vec(q0 * qt.inverse());
     auto q_prev = q;
     q = (q_prev + (angular_velocity + lambda * q_prev) * dt) *
         exp(-lambda * dt);
     angular_velocity =
         (angular_velocity + lambda * q_prev) * exp(-lambda * dt) - lambda * q;
-    self_trans.set_world_rot(toolkit::math::so3_to_quat(q) * qt);
+    self_trans.set_world_rot(toolkit::math::rot_vec_to_quat(q) * qt);
   }
 
   void draw_to_scene(toolkit::iapp *app) override {

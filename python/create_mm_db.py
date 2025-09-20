@@ -1,6 +1,7 @@
 import numpy as np
 from utils import bvh
 import scipy.signal as signal
+from test import forward_kinematics_direct
 
 
 def build_motion_db(files):
@@ -199,51 +200,8 @@ def compute_db_features(
     return X, Xoffset, Xscale
 
 
-def process_interact_data(base_dir, output_dir):
-    for file in os.listdir(base_dir):
-        filepath = os.path.join(base_dir, file)
-        data = bvh.load(filepath)
-        data['frametime'] = 1.0/60.0
-        data['positions'] = 0.01*data['positions']
-        data['offsets'] = 0.01*data['offsets']
-        nframes, njoints = data['rotations'].shape[0:2]
-        rotations = np.zeros((nframes*2, njoints, 4), dtype=data['rotations'].dtype)
-        positions = np.zeros((nframes*2, njoints, 3), dtype=data['positions'].dtype)
-        
-        for f in range(1, nframes):
-            rotations[2*f-2] = data['rotations'][f-1]
-            for j in range(njoints):
-                start_rot, end_rot = data['rotations'][f-1,j], data['rotations'][f,j]
-                if np.dot(start_rot, end_rot) < 0.0:
-                    end_rot *= -1
-                rotations[2*f-1, j] = 0.5*start_rot+0.5*end_rot
-                rotations[2*f-1, j] /= np.linalg.norm(rotations[2*f-1, j])
-            rotations[2*f] = data['rotations'][f]
-            
-            positions[2*f-2] = data['positions'][f-1]
-            positions[2*f-1] = data['positions'][f-1] * 0.5 + data['positions'][f] * 0.5
-            positions[2*f] = data['positions'][f]
-        
-        positions[1] = positions[2]
-        rotations[1] = rotations[2]
-        
-        data['offsets'][0] = 0
-        data['rotations'] = rotations
-        data['positions'] = positions
-        
-        bvh.save(os.path.join(output_dir, file), data)
-
-
-if __name__ == "__main__":
-    import os
-    # base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_to_smpl_processed'
-    base_dir = 'data/InterAct/bvh'
-    output_dir = 'data/InterAct/mm_processed'
-    os.makedirs(output_dir, exist_ok=True)
-    # process_interact_data(base_dir, output_dir)
+def create_mm_db(base_dir):
     files = []
-    for fn in os.listdir(output_dir):
-        files.append((os.path.join(output_dir, fn), 0, -1))
     # files = [
     #     (
     #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/pushAndStumble1_subject5.bvh",
@@ -261,6 +219,10 @@ if __name__ == "__main__":
     #         15518,
     #     ),
     # ]
+    for fn in os.listdir(base_dir):
+        if not fn.endswith(".bvh"):
+            continue
+        files.append((os.path.join(base_dir, fn), 0, -1))
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
         files
     )
@@ -288,3 +250,120 @@ if __name__ == "__main__":
         Xoffset=Xoffset.astype(np.float32),
         Xscale=Xscale.astype(np.float32),
     )
+
+
+def process_interact_data(base_dir, output_dir):
+    for file in os.listdir(base_dir):
+        if not file.endswith(".bvh"):
+            continue
+        data = bvh.load(os.path.join(base_dir, file))
+        data["frametime"] = 1.0 / 60.0
+        data["positions"] = 0.01 * data["positions"]
+        data["offsets"] = 0.01 * data["offsets"]
+        nframes, njoints = data["rotations"].shape[0:2]
+        rotations = np.zeros((nframes * 2, njoints, 4), dtype=data["rotations"].dtype)
+        positions = np.zeros((nframes * 2, njoints, 3), dtype=data["positions"].dtype)
+
+        for f in range(1, nframes):
+            rotations[2 * f - 2] = data["rotations"][f - 1]
+            for j in range(njoints):
+                start_rot, end_rot = (
+                    data["rotations"][f - 1, j],
+                    data["rotations"][f, j],
+                )
+                if np.dot(start_rot, end_rot) < 0.0:
+                    end_rot *= -1
+                rotations[2 * f - 1, j] = 0.5 * start_rot + 0.5 * end_rot
+                rotations[2 * f - 1, j] /= np.linalg.norm(rotations[2 * f - 1, j])
+            rotations[2 * f] = data["rotations"][f]
+
+            positions[2 * f - 2] = data["positions"][f - 1]
+            positions[2 * f - 1] = (
+                data["positions"][f - 1] * 0.5 + data["positions"][f] * 0.5
+            )
+            positions[2 * f] = data["positions"][f]
+
+        positions[1] = positions[2]
+        rotations[1] = rotations[2]
+
+        data["offsets"][0] = 0
+        data["rotations"] = rotations
+        data["positions"] = positions
+
+        bvh.save(os.path.join(output_dir, file), data)
+
+
+def extract_motion_trajectory(base_dir, output_dir):
+    from scipy.spatial.transform import Rotation
+    from tqdm import tqdm
+
+    for file in tqdm(os.listdir(base_dir)):
+        if not file.endswith(".bvh"):
+            continue
+        data = bvh.load(os.path.join(base_dir, file))
+        gpos, grot = forward_kinematics_direct(
+            data["positions"], data["rotations"], data["parents"]
+        )
+        root_pos = gpos[:, 0]
+        root_rot = grot[:, 0]
+        nframes = root_pos.shape[0]
+
+        # we need:
+        # 1. the direction at each frame as the simulated input for left joystick
+        # 2. the root facing direction as the simulated input for right joystick
+
+        root_pos = root_pos[1:-1].copy()
+        root_pos[:, 1] = 0
+        init_root_pos = root_pos[0].copy()
+        root_pos -= init_root_pos
+        root_vel = np.zeros_like(root_pos)
+        root_vel[1:-1] = (
+            0.5 * (root_pos[2:] - root_pos[1:-1]) * 60
+            + 0.5 * (root_pos[1:-1] - root_pos[:-2]) * 60
+        )
+        root_vel[0] = root_vel[1] - (root_vel[3] - root_vel[2])
+        root_vel[-1] = root_vel[-2] + (root_vel[-2] - root_vel[-3])
+        root_facing = np.zeros((nframes - 2, 3))
+        for f in range(1, nframes - 1):
+            facing_dir = Rotation.from_quat(root_rot[f, [1, 2, 3, 0]]).apply(
+                np.array([0, 0, 1])
+            )
+            facing_dir[1] = 0
+            facing_dir /= np.linalg.norm(facing_dir) + 1e-5
+            root_facing[f - 1] = facing_dir
+
+        np.savez(
+            os.path.join(output_dir, file.replace(".bvh", ".npz")),
+            pos=root_pos.astype(np.float32),
+            vel=root_vel,
+            facing=root_facing.astype(np.float32),
+        )
+
+
+if __name__ == "__main__":
+    import os
+
+    # # base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_to_smpl_processed'
+    # base_dir = 'data/InterAct/bvh'
+    # mm_processed_dir = 'data/InterAct/mm_processed'
+    # traj_output_dir = 'data/InterAct/extracted_traj'
+    # os.makedirs(mm_processed_dir, exist_ok=True)
+    # os.makedirs(traj_output_dir, exist_ok=True)
+    # # process_interact_data(base_dir, mm_processed_dir)
+    # # create_mm_db(mm_processed_dir)
+
+    # extract_motion_trajectory(mm_processed_dir, traj_output_dir)
+
+    base_dir = "data/lafan1/bvh"
+    processed_dir = "data/lafan1/processed_bvh"
+    traj_output_dir = "data/lafan1/traj_output"
+    os.makedirs(traj_output_dir, exist_ok=True)
+    extract_motion_trajectory(processed_dir, traj_output_dir)
+    # os.makedirs(processed_dir, exist_ok=True)
+    # from tqdm import tqdm
+    # for file in tqdm(os.listdir(base_dir)):
+    #     data = bvh.load(os.path.join(base_dir, file))
+    #     data['offsets'][0] = 0
+    #     data['offsets'] *= 0.01
+    #     data['positions'] *= 0.01
+    #     bvh.save(os.path.join(processed_dir, file), data)

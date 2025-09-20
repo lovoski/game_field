@@ -1,59 +1,15 @@
-/**
- * Algorithm reference:
- * https://github.com/orangeduck/GenoViewPython-MotionMatching
- * https://www.theorangeduck.com/page/code-vs-data-driven-displacement
- */
 #pragma once
 
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/opengl/base.hpp"
 #include "toolkit/opengl/draw.hpp"
 #include "toolkit/scriptable.hpp"
+#include "toolkit/anim/scripts/motion_matching.hpp"
 #include <cnpy.h>
 
 namespace toolkit::anim {
 
-#define MM_FEATURE_DIM 27
-
-std::tuple<math::vector3, math::vector3>
-query_left_right_joystick(float deadzone = 0.1);
-
-std::tuple<math::vector3, math::vector3>
-spring_damper_position(math::vector3 x0, math::vector3 v0, math::vector3 xt,
-                       math::vector3 vt, float dt, float halflife);
-std::tuple<math::quat, math::vector3>
-spring_damper_rotation(math::quat q0, math::vector3 av0, math::quat qt,
-                       math::vector3 avt, float dt, float halflife);
-
-void inertialize_transition_position(std::vector<math::vector3> &off_pos,
-                                     std::vector<math::vector3> &off_vel,
-                                     std::vector<math::vector3> src_pos,
-                                     std::vector<math::vector3> src_vel,
-                                     std::vector<math::vector3> target_pos,
-                                     std::vector<math::vector3> target_vel);
-
-void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
-                                     std::vector<math::vector3> &off_ang,
-                                     std::vector<math::quat> src_rot,
-                                     std::vector<math::vector3> src_ang,
-                                     std::vector<math::quat> target_rot,
-                                     std::vector<math::vector3> target_ang);
-
-std::tuple<math::vector3, math::vector3, math::vector3, math::vector3>
-inertialize_update_position(math::vector3 off_pos, math::vector3 off_vel,
-                            math::vector3 in_pos, math::vector3 in_vel,
-                            float halflife, float dt);
-
-std::tuple<math::quat, math::vector3, math::quat, math::vector3>
-inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
-                            math::quat in_rot, math::vector3 in_ang,
-                            float halflife, float dt);
-
-struct motion_trajectory {
-  std::vector<math::vector3> pos, facing;
-};
-
-class motion_matching : public scriptable {
+class traj_tracking : public scriptable {
 public:
   void start() override;
   void destroy() override;
@@ -65,6 +21,11 @@ public:
   void fixedupdate(iapp *app, float dt);
 
 private:
+  // if trajectory loaded, then follow the trajectory instead of user input
+  bool trajectory_loaded = false;
+  int current_traj_frame = 0;
+  motion_trajectory traj;
+
   bool db_loaded, mapping_loaded = false;
   std::string db_filepath = "", mapping_filepath = "";
   std::map<std::string, int> joint_name_to_idx;
@@ -116,6 +77,6 @@ private:
   float feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                      std::array<float, MM_FEATURE_DIM> &feat1);
 };
-DECLARE_SCRIPT(motion_matching, animation)
+DECLARE_SCRIPT(traj_tracking, animation)
 
 }; // namespace toolkit::anim

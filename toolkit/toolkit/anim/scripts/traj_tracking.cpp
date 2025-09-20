@@ -1,58 +1,14 @@
 #include "toolkit/anim/scripts/motion_matching.hpp"
+#include "toolkit/anim/scripts/traj_tracking.hpp"
 #include "toolkit/opengl/editor.hpp"
 
 namespace toolkit::anim {
 
 const float const_e = 2.71828f;
 
-std::tuple<math::vector3, math::vector3>
-spring_damper_position(math::vector3 x0, math::vector3 v0, math::vector3 xt,
-                       math::vector3 vt, float dt, float halflife) {
-  float lambda = log(2) / (halflife * log(const_e));
-  math::vector3 x = x0 - xt, v = v0 - vt;
-  auto x_prev = x;
-  x = (x_prev + (v + lambda * x_prev) * dt) * std::exp(-lambda * dt);
-  v = (v + lambda * x_prev) * std::exp(-lambda * dt) - lambda * x;
-  return {x + xt, v + vt};
-}
+void traj_tracking::destroy() {}
 
-std::tuple<math::quat, math::vector3>
-spring_damper_rotation(math::quat q0, math::vector3 av0, math::quat qt,
-                       math::vector3 avt, float dt, float halflife) {
-  float lambda = log(2) / (halflife * log(const_e));
-  if (q0.dot(qt) < 0.0f)
-    qt = math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
-  auto q = math::quat_to_rot_vec(q0 * qt.inverse());
-  math::vector3 av = av0 - avt;
-  auto q_prev = q;
-  q = (q_prev + (av + lambda * q_prev) * dt) * exp(-lambda * dt);
-  av = (av + lambda * q_prev) * exp(-lambda * dt) - lambda * q;
-  return {toolkit::math::rot_vec_to_quat(q) * qt, av + avt};
-}
-
-std::tuple<math::vector3, math::vector3, math::vector3, math::vector3>
-inertialize_update_position(math::vector3 off_pos, math::vector3 off_vel,
-                            math::vector3 in_pos, math::vector3 in_vel,
-                            float halflife, float dt) {
-  auto [op, ov] =
-      spring_damper_position(off_pos, off_vel, math::vector3::Zero(),
-                             math::vector3::Zero(), dt, halflife);
-  return {op, ov, in_pos + op, in_vel + ov};
-}
-
-std::tuple<math::quat, math::vector3, math::quat, math::vector3>
-inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
-                            math::quat in_rot, math::vector3 in_ang,
-                            float halflife, float dt) {
-  auto [ofr, oa] =
-      spring_damper_rotation(off_rot, off_ang, math::quat::Identity(),
-                             math::vector3::Zero(), dt, halflife);
-  return {ofr, oa, ofr * in_rot, in_ang + oa};
-}
-
-void motion_matching::destroy() {}
-
-void motion_matching::start() {
+void traj_tracking::start() {
   auto actor_comp = registry->try_get<anim::actor>(entity);
   if (actor_comp != nullptr) {
     actor_bind_rot.resize(actor_comp->ordered_entities.size(),
@@ -72,12 +28,12 @@ void motion_matching::start() {
     }
   }
 
-  // disable default editor camera manipulation
-  static_cast<opengl::editor *>(registry->ctx().get<iapp *>())
-      ->editor_manipulate_camera = false;
+  // // disable default editor camera manipulation
+  // static_cast<opengl::editor *>(registry->ctx().get<iapp *>())
+  //     ->editor_manipulate_camera = false;
 }
 
-void motion_matching::update(iapp *app, float dt) {
+void traj_tracking::update(iapp *app, float dt) {
   float residual = cur_time - cur_exec_fixed * fixed_interval;
   while (residual > fixed_interval) {
     residual -= fixed_interval;
@@ -86,17 +42,17 @@ void motion_matching::update(iapp *app, float dt) {
   }
   cur_time += dt;
 
-  // update camera settings
-  auto &cam_trans =
-  registry->get<transform>(opengl::g_instance.active_camera); math::vector3
-  cam_fixed_pos =
-      root_pos + 3 * math::world_forward + 2 * math::world_up;
-  math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
-  cam_trans.set_world_transform(
-      math::lookat(cam_fixed_pos, cam_focus_target,
-      math::world_up).inverse());
+  // // update camera settings
+  // auto &cam_trans =
+  // registry->get<transform>(opengl::g_instance.active_camera); math::vector3
+  // cam_fixed_pos =
+  //     root_pos + 3 * math::world_forward + 2 * math::world_up;
+  // math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
+  // cam_trans.set_world_transform(
+  //     math::lookat(cam_fixed_pos, cam_focus_target,
+  //     math::world_up).inverse());
 }
-void motion_matching::fixedupdate(iapp *app, float dt) {
+void traj_tracking::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
   if (db_loaded && mapping_loaded && (actor_comp != nullptr)) {
     // input and trajectory
@@ -126,6 +82,26 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
       t_vel[i] = vel;
       t_dir[i] = t_rot[i] * math::vector3(0, 0, 1);
     }
+
+    // // override left_stick and right_stick with given trajectory
+    // if (trajectory_loaded && (current_traj_frame < traj.pos.size() - 65)) {
+    //   desired_dir = traj.facing[current_traj_frame].normalized();
+    //   desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
+    //   math::vector3 move_offset =
+    //       traj.pos[current_traj_frame + 1] - traj.pos[current_traj_frame];
+    //   desired_vel = move_offset.normalized() * 5.0f;
+
+    //   for (int i = 1; i < 4; i++) {
+    //     t_rot[i-1] = math::from_to_rot(math::world_forward,
+    //                                  traj.facing[current_traj_frame + 20 *
+    //                                  i]);
+    //     t_vel[i-1] = traj.pos[current_traj_frame + 20 * i + 1] -
+    //                traj.pos[current_traj_frame + 20 * i];
+    //     t_dir[i-1] = traj.facing[current_traj_frame + 20 * i];
+    //   }
+
+    //   current_traj_frame++;
+    // }
 
     // search
     if (search_timer < 0.0f) {
@@ -251,7 +227,7 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
   }
 }
 
-void motion_matching::draw_to_scene(iapp *app) {
+void traj_tracking::draw_to_scene(iapp *app) {
   opengl::script_draw_to_scene_proxy(app, [&](opengl::editor *editor,
                                               transform &cam_trans,
                                               opengl::camera &cam_comp) {
@@ -276,6 +252,16 @@ void motion_matching::draw_to_scene(iapp *app) {
       opengl::draw_bones(bone_pairs, cam_comp.vp, opengl::Purple);
     }
 
+    if (trajectory_loaded) {
+      opengl::draw_wire_spheres(traj.pos, cam_comp.vp, 0.005f);
+      // for (int i = 0; i < traj.facing.size(); i += 20) {
+      //   const float arrow_length = 0.05;
+      //   opengl::draw_arrow(traj.pos[i],
+      //                      traj.pos[i] + traj.facing[i] * arrow_length,
+      //                      cam_comp.vp, opengl::Green, arrow_length * 0.2);
+      // }
+    }
+
     opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_forward,
                        cam_comp.vp, opengl::Blue);
     opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_up,
@@ -285,7 +271,7 @@ void motion_matching::draw_to_scene(iapp *app) {
   });
 }
 
-void motion_matching::draw_gui(iapp *app) {
+void traj_tracking::draw_gui(iapp *app) {
   ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());
   if (ImGui::Button("Select Database", {-1, 30}))
@@ -360,10 +346,32 @@ void motion_matching::draw_gui(iapp *app) {
         mapping_loaded = true;
       }
     }
+  if (ImGui::Button("Select Trajectory", {-1, 30})) {
+    std::string filepath;
+    if (open_file_dialog("Select Trajectory File", {"*.npz"}, "*.npz",
+                         filepath)) {
+      auto data = cnpy::npz_load(filepath);
+      auto &root_pos = data["pos"];
+      auto &root_facing = data["facing"];
+      int nframes = root_pos.shape[0];
+      traj.pos.resize(nframes, math::vector3::Zero());
+      traj.facing.resize(nframes, math::vector3::Zero());
+      auto root_pos_arr = root_pos.as_vec<float>();
+      auto root_facing_arr = root_facing.as_vec<float>();
+      for (int i = 0; i < nframes; i++) {
+        traj.pos[i] << root_pos_arr[3 * i + 0], root_pos_arr[3 * i + 1],
+            root_pos_arr[3 * i + 2];
+        traj.facing[i] << root_facing_arr[3 * i + 0],
+            root_facing_arr[3 * i + 1], root_facing_arr[3 * i + 2];
+      }
+      current_traj_frame = 0;
+      trajectory_loaded = true;
+    }
+  }
 }
 
 std::array<float, MM_FEATURE_DIM>
-motion_matching::compute_runtime_feature(int frame) {
+traj_tracking::compute_runtime_feature(int frame) {
   std::array<float, MM_FEATURE_DIM> feature;
   // Xpos, Xvel
   for (int i = 0; i < 15; i++)
@@ -383,64 +391,12 @@ motion_matching::compute_runtime_feature(int frame) {
   return feature;
 }
 
-float motion_matching::feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
+float traj_tracking::feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                                     std::array<float, MM_FEATURE_DIM> &feat1) {
   float dist = 0.0f;
   for (int i = 0; i < MM_FEATURE_DIM; i++)
     dist += (feat0[i] - feat1[i]) * (feat0[i] - feat1[i]);
   return std::sqrt(dist);
-}
-
-void inertialize_transition_position(std::vector<math::vector3> &off_pos,
-                                     std::vector<math::vector3> &off_vel,
-                                     std::vector<math::vector3> src_pos,
-                                     std::vector<math::vector3> src_vel,
-                                     std::vector<math::vector3> target_pos,
-                                     std::vector<math::vector3> target_vel) {
-  int num_joints = off_pos.size();
-  for (int i = 0; i < num_joints; i++) {
-    off_pos[i] = off_pos[i] + src_pos[i] - target_pos[i];
-    off_vel[i] = off_vel[i] + src_vel[i] - target_vel[i];
-  }
-}
-
-void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
-                                     std::vector<math::vector3> &off_ang,
-                                     std::vector<math::quat> src_rot,
-                                     std::vector<math::vector3> src_ang,
-                                     std::vector<math::quat> target_rot,
-                                     std::vector<math::vector3> target_ang) {
-  int num_joints = off_rot.size();
-  for (int i = 0; i < num_joints; i++) {
-    off_rot[i] = (off_rot[i] * src_rot[i]) * (target_rot[i].inverse());
-    off_ang[i] = off_ang[i] + src_ang[i] - target_ang[i];
-  }
-}
-
-std::tuple<math::vector3, math::vector3>
-query_left_right_joystick(float deadzone) {
-  math::vector3 left_stick = math::vector3::Zero(),
-                right_stick = math::vector3::Zero();
-  for (int i = GLFW_JOYSTICK_1; i < GLFW_JOYSTICK_LAST; i++) {
-    if (glfwJoystickPresent(i)) {
-      int axes_count;
-      auto axes = glfwGetJoystickAxes(i, &axes_count);
-      float left_mag = std::sqrt(axes[0] * axes[0] + axes[1] * axes[1]);
-      float right_mag = std::sqrt(axes[2] * axes[2] + axes[3] * axes[3]);
-      if (left_mag > deadzone) {
-        float clip_mag = left_mag > 1.0 ? 1.0 : left_mag * left_mag;
-        left_stick.x() = axes[0] / left_mag * clip_mag;
-        left_stick.z() = axes[1] / left_mag * clip_mag;
-      }
-      if (right_mag > deadzone) {
-        float clip_mag = right_mag > 1.0 ? 1.0 : right_mag * right_mag;
-        right_stick.x() = axes[2] / right_mag * clip_mag;
-        right_stick.z() = axes[3] / right_mag * clip_mag;
-      }
-      break;
-    }
-  }
-  return {left_stick, right_stick};
 }
 
 }; // namespace toolkit::anim
