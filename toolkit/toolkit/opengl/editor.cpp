@@ -511,8 +511,7 @@ void editor::draw_main_menubar() {
       }
       if (ImGui::MenuItem("Save  Scene")) {
         std::string filepath;
-        if (save_file_dialog("Serialize scene file", {"*.scene"}, "Scene File",
-                             filepath)) {
+        if (save_file_dialog("Serialize scene file", {"*.scene"}, filepath)) {
           auto data = serialize();
           std::ofstream output(filepath);
           if (output.is_open()) {
@@ -526,8 +525,7 @@ void editor::draw_main_menubar() {
       }
       if (ImGui::MenuItem("Load  Scene")) {
         std::string filepath;
-        if (open_file_dialog("Deserialize scene file", {"*.scene"},
-                             "Scene File", filepath)) {
+        if (open_file_dialog("Deserialize scene file", {"*.scene"}, filepath)) {
           std::ifstream input(filepath);
           if (input.is_open()) {
             auto data = nlohmann::json::parse(
@@ -546,7 +544,7 @@ void editor::draw_main_menubar() {
       if (ImGui::MenuItem("Import Prefab")) {
         std::string filepath;
         if (open_file_dialog("Import prefab to current scene", {"*.prefab"},
-                             "*.prefab", filepath)) {
+                             filepath)) {
           std::ifstream input(filepath);
           if (input.is_open()) {
             auto data = nlohmann::json::parse(
@@ -569,7 +567,7 @@ void editor::draw_main_menubar() {
         if (open_file_dialog("Open model asset file",
                              {"*.fbx", "*.FBX", "*.obj", "*.OBJ", "*.pmx",
                               "*.PMX", "*.ply", "*.PLY"},
-                             "*.fbx, *.obj, *.pmx, *.ply", filepath)) {
+                             filepath)) {
           // assets::open_model_assimp(registry, filepath);
           if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx") ||
               endswith(filepath, ".OBJ") || endswith(filepath, ".obj")) {
@@ -589,7 +587,7 @@ void editor::draw_main_menubar() {
       if (ImGui::MenuItem("Import   BVH")) {
         std::string filepath;
         if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
-                             "*.bvh", filepath)) {
+                             filepath)) {
           spdlog::info("Load motion file {0}", filepath);
           anim::create_bvh_actor(registry, filepath);
         }
@@ -783,8 +781,7 @@ void editor::draw_entity_hierarchy() {
     }
     if (ImGui::MenuItem("Make Prefab")) {
       std::string filepath;
-      if (save_file_dialog("Save entity hierarchy as prefab", {"*.prefab"},
-                           "*.prefab", filepath)) {
+      if (save_file_dialog("Save entity hierarchy as prefab", {"*.prefab"}, filepath)) {
         auto data = make_prefab(entity);
         std::ofstream output(filepath);
         if (output.is_open()) {

@@ -1,5 +1,5 @@
-#include "toolkit/anim/scripts/motion_matching.hpp"
 #include "toolkit/anim/scripts/traj_tracking.hpp"
+#include "toolkit/anim/scripts/motion_matching.hpp"
 #include "toolkit/opengl/editor.hpp"
 
 namespace toolkit::anim {
@@ -52,58 +52,32 @@ void traj_tracking::update(iapp *app, float dt) {
   //     math::lookat(cam_fixed_pos, cam_focus_target,
   //     math::world_up).inverse());
 }
+
 void traj_tracking::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
-  if (db_loaded && mapping_loaded && (actor_comp != nullptr)) {
-    // input and trajectory
-    auto [left_stick, right_stick] =
-        query_left_right_joystick(joystick_deadzone);
-    desired_vel = 5 * left_stick;
-    if (left_stick.norm() > 0.01f)
-      desired_dir = left_stick.normalized();
-    if (right_stick.norm() > 0.01f)
-      desired_dir = right_stick.normalized();
-    desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
+  if (db_loaded && mapping_loaded && trajectory_loaded &&
+      (actor_comp != nullptr) && (current_traj_frame < traj.pos.size() - 60)) {
 
+    // look for reasonable trajectory point
+    float min_pos_dist = std::numeric_limits<float>::max();
+    int min_pos_dist_index = current_traj_frame;
+    for (int i = current_traj_frame; i < current_traj_frame + 20; i++) {
+      float pos_dist = (root_pos - traj.pos[i]).norm();
+      if (pos_dist < min_pos_dist) {
+        min_pos_dist = pos_dist;
+        min_pos_dist_index = i;
+      }
+    }
+    // use the min_pos_dist_index to generate query
     for (int i = 0; i < 3; i++) {
-      auto [vel, acc] = spring_damper_position(root_vel, root_acc, desired_vel,
-                                               math::vector3::Zero(),
-                                               t_times[i], vel_halflife);
-      auto [rot, ang] = spring_damper_rotation(root_rot, root_ang, desired_rot,
-                                               math::vector3::Zero(),
-                                               t_times[i], rot_halflife);
-      if (i == 0)
-        t_pos[i] = (root_vel + vel) * 0.5 * t_times[i] + root_pos;
-      else
-        t_pos[i] =
-            (t_vel[i - 1] + t_vel[i]) * 0.5 * (t_times[i] - t_times[i - 1]) +
-            t_pos[i - 1];
-      t_rot[i] = rot;
-      t_vel[i] = vel;
+      t_pos[i] = traj.pos[min_pos_dist_index + 20 * (i + 1)];
+      t_vel[i] = traj.vel[min_pos_dist_index + 20 * (i + 1)];
+      t_rot[i] = math::from_to_rot(
+          math::world_forward, traj.facing[min_pos_dist_index + 20 * (i + 1)]);
       t_dir[i] = t_rot[i] * math::vector3(0, 0, 1);
     }
 
-    // // override left_stick and right_stick with given trajectory
-    // if (trajectory_loaded && (current_traj_frame < traj.pos.size() - 65)) {
-    //   desired_dir = traj.facing[current_traj_frame].normalized();
-    //   desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
-    //   math::vector3 move_offset =
-    //       traj.pos[current_traj_frame + 1] - traj.pos[current_traj_frame];
-    //   desired_vel = move_offset.normalized() * 5.0f;
-
-    //   for (int i = 1; i < 4; i++) {
-    //     t_rot[i-1] = math::from_to_rot(math::world_forward,
-    //                                  traj.facing[current_traj_frame + 20 *
-    //                                  i]);
-    //     t_vel[i-1] = traj.pos[current_traj_frame + 20 * i + 1] -
-    //                traj.pos[current_traj_frame + 20 * i];
-    //     t_dir[i-1] = traj.facing[current_traj_frame + 20 * i];
-    //   }
-
-    //   current_traj_frame++;
-    // }
-
-    // search
+    // create motion feature query based on root_rot, t_pos, root_pos, t_dir
     if (search_timer < 0.0f) {
       auto Xquery = compute_runtime_feature(anim_frame);
 
@@ -153,36 +127,41 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
 
     // spdlog::info("anim frame {0}", anim_frame);
 
-    // update root
-    auto [vel, acc] =
-        spring_damper_position(root_vel, root_acc, desired_vel,
-                               math::vector3::Zero(), dt, vel_halflife);
-    auto [rot, ang] =
-        spring_damper_rotation(root_rot, root_ang, desired_rot,
-                               math::vector3::Zero(), dt, rot_halflife);
-    root_acc = acc;
-    root_ang = ang;
-    root_rot = rot;
+    // // update root
+    // auto [vel, acc] =
+    //     spring_damper_position(root_vel, root_acc, desired_vel,
+    //                            math::vector3::Zero(), dt, vel_halflife);
+    // auto [rot, ang] =
+    //     spring_damper_rotation(root_rot, root_ang, desired_rot,
+    //                            math::vector3::Zero(), dt, rot_halflife);
+    // root_acc = acc;
+    // root_ang = ang;
+    // root_rot = rot;
+    root_rot =
+        math::from_to_rot(math::world_forward, traj.facing[min_pos_dist_index]);
     root_vel = root_rot * (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
     root_pos = root_pos + root_vel * dt;
 
+    current_traj_frame++;
+
+    root_pos_history.push_back(root_pos);
+
+    return;
     // update the rest of the pose
-    data_joints_world_pos.resize(parents.size());
-    // Ypos -> local position
-    // Yrot -> local rotation
-    std::vector<math::matrix4> local_trans(parents.size()),
-        global_trans(parents.size());
-    std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
-        world_rot(parents.size(), math::quat::Identity());
-    std::vector<math::vector3> local_pos(parents.size(), math::vector3::Zero()),
-        old_local_pos(parents.size(), math::vector3::Zero());
-    math::vector3 scale_value = math::vector3::Ones();
-    float iner_halflife = 0.075;
-    for (int i = 0; i < parents.size(); i++) {
-      if (i == 0) {
-        local_trans[i] =
-            math::compose_transform(root_pos, root_rot, scale_value);
-      } else {
+    {
+      data_joints_world_pos.resize(parents.size());
+      // Ypos -> local position
+      // Yrot -> local rotation
+      std::vector<math::matrix4> local_trans(parents.size()),
+          global_trans(parents.size());
+      std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
+          world_rot(parents.size(), math::quat::Identity());
+      std::vector<math::vector3> local_pos(parents.size(),
+                                           math::vector3::Zero()),
+          old_local_pos(parents.size(), math::vector3::Zero());
+      math::vector3 scale_value = math::vector3::Ones();
+      float iner_halflife = 0.075;
+      for (int i = 0; i < parents.size(); i++) {
         auto [op, ov, out_pos, out_vel] = inertialize_update_position(
             off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
             iner_halflife, dt);
@@ -197,30 +176,32 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
         local_pos[i] = out_pos;
         local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
       }
-    }
-    old_local_pos = local_pos;
-    for (int i = 0; i < parents.size(); i++) {
-      if (parents[i] != -1) {
-        global_trans[i] = global_trans[parents[i]] * local_trans[i];
-        world_rot[i] = world_rot[parents[i]] * local_rot[i];
-      } else {
-        global_trans[i] = local_trans[i];
-        world_rot[i] = root_rot;
-      }
-    }
-
-    for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
-      auto joint_entity = actor_comp->ordered_entities[i];
-      auto &joint_trans = registry->get<transform>(joint_entity);
-      if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
-        int joint_data_idx = joint_name_to_idx[joint_trans.name];
-        if (i == 0) {
-          math::vector3 world_pos =
-              global_trans[joint_data_idx].col(3).head<3>();
-          joint_trans.set_world_pos(world_pos);
-          joint_trans.set_world_rot(world_rot[joint_data_idx]);
+      old_local_pos = local_pos;
+      for (int i = 0; i < parents.size(); i++) {
+        if (parents[i] != -1) {
+          global_trans[i] = global_trans[parents[i]] * local_trans[i];
+          world_rot[i] = world_rot[parents[i]] * local_rot[i];
         } else {
-          joint_trans.set_local_rot(local_rot[joint_data_idx]);
+          global_trans[i] =
+              math::compose_transform(root_pos, root_rot, scale_value);
+          world_rot[i] = root_rot;
+        }
+      }
+
+      for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
+        auto joint_entity = actor_comp->ordered_entities[i];
+        auto &joint_trans = registry->get<transform>(joint_entity);
+        if (joint_name_to_idx.find(joint_trans.name) !=
+            joint_name_to_idx.end()) {
+          int joint_data_idx = joint_name_to_idx[joint_trans.name];
+          if (i == 0) {
+            math::vector3 world_pos =
+                global_trans[joint_data_idx].col(3).head<3>();
+            joint_trans.set_world_pos(world_pos);
+            joint_trans.set_world_rot(world_rot[joint_data_idx]);
+          } else {
+            joint_trans.set_local_rot(local_rot[joint_data_idx]);
+          }
         }
       }
     }
@@ -253,13 +234,22 @@ void traj_tracking::draw_to_scene(iapp *app) {
     }
 
     if (trajectory_loaded) {
-      opengl::draw_wire_spheres(traj.pos, cam_comp.vp, 0.005f);
+      // std::vector<std::pair<math::vector3, math::vector3>> arrows;
+      // for (int i = 0; i < traj.facing.size(); i += 20)
+      //   arrows.emplace_back(
+      //       std::make_pair(traj.pos[i], traj.pos[i] + 0.1 * traj.facing[i]));
+      // opengl::draw_arrows(arrows, cam_comp.vp, opengl::White, 0.005f);
+      opengl::draw_wire_spheres(traj_points, cam_comp.vp, 0.005f, opengl::Red);
+      opengl::draw_linestrip(traj_points, cam_comp.vp, opengl::Red);
       // for (int i = 0; i < traj.facing.size(); i += 20) {
       //   const float arrow_length = 0.05;
       //   opengl::draw_arrow(traj.pos[i],
       //                      traj.pos[i] + traj.facing[i] * arrow_length,
       //                      cam_comp.vp, opengl::Green, arrow_length * 0.2);
       // }
+
+      opengl::draw_wire_spheres(root_pos_history, cam_comp.vp, 0.005,
+                                opengl::Red);
     }
 
     opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_forward,
@@ -274,8 +264,9 @@ void traj_tracking::draw_to_scene(iapp *app) {
 void traj_tracking::draw_gui(iapp *app) {
   ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());
+  ImGui::Text(str_format("Traj File: %s", traj_filepath.c_str()).c_str());
   if (ImGui::Button("Select Database", {-1, 30}))
-    if (open_file_dialog("Select Database", {"*.npz"}, "*.npz", db_filepath)) {
+    if (open_file_dialog("Select Database", {"*.npz"}, db_filepath)) {
       auto data = cnpy::npz_load(db_filepath);
       int num_features = data["X"].shape[0];
       auto xarr = data["X"].as_vec<float>();
@@ -334,7 +325,7 @@ void traj_tracking::draw_gui(iapp *app) {
       db_loaded = true;
     }
   if (ImGui::Button("Select Joint Mapping", {-1, 30}))
-    if (open_file_dialog("Select Joint Mapping", {"*.json"}, "*.json",
+    if (open_file_dialog("Select Joint Mapping", {"*.json"},
                          mapping_filepath)) {
       std::ifstream input(mapping_filepath);
       if (input.is_open()) {
@@ -347,23 +338,37 @@ void traj_tracking::draw_gui(iapp *app) {
       }
     }
   if (ImGui::Button("Select Trajectory", {-1, 30})) {
-    std::string filepath;
-    if (open_file_dialog("Select Trajectory File", {"*.npz"}, "*.npz",
-                         filepath)) {
-      auto data = cnpy::npz_load(filepath);
-      auto &root_pos = data["pos"];
-      auto &root_facing = data["facing"];
-      int nframes = root_pos.shape[0];
-      traj.pos.resize(nframes, math::vector3::Zero());
-      traj.facing.resize(nframes, math::vector3::Zero());
-      auto root_pos_arr = root_pos.as_vec<float>();
-      auto root_facing_arr = root_facing.as_vec<float>();
-      for (int i = 0; i < nframes; i++) {
-        traj.pos[i] << root_pos_arr[3 * i + 0], root_pos_arr[3 * i + 1],
-            root_pos_arr[3 * i + 2];
-        traj.facing[i] << root_facing_arr[3 * i + 0],
-            root_facing_arr[3 * i + 1], root_facing_arr[3 * i + 2];
+    if (open_file_dialog("Select Trajectory File", {"*.txt"}, traj_filepath)) {
+      std::ifstream input(traj_filepath);
+      if (input.is_open()) {
+        std::string line;
+        while (std::getline(input, line)) {
+          if (line == "\n" || line == "\r\n")
+            continue;
+          auto segs = split(trim(line));
+          traj_points.push_back(math::vector3(
+              std::stof(segs[0]), std::stof(segs[1]), std::stof(segs[2])));
+        }
       }
+      // auto data = cnpy::npz_load(traj_filepath);
+      // auto &root_pos = data["pos"];
+      // auto &root_vel = data["vel"];
+      // auto &root_facing = data["facing"];
+      // int nframes = root_pos.shape[0];
+      // traj.pos.resize(nframes, math::vector3::Zero());
+      // traj.vel.resize(nframes, math::vector3::Zero());
+      // traj.facing.resize(nframes, math::vector3::Zero());
+      // auto root_pos_arr = root_pos.as_vec<float>();
+      // auto root_vel_arr = root_vel.as_vec<float>();
+      // auto root_facing_arr = root_facing.as_vec<float>();
+      // for (int i = 0; i < nframes; i++) {
+      //   traj.pos[i] << root_pos_arr[3 * i + 0], root_pos_arr[3 * i + 1],
+      //       root_pos_arr[3 * i + 2];
+      //   traj.vel[i] << root_vel_arr[3 * i + 0], root_vel_arr[3 * i + 1],
+      //       root_vel_arr[3 * i + 2];
+      //   traj.facing[i] << root_facing_arr[3 * i + 0],
+      //       root_facing_arr[3 * i + 1], root_facing_arr[3 * i + 2];
+      // }
       current_traj_frame = 0;
       trajectory_loaded = true;
     }
@@ -392,7 +397,7 @@ traj_tracking::compute_runtime_feature(int frame) {
 }
 
 float traj_tracking::feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
-                                    std::array<float, MM_FEATURE_DIM> &feat1) {
+                                  std::array<float, MM_FEATURE_DIM> &feat1) {
   float dist = 0.0f;
   for (int i = 0; i < MM_FEATURE_DIM; i++)
     dist += (feat0[i] - feat1[i]) * (feat0[i] - feat1[i]);

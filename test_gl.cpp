@@ -1,5 +1,6 @@
 #include "scripts/mesh_modify.hpp"
 #include "scripts/mixamo_manipulate.hpp"
+#include "scripts/record_proj_traj.hpp"
 #include "scripts/spring_damper.hpp"
 #include "scripts/vis_frustom_bbs.hpp"
 #include "scripts/vis_point_sequence.hpp"

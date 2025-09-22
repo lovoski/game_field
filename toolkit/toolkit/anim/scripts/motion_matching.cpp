@@ -87,15 +87,14 @@ void motion_matching::update(iapp *app, float dt) {
   cur_time += dt;
 
   // update camera settings
-  auto &cam_trans =
-  registry->get<transform>(opengl::g_instance.active_camera); math::vector3
-  cam_fixed_pos =
+  auto &cam_trans = registry->get<transform>(opengl::g_instance.active_camera);
+  math::vector3 cam_fixed_pos =
       root_pos + 3 * math::world_forward + 2 * math::world_up;
   math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
   cam_trans.set_world_transform(
-      math::lookat(cam_fixed_pos, cam_focus_target,
-      math::world_up).inverse());
+      math::lookat(cam_fixed_pos, cam_focus_target, math::world_up).inverse());
 }
+
 void motion_matching::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
   if (db_loaded && mapping_loaded && (actor_comp != nullptr)) {
@@ -186,8 +185,12 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
                                math::vector3::Zero(), dt, rot_halflife);
     root_acc = acc;
     root_ang = ang;
+    // directly use the spring synthesized rotation as root rotation
     root_rot = rot;
+    // motion database store the velocity in world space, remap it to local
+    // space of current rotation for better alignment
     root_vel = root_rot * (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
+    // update the position based on velocity from the matched motion
     root_pos = root_pos + root_vel * dt;
 
     // update the rest of the pose
@@ -203,24 +206,19 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
     math::vector3 scale_value = math::vector3::Ones();
     float iner_halflife = 0.075;
     for (int i = 0; i < parents.size(); i++) {
-      if (i == 0) {
-        local_trans[i] =
-            math::compose_transform(root_pos, root_rot, scale_value);
-      } else {
-        auto [op, ov, out_pos, out_vel] = inertialize_update_position(
-            off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
-            iner_halflife, dt);
-        auto [orf, oa, out_rot, out_ang] = inertialize_update_rotation(
-            off_rot[i], off_ang[i], Yrot[anim_frame][i], Yang[anim_frame][i],
-            iner_halflife, dt);
-        off_pos[i] = op;
-        off_vel[i] = ov;
-        off_rot[i] = orf;
-        off_ang[i] = oa;
-        local_rot[i] = out_rot;
-        local_pos[i] = out_pos;
-        local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
-      }
+      auto [op, ov, out_pos, out_vel] = inertialize_update_position(
+          off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
+          iner_halflife, dt);
+      auto [orf, oa, out_rot, out_ang] = inertialize_update_rotation(
+          off_rot[i], off_ang[i], Yrot[anim_frame][i], Yang[anim_frame][i],
+          iner_halflife, dt);
+      off_pos[i] = op;
+      off_vel[i] = ov;
+      off_rot[i] = orf;
+      off_ang[i] = oa;
+      local_rot[i] = out_rot;
+      local_pos[i] = out_pos;
+      local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
     }
     old_local_pos = local_pos;
     for (int i = 0; i < parents.size(); i++) {
@@ -228,7 +226,10 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
         global_trans[i] = global_trans[parents[i]] * local_trans[i];
         world_rot[i] = world_rot[parents[i]] * local_rot[i];
       } else {
-        global_trans[i] = local_trans[i];
+        // replace the transform of simulation object with the user-controlled
+        // variables
+        global_trans[i] =
+            math::compose_transform(root_pos, root_rot, scale_value);
         world_rot[i] = root_rot;
       }
     }
@@ -289,7 +290,7 @@ void motion_matching::draw_gui(iapp *app) {
   ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());
   if (ImGui::Button("Select Database", {-1, 30}))
-    if (open_file_dialog("Select Database", {"*.npz"}, "*.npz", db_filepath)) {
+    if (open_file_dialog("Select Database", {"*.npz"}, db_filepath)) {
       auto data = cnpy::npz_load(db_filepath);
       int num_features = data["X"].shape[0];
       auto xarr = data["X"].as_vec<float>();
@@ -348,7 +349,7 @@ void motion_matching::draw_gui(iapp *app) {
       db_loaded = true;
     }
   if (ImGui::Button("Select Joint Mapping", {-1, 30}))
-    if (open_file_dialog("Select Joint Mapping", {"*.json"}, "*.json",
+    if (open_file_dialog("Select Joint Mapping", {"*.json"},
                          mapping_filepath)) {
       std::ifstream input(mapping_filepath);
       if (input.is_open()) {

@@ -10,6 +10,59 @@ namespace fs = std::filesystem;
 
 namespace toolkit {
 
+std::string ltrim(std::string str) {
+  str.erase(str.begin(),
+            std::find_if(str.begin(), str.end(),
+                         [](unsigned char ch) { return !std::isspace(ch); }));
+  return str;
+}
+
+std::string rtrim(std::string str) {
+  str.erase(std::find_if(str.rbegin(), str.rend(),
+                         [](unsigned char ch) { return !std::isspace(ch); })
+                .base(),
+            str.end());
+  return str;
+}
+
+std::string trim(std::string str) { return ltrim(rtrim(str)); }
+
+std::vector<std::string> split(const std::string &str,
+                               const std::string &delim) {
+  std::vector<std::string> result;
+
+  // Handle empty string input
+  if (str.empty()) {
+    return result;
+  }
+
+  // If no delimiter specified, split on whitespace (like Python)
+  if (delim.empty()) {
+    std::string::size_type start = 0, end = 0;
+    while ((start = str.find_first_not_of(" \t\r\n", end)) !=
+           std::string::npos) {
+      end = str.find_first_of(" \t\r\n", start);
+      if (end == std::string::npos) {
+        result.push_back(str.substr(start));
+        break;
+      }
+      result.push_back(str.substr(start, end - start));
+    }
+    return result;
+  }
+
+  // Split on specified delimiter
+  std::string::size_type start = 0, end = 0;
+  while ((end = str.find(delim, start)) != std::string::npos) {
+    result.push_back(str.substr(start, end - start));
+    start = end + delim.length();
+  }
+  // Add the last part
+  result.push_back(str.substr(start));
+
+  return result;
+}
+
 std::string lower_case(std::string str) {
   std::transform(str.begin(), str.end(), str.begin(),
                  [](unsigned char c) { return std::tolower(c); });
@@ -115,7 +168,10 @@ bool open_folder_dialog(std::string title, std::string &selectedFolder) {
 
 bool save_file_dialog(std::string title,
                       std::vector<const char *> filterPatterns,
-                      std::string description, std::string &selectedFile) {
+                      std::string &selectedFile) {
+  std::string description = "";
+  for (int i = 0; i < filterPatterns.size(); i++)
+    description = description + std::string(filterPatterns[i]) + " ";
   auto ret = tinyfd_saveFileDialog(title.c_str(), "./", filterPatterns.size(),
                                    filterPatterns.data(), description.c_str());
   if (ret == NULL)
@@ -126,7 +182,10 @@ bool save_file_dialog(std::string title,
 
 bool open_file_dialog(std::string title,
                       std::vector<const char *> filterPatterns,
-                      std::string description, std::string &selectedFile) {
+                      std::string &selectedFile) {
+  std::string description = "";
+  for (int i = 0; i < filterPatterns.size(); i++)
+    description = description + std::string(filterPatterns[i]) + " ";
   auto ret =
       tinyfd_openFileDialog(title.c_str(), "./", filterPatterns.size(),
                             filterPatterns.data(), description.c_str(), 0);

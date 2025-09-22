@@ -5,13 +5,25 @@
 #include <filesystem>
 #include <zlib.h>
 
-
 namespace toolkit {
 
 std::string lower_case(std::string str);
 std::string uppper_case(std::string str);
 // Check if `base` has `pattern` as a continuous substring.
 bool has_substr(std::string base, std::string pattern);
+
+// Trim whitespace from both ends of string (like Python's str.strip())
+std::string trim(std::string str);
+// Trim whitespace from left side of string (like Python's str.lstrip())
+std::string ltrim(std::string str);
+// Trim whitespace from right side of string (like Python's str.rstrip())
+std::string rtrim(std::string str);
+
+// Split string by delimiter (like Python's str.split())
+// If delim is empty, splits on whitespace like Python
+std::vector<std::string> split(const std::string &str,
+                               const std::string &delim = "");
+
 int string_hash(const std::string str);
 std::string replace(std::string str, std::string pattern, std::string replace);
 bool endswith(std::string target, std::string pattern);
@@ -35,11 +47,11 @@ bool open_folder_dialog(std::string title, std::string &selectedFolder);
 
 bool save_file_dialog(std::string title,
                       std::vector<const char *> filterPatterns,
-                      std::string description, std::string &selectedFile);
+                      std::string &selectedFile);
 
 bool open_file_dialog(std::string title,
                       std::vector<const char *> filterPatterns,
-                      std::string description, std::string &selectedFile);
+                      std::string &selectedFile);
 
 bool listdir(std::string dirpath, std::function<void(std::string)> f);
 

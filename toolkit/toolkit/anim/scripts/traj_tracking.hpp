@@ -1,13 +1,17 @@
 #pragma once
 
 #include "toolkit/anim/components/actor.hpp"
+#include "toolkit/anim/scripts/motion_matching.hpp"
 #include "toolkit/opengl/base.hpp"
 #include "toolkit/opengl/draw.hpp"
 #include "toolkit/scriptable.hpp"
-#include "toolkit/anim/scripts/motion_matching.hpp"
 #include <cnpy.h>
 
 namespace toolkit::anim {
+
+struct motion_trajectory {
+  std::vector<math::vector3> pos, vel, facing;
+};
 
 class traj_tracking : public scriptable {
 public:
@@ -22,12 +26,11 @@ public:
 
 private:
   // if trajectory loaded, then follow the trajectory instead of user input
-  bool trajectory_loaded = false;
   int current_traj_frame = 0;
   motion_trajectory traj;
-
-  bool db_loaded, mapping_loaded = false;
-  std::string db_filepath = "", mapping_filepath = "";
+  std::vector<math::vector3> traj_points;
+  bool db_loaded, mapping_loaded = false, trajectory_loaded = false;
+  std::string db_filepath = "", mapping_filepath = "", traj_filepath = "";
   std::map<std::string, int> joint_name_to_idx;
 
   int cur_exec_fixed = 0;
@@ -52,14 +55,19 @@ private:
   std::vector<math::matrix4> actor_bind_mat;
 
   std::vector<float> t_times = {20.0f / 60.0f, 40.0f / 60.0f, 60.0f / 60.0f};
+  // trajectory positions in world space
   std::vector<math::vector3> t_pos =
       std::vector<math::vector3>(3, math::vector3::Zero());
+  // trajectory velocity in world space
   std::vector<math::vector3> t_vel =
       std::vector<math::vector3>(3, math::vector3::Zero());
+  // trajectory facing direction in world space, computed based on t_rot
   std::vector<math::vector3> t_dir =
       std::vector<math::vector3>(3, math::vector3(0, 0, 1));
   std::vector<math::quat> t_rot =
       std::vector<math::quat>(3, math::quat::Identity());
+
+  std::vector<math::vector3> root_pos_history;
 
   int anim_range = 0, anim_frame = 0;
   int best_range = 0, best_frame = 0;

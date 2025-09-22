@@ -30,7 +30,7 @@ public:
   void draw_gui(iapp *app) override {
     ImGui::Text("BVH Motion Path: %s", filepath.c_str());
     if (ImGui::Button("Import Motion", {-1, 30})) {
-      if (open_file_dialog("Slect Motion File", {"*.bvh"}, "*.bvh", filepath)) {
+      if (open_file_dialog("Slect Motion File", {"*.bvh"}, filepath)) {
         motion.load(filepath);
         motion_loaded = true;
       }

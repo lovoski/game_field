@@ -1,10 +1,11 @@
 #include "toolkit/anim/anim_system.hpp"
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/motion_matching.hpp"
-#include "toolkit/anim/scripts/traj_tracking.hpp"
 #include "toolkit/anim/scripts/motion_player.hpp"
 #include "toolkit/anim/scripts/tps_cam_controller.hpp"
+#include "toolkit/anim/scripts/traj_tracking.hpp"
 #include <spdlog/spdlog.h>
+
 
 namespace toolkit::anim {
 
@@ -19,7 +20,7 @@ void anim_system::draw_gui(entt::registry &registry, entt::entity entity) {
         auto bvh_str = make_current_pose_bvh(
             registry, registry.get<transform>(ptr->ordered_entities[0]));
         std::string save_filepath;
-        if (save_file_dialog(str_format("Save .bvh pose"), {"*.bvh"}, "*.bvh",
+        if (save_file_dialog(str_format("Save .bvh pose"), {"*.bvh"},
                              save_filepath)) {
           std::ofstream output(save_filepath);
           if (output.is_open())

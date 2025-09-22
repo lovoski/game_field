@@ -335,7 +335,7 @@ def extract_motion_trajectory(base_dir, output_dir):
         np.savez(
             os.path.join(output_dir, file.replace(".bvh", ".npz")),
             pos=root_pos.astype(np.float32),
-            vel=root_vel,
+            vel=root_vel.astype(np.float32),
             facing=root_facing.astype(np.float32),
         )
 

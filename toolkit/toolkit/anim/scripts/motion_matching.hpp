@@ -49,10 +49,6 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
                             math::quat in_rot, math::vector3 in_ang,
                             float halflife, float dt);
 
-struct motion_trajectory {
-  std::vector<math::vector3> pos, facing;
-};
-
 class motion_matching : public scriptable {
 public:
   void start() override;

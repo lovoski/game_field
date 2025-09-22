@@ -7,7 +7,6 @@
 #include "toolkit/loaders/motion.hpp"
 #include "toolkit/opengl/draw.hpp"
 
-
 #include <cnpy.h>
 
 struct vis_point_sequence : public toolkit::scriptable {
@@ -48,8 +47,7 @@ struct vis_point_sequence : public toolkit::scriptable {
   void draw_gui(toolkit::iapp *app) override {
     if (ImGui::Button("Load .npy file", {-1, 30})) {
       std::string filepath;
-      if (toolkit::open_file_dialog("Select .npy file", {"*.npy"}, "*.npy",
-                                    filepath)) {
+      if (toolkit::open_file_dialog("Select .npy file", {"*.npy"}, filepath)) {
         auto data = cnpy::npy_load(filepath);
         if (data.word_size == 4)
           fill_positions<float>(data);
@@ -59,8 +57,7 @@ struct vis_point_sequence : public toolkit::scriptable {
     }
     if (ImGui::Button("Load .bvh file", {-1, 30})) {
       std::string filepath;
-      if (toolkit::open_file_dialog("Select .bvh file", {"*.bvh"}, "*.bvh",
-                                    filepath)) {
+      if (toolkit::open_file_dialog("Select .bvh file", {"*.bvh"}, filepath)) {
         motion_data.load(filepath, 0.01f);
       }
     }
@@ -87,10 +84,13 @@ struct vis_point_sequence : public toolkit::scriptable {
                      tmp_vec)
                         .head<3>();
               }
-              std::vector<std::pair<toolkit::math::vector3, toolkit::math::vector3>> bones;
+              std::vector<
+                  std::pair<toolkit::math::vector3, toolkit::math::vector3>>
+                  bones;
               for (int i = 0; i < parents.size(); i++)
                 if (parents[i] != -1)
-                  bones.push_back(std::make_pair(tmp_pos[parents[i]], tmp_pos[i]));
+                  bones.push_back(
+                      std::make_pair(tmp_pos[parents[i]], tmp_pos[i]));
               toolkit::opengl::draw_bones(bones, cam_comp.vp, positions_color);
               if (motion_data.skel.get_num_joints() != 0) {
                 auto frame_data = motion_data.at(current_frame);
@@ -99,11 +99,17 @@ struct vis_point_sequence : public toolkit::scriptable {
                 toolkit::math::vector4 tmp_vec0, tmp_vec1;
                 for (int i = 0; i < motion_data.skel.joint_parent.size(); i++) {
                   if (motion_data.skel.joint_parent[i] != -1) {
-                    tmp_vec0<<motion_pos[motion_data.skel.joint_parent[i]],1.0f;
-                    tmp_vec1<<motion_pos[i],1.0f;
-                    tmp_vec0 = registry->get<toolkit::transform>(entity).matrix()*tmp_vec0;
-                    tmp_vec1 = registry->get<toolkit::transform>(entity).matrix()*tmp_vec1;
-                    bones.push_back(std::make_pair(tmp_vec0.head<3>(), tmp_vec1.head<3>()));
+                    tmp_vec0 << motion_pos[motion_data.skel.joint_parent[i]],
+                        1.0f;
+                    tmp_vec1 << motion_pos[i], 1.0f;
+                    tmp_vec0 =
+                        registry->get<toolkit::transform>(entity).matrix() *
+                        tmp_vec0;
+                    tmp_vec1 =
+                        registry->get<toolkit::transform>(entity).matrix() *
+                        tmp_vec1;
+                    bones.push_back(
+                        std::make_pair(tmp_vec0.head<3>(), tmp_vec1.head<3>()));
                   }
                 }
                 toolkit::opengl::draw_bones(bones, cam_comp.vp, motion_color);
@@ -119,7 +125,7 @@ struct vis_point_sequence : public toolkit::scriptable {
         });
   }
 
-  void update(toolkit::iapp* app, float dt) override {
+  void update(toolkit::iapp *app, float dt) override {
     if (auto_play) {
       current_time += dt;
       current_frame = std::round(current_time * fps);
@@ -130,7 +136,8 @@ struct vis_point_sequence : public toolkit::scriptable {
   int fps = 30;
   float current_time = 0.0f;
   bool auto_play = false, motion_loaded = false;
-  toolkit::math::vector3 positions_color = toolkit::opengl::Red, motion_color = toolkit::opengl::Purple;
+  toolkit::math::vector3 positions_color = toolkit::opengl::Red,
+                         motion_color = toolkit::opengl::Purple;
   std::vector<entt::entity> entities;
   std::vector<std::vector<toolkit::math::vector3>> positions;
   std::vector<int> parents;
