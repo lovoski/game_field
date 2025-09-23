@@ -84,12 +84,18 @@ def build_motion_db(files):
             names = np.array(["Simulation"] + bvhData["names"])
 
             # Compute velocities via central difference
+            # vel = np.empty_like(pos)
+            # vel[1:-1] = (
+            #     0.5 * (pos[2:] - pos[1:-1]) * 60.0 + 0.5 * (pos[1:-1] - pos[:-2]) * 60.0
+            # )
+            # vel[0] = vel[1] - (vel[3] - vel[2])
+            # vel[-1] = vel[-2] + (vel[-2] - vel[-3])
+
+            # directly use position difference as velocity
             vel = np.empty_like(pos)
-            vel[1:-1] = (
-                0.5 * (pos[2:] - pos[1:-1]) * 60.0 + 0.5 * (pos[1:-1] - pos[:-2]) * 60.0
-            )
-            vel[0] = vel[1] - (vel[3] - vel[2])
-            vel[-1] = vel[-2] + (vel[-2] - vel[-3])
+            vel[:-1] = pos[1:]-pos[:-1]
+            vel[-1] = vel[-2]
+            vel *= 60
 
             # Same for angular velocities
             ang = np.zeros_like(pos)
@@ -201,28 +207,28 @@ def compute_db_features(
 
 
 def create_mm_db(base_dir):
-    files = []
-    # files = [
-    #     (
-    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/pushAndStumble1_subject5.bvh",
-    #         397,
-    #         706,
-    #     ),
-    #     (
-    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/run1_subject5.bvh",
-    #         172,
-    #         14136,
-    #     ),
-    #     (
-    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_retarget_to_smpl_processed/walk1_subject5.bvh",
-    #         160,
-    #         15518,
-    #     ),
-    # ]
-    for fn in os.listdir(base_dir):
-        if not fn.endswith(".bvh"):
-            continue
-        files.append((os.path.join(base_dir, fn), 0, -1))
+    # files = []
+    # for fn in os.listdir(base_dir):
+    #     if not fn.endswith(".bvh"):
+    #         continue
+    #     files.append((os.path.join(base_dir, fn), 0, -1))
+    files = [
+        (
+            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/pushAndStumble1_subject5.bvh",
+            397,
+            706,
+        ),
+        (
+            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/run1_subject5.bvh",
+            172,
+            14136,
+        ),
+        (
+            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/walk1_subject5.bvh",
+            160,
+            15518,
+        ),
+    ]
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
         files
     )
@@ -293,6 +299,16 @@ def process_interact_data(base_dir, output_dir):
         bvh.save(os.path.join(output_dir, file), data)
 
 
+def process_lafan1_data(base_dir, output_dir):
+    for file in os.listdir(base_dir):
+        if not file.endswith(".bvh"):
+            continue
+        data = bvh.load(os.path.join(base_dir, file))
+        data["positions"] = 0.01 * data["positions"]
+        data["offsets"] = 0.01 * data["offsets"]
+        bvh.save(os.path.join(output_dir, file), data)
+
+
 def extract_motion_trajectory(base_dir, output_dir):
     from scipy.spatial.transform import Rotation
     from tqdm import tqdm
@@ -312,36 +328,43 @@ def extract_motion_trajectory(base_dir, output_dir):
         # 1. the direction at each frame as the simulated input for left joystick
         # 2. the root facing direction as the simulated input for right joystick
 
-        root_pos = root_pos[1:-1].copy()
-        root_pos[:, 1] = 0
-        init_root_pos = root_pos[0].copy()
-        root_pos -= init_root_pos
-        root_vel = np.zeros_like(root_pos)
-        root_vel[1:-1] = (
-            0.5 * (root_pos[2:] - root_pos[1:-1]) * 60
-            + 0.5 * (root_pos[1:-1] - root_pos[:-2]) * 60
-        )
-        root_vel[0] = root_vel[1] - (root_vel[3] - root_vel[2])
-        root_vel[-1] = root_vel[-2] + (root_vel[-2] - root_vel[-3])
-        root_facing = np.zeros((nframes - 2, 3))
-        for f in range(1, nframes - 1):
+        root_pos = np.array([1, 0, 1]) * root_pos
+        root_facing = np.zeros((nframes, 3))
+        for f in range(nframes):
             facing_dir = Rotation.from_quat(root_rot[f, [1, 2, 3, 0]]).apply(
                 np.array([0, 0, 1])
             )
             facing_dir[1] = 0
-            facing_dir /= np.linalg.norm(facing_dir) + 1e-5
-            root_facing[f - 1] = facing_dir
+            facing_dir /= (np.linalg.norm(facing_dir) + 1e-5)
+            root_facing[f] = facing_dir
+        root_pos = signal.savgol_filter(root_pos, 31, 3, axis=0, mode='interp')
+        root_facing = signal.savgol_filter(root_facing, 61, 3, axis=0, mode='interp')
+        root_facing = root_facing / np.linalg.norm(root_facing, axis=1, keepdims=True)
 
-        np.savez(
-            os.path.join(output_dir, file.replace(".bvh", ".npz")),
-            pos=root_pos.astype(np.float32),
-            vel=root_vel.astype(np.float32),
-            facing=root_facing.astype(np.float32),
-        )
+        with open(os.path.join(output_dir, file.replace('.bvh', '.txt')), 'w') as f:
+            for frame in range(root_pos.shape[0]):
+                f.write(f'{root_pos[frame, 0]:.3f} {root_pos[frame, 1]:.3f} {root_pos[frame, 2]:.3f} {root_facing[frame, 0]:.3f} {root_facing[frame, 1]:.3f} {root_facing[frame, 2]:.3f}\n')
+        # np.savez(
+        #     os.path.join(output_dir, file.replace(".bvh", ".npz")),
+        #     pos=root_pos.astype(np.float32),
+        #     vel=root_vel.astype(np.float32),
+        #     facing=root_facing.astype(np.float32),
+        # )
 
 
 if __name__ == "__main__":
     import os
+
+    lafan1_base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion'
+    lafan1_processed_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed'
+    lafan1_traj_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed_traj'
+    os.makedirs(lafan1_processed_dir, exist_ok=True)
+    os.makedirs(lafan1_traj_dir, exist_ok=True)
+    # process_lafan1_data(lafan1_base_dir, lafan1_processed_dir)
+    
+    extract_motion_trajectory(lafan1_processed_dir, lafan1_traj_dir)
+    
+    # create_mm_db(lafan1_processed_dir)
 
     # # base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/persona_to_smpl_processed'
     # base_dir = 'data/InterAct/bvh'
@@ -354,11 +377,11 @@ if __name__ == "__main__":
 
     # extract_motion_trajectory(mm_processed_dir, traj_output_dir)
 
-    base_dir = "data/lafan1/bvh"
-    processed_dir = "data/lafan1/processed_bvh"
-    traj_output_dir = "data/lafan1/traj_output"
-    os.makedirs(traj_output_dir, exist_ok=True)
-    extract_motion_trajectory(processed_dir, traj_output_dir)
+    # base_dir = "data/lafan1/bvh"
+    # processed_dir = "data/lafan1/processed_bvh"
+    # traj_output_dir = "data/lafan1/traj_output"
+    # os.makedirs(traj_output_dir, exist_ok=True)
+    # extract_motion_trajectory(processed_dir, traj_output_dir)
     # os.makedirs(processed_dir, exist_ok=True)
     # from tqdm import tqdm
     # for file in tqdm(os.listdir(base_dir)):

@@ -82,6 +82,9 @@ private:
   math::vector3 desired_vel = math::vector3::Zero(),
                 desired_dir = math::vector3(0, 0, 1);
 
+  math::quat db_start_rot = math::quat::Identity(),
+             ent_start_rot = math::quat::Identity();
+
   std::vector<math::quat> actor_bind_rot;
   std::vector<math::vector3> actor_bind_pos, data_joints_world_pos;
   std::vector<math::matrix4> actor_bind_mat;

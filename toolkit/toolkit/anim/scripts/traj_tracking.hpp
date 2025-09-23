@@ -9,8 +9,13 @@
 
 namespace toolkit::anim {
 
-struct motion_trajectory {
-  std::vector<math::vector3> pos, vel, facing;
+struct mm_context {
+  math::vector3 root_world_pos = math::vector3::Zero(),
+                root_world_vel = math::vector3::Zero(),
+                root_world_acc = math::vector3::Zero(),
+                root_world_ang = math::vector3::Zero();
+  math::quat root_world_rot = math::quat::Identity();
+  std::array<math::vector3, 3> traj_world_pos, traj_world_dir;
 };
 
 class traj_tracking : public scriptable {
@@ -26,46 +31,35 @@ public:
 
 private:
   // if trajectory loaded, then follow the trajectory instead of user input
-  int current_traj_frame = 0;
-  motion_trajectory traj;
-  std::vector<math::vector3> traj_points;
+  int applied_traj_frame = 0;
+  std::vector<math::vector3> traj_points, traj_facing;
   bool db_loaded, mapping_loaded = false, trajectory_loaded = false;
   std::string db_filepath = "", mapping_filepath = "", traj_filepath = "";
   std::map<std::string, int> joint_name_to_idx;
 
+  math::quat desired_rot = math::quat::Identity();
+
+  math::quat db_start_rot = math::quat::Identity(),
+             ent_start_rot = math::quat::Identity();
+
+  mm_context cur_context;
+  std::tuple<float, int, int> lhmm(mm_context context, int cur_frame,
+                                   int cur_range, int k, int l);
+
+  // fixed update related local variables
   int cur_exec_fixed = 0;
+  float cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
+
   float joystick_deadzone = 0.2f;
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;
-  float cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
   float search_time = 0.25f, search_timer = search_time;
-  math::vector3 root_pos = math::vector3::Zero(),
-                root_vel = math::vector3::Zero(),
-                root_acc = math::vector3::Zero(),
-                root_ang = math::vector3::Zero();
-  // math::vector3 chara_pos = math::vector3::Zero(),
-  //               chara_vel = math::vector3::Zero();
-  math::quat root_rot = math::quat::Identity(),
-             desired_rot = math::quat::Identity();
-  math::vector3 desired_vel = math::vector3::Zero(),
-                desired_dir = math::vector3(0, 0, 1);
 
   std::vector<math::quat> actor_bind_rot;
   std::vector<math::vector3> actor_bind_pos, data_joints_world_pos;
   std::vector<math::matrix4> actor_bind_mat;
 
   std::vector<float> t_times = {20.0f / 60.0f, 40.0f / 60.0f, 60.0f / 60.0f};
-  // trajectory positions in world space
-  std::vector<math::vector3> t_pos =
-      std::vector<math::vector3>(3, math::vector3::Zero());
-  // trajectory velocity in world space
-  std::vector<math::vector3> t_vel =
-      std::vector<math::vector3>(3, math::vector3::Zero());
-  // trajectory facing direction in world space, computed based on t_rot
-  std::vector<math::vector3> t_dir =
-      std::vector<math::vector3>(3, math::vector3(0, 0, 1));
-  std::vector<math::quat> t_rot =
-      std::vector<math::quat>(3, math::quat::Identity());
 
   std::vector<math::vector3> root_pos_history;
 
@@ -81,7 +75,8 @@ private:
   std::vector<std::vector<math::quat>> Yrot;
   std::vector<int> YrangeStarts, YrangeStops, parents;
   std::vector<std::string> names;
-  std::array<float, MM_FEATURE_DIM> compute_runtime_feature(int frame);
+  std::array<float, MM_FEATURE_DIM>
+  compute_runtime_feature(int frame, const mm_context &context);
   float feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                      std::array<float, MM_FEATURE_DIM> &feat1);
 };

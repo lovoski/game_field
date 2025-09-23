@@ -53,55 +53,116 @@ void traj_tracking::update(iapp *app, float dt) {
   //     math::world_up).inverse());
 }
 
-void traj_tracking::fixedupdate(iapp *app, float dt) {
-  auto actor_comp = registry->try_get<anim::actor>(entity);
-  if (db_loaded && mapping_loaded && trajectory_loaded &&
-      (actor_comp != nullptr) && (current_traj_frame < traj.pos.size() - 60)) {
-
-    // look for reasonable trajectory point
-    float min_pos_dist = std::numeric_limits<float>::max();
-    int min_pos_dist_index = current_traj_frame;
-    for (int i = current_traj_frame; i < current_traj_frame + 20; i++) {
-      float pos_dist = (root_pos - traj.pos[i]).norm();
-      if (pos_dist < min_pos_dist) {
-        min_pos_dist = pos_dist;
-        min_pos_dist_index = i;
+std::tuple<float, int, int> traj_tracking::lhmm(mm_context context,
+                                                int cur_frame, int cur_range,
+                                                int k, int l) {
+  auto cur_query = compute_runtime_feature(cur_frame, context);
+  float best;
+  if (best_frame < YrangeStops[cur_range] - search_time) {
+    best = feature_dist(cur_query, X[cur_frame]) - current_bias;
+  } else
+    best = std::numeric_limits<float>::max();
+  if (l == 1) {
+    // find the best and return
+    int best_pred_frame = cur_frame, best_pred_range = cur_range;
+    for (int range_idx = 0; range_idx < YrangeStarts.size(); range_idx++) {
+      // search each range for the optimal feature
+      for (int feat_idx = YrangeStarts[range_idx];
+           feat_idx < YrangeStops[range_idx] - 60; feat_idx++) {
+        float dist = feature_dist(cur_query, X[feat_idx]);
+        // find which place this dist should be
+        if (dist < best) {
+          best = dist;
+          best_pred_frame = feat_idx;
+          best_pred_range = range_idx;
+        }
       }
     }
-    // use the min_pos_dist_index to generate query
-    for (int i = 0; i < 3; i++) {
-      t_pos[i] = traj.pos[min_pos_dist_index + 20 * (i + 1)];
-      t_vel[i] = traj.vel[min_pos_dist_index + 20 * (i + 1)];
-      t_rot[i] = math::from_to_rot(
-          math::world_forward, traj.facing[min_pos_dist_index + 20 * (i + 1)]);
-      t_dir[i] = t_rot[i] * math::vector3(0, 0, 1);
+    return {best, best_pred_frame, best_pred_range};
+  } else {
+    std::vector<float> k_best_dist(k, best);
+    std::vector<int> k_best_idx(k, cur_frame), k_best_range(k, cur_range);
+    for (int i = 1; i < k; i++) {
+      k_best_dist[i] = std::numeric_limits<float>::max();
+      k_best_idx[i] = -1;
+      k_best_range[i] = -1;
     }
-
-    // create motion feature query based on root_rot, t_pos, root_pos, t_dir
-    if (search_timer < 0.0f) {
-      auto Xquery = compute_runtime_feature(anim_frame);
-
-      best_range = anim_range;
-      best_frame = anim_frame;
-
-      float best;
-      if (best_frame < YrangeStops[best_range] - search_time) {
-        best = feature_dist(Xquery, X[best_frame]) - current_bias;
-      } else
-        best = std::numeric_limits<float>::max();
-
-      for (int range_idx = 0; range_idx < YrangeStarts.size(); range_idx++) {
-        // search each range for the optimal feature
-        for (int feat_idx = YrangeStarts[range_idx];
-             feat_idx < YrangeStops[range_idx] - 60; feat_idx++) {
-          float dist = feature_dist(Xquery, X[feat_idx]);
-          if (dist < best) {
-            best = dist;
-            best_range = range_idx;
-            best_frame = feat_idx;
+    for (int range_idx = 0; range_idx < YrangeStarts.size(); range_idx++) {
+      // search each range for the optimal feature
+      for (int feat_idx = YrangeStarts[range_idx];
+           feat_idx < YrangeStops[range_idx] - 60; feat_idx++) {
+        float dist = feature_dist(cur_query, X[feat_idx]);
+        // find which place this dist should be
+        for (int bi = 0; bi < k; bi++) {
+          if (dist < k_best_dist[bi]) {
+            if (bi != k - 1) {
+              k_best_dist[bi + 1] = k_best_dist[bi];
+              k_best_idx[bi + 1] = k_best_idx[bi];
+              k_best_range[bi + 1] = k_best_range[bi];
+            }
+            k_best_dist[bi] = dist;
+            k_best_idx[bi] = feat_idx;
+            k_best_range[bi] = range_idx;
           }
         }
       }
+    }
+    // find the most promising one as return value
+    float best_pred_dist = std::numeric_limits<float>::max();
+    int best_pred_k = -1;
+    for (int i = 0; i < k; i++) {
+      // contruct the predicted context after search_time
+      mm_context pred_context;
+
+      // use the predicted context to perform recursive search
+      auto [pred_dist, pred_frame, pred_range] =
+          lhmm(pred_context, k_best_idx[i], k_best_range[i], k, l - 1);
+      if (pred_dist < best_pred_dist) {
+        best_pred_dist = pred_dist;
+        best_pred_k = i;
+      }
+    }
+    return {best_pred_dist, k_best_idx[best_pred_k], k_best_range[best_pred_k]};
+  }
+}
+
+void traj_tracking::fixedupdate(iapp *app, float dt) {
+  auto actor_comp = registry->try_get<anim::actor>(entity);
+  if (db_loaded && mapping_loaded && trajectory_loaded &&
+      (actor_comp != nullptr)) {
+    if (search_timer < 0.0f) {
+      // find the closest point on trajectory as a start point
+      float min_traj_diff = std::numeric_limits<float>::max();
+      int min_traj_idx = -1;
+      for (int i = std::min(applied_traj_frame + 1,
+                            static_cast<int>(traj_points.size() - 1));
+           i < std::min(applied_traj_frame + 60,
+                        static_cast<int>(traj_points.size() - 1));
+           i++) {
+        float traj_diff = (cur_context.root_world_pos - traj_points[i]).norm();
+        if (traj_diff < min_traj_diff) {
+          min_traj_diff = traj_diff;
+          min_traj_idx = i;
+        }
+      }
+      applied_traj_frame = min_traj_idx;
+      // we assume the trajectory and motion share the same frequency, so the
+      // query must ensure within one search_time window, the trajectory and
+      // character root motion match best
+      for (int i = 0; i < 3; i++) {
+        int sample_idx = std::min(applied_traj_frame + 5 * (i + 1),
+                                  static_cast<int>(traj_points.size() - 1));
+        cur_context.traj_world_pos[i] = traj_points[sample_idx];
+        cur_context.traj_world_dir[i] = traj_facing[sample_idx];
+      }
+      desired_rot =
+          math::from_to_rot(math::world_forward, cur_context.traj_world_dir[0]);
+
+      // perform the optimized recursive search
+      auto [search_best_dist, search_best_frame, search_best_range] =
+          lhmm(cur_context, anim_frame, anim_range, 3, 1);
+      best_frame = search_best_frame;
+      best_range = search_best_range;
 
       if ((best_range != anim_range) || (best_frame != anim_frame)) {
         // make transition to the new motion
@@ -116,7 +177,11 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
         anim_frame = best_frame;
       }
       search_timer = search_time;
+
+      db_start_rot = Yrot[best_frame][0];
+      ent_start_rot = cur_context.root_world_rot;
     }
+    // increment the animate frame by one
     anim_frame = std::clamp(anim_frame + 1.0f,
                             static_cast<float>(YrangeStarts[anim_range]),
                             static_cast<float>(YrangeStops[anim_range] - 1));
@@ -125,28 +190,23 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
     if (anim_frame >= YrangeStops[anim_range] - 4)
       search_timer = 0.0f;
 
-    // spdlog::info("anim frame {0}", anim_frame);
+    // auto [rot, ang] = spring_damper_rotation(
+    //     cur_context.root_world_rot, cur_context.root_world_ang, desired_rot,
+    //     math::vector3::Zero(), dt, rot_halflife);
 
-    // // update root
-    // auto [vel, acc] =
-    //     spring_damper_position(root_vel, root_acc, desired_vel,
-    //                            math::vector3::Zero(), dt, vel_halflife);
-    // auto [rot, ang] =
-    //     spring_damper_rotation(root_rot, root_ang, desired_rot,
-    //                            math::vector3::Zero(), dt, rot_halflife);
-    // root_acc = acc;
-    // root_ang = ang;
-    // root_rot = rot;
-    root_rot =
-        math::from_to_rot(math::world_forward, traj.facing[min_pos_dist_index]);
-    root_vel = root_rot * (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
-    root_pos = root_pos + root_vel * dt;
+    // update cur_context given anim_frame and anim_range
+    // cur_context.root_world_ang = ang;
+    // cur_context.root_world_rot = rot;
+    cur_context.root_world_rot =
+        (Yrot[anim_frame][0] * (db_start_rot.inverse())) * ent_start_rot;
+    cur_context.root_world_vel =
+        cur_context.root_world_rot *
+        (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
+    cur_context.root_world_pos += cur_context.root_world_vel * dt;
 
-    current_traj_frame++;
+    root_pos_history.push_back(cur_context.root_world_pos);
 
-    root_pos_history.push_back(root_pos);
-
-    return;
+    // return;
     // update the rest of the pose
     {
       data_joints_world_pos.resize(parents.size());
@@ -183,8 +243,9 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
           world_rot[i] = world_rot[parents[i]] * local_rot[i];
         } else {
           global_trans[i] =
-              math::compose_transform(root_pos, root_rot, scale_value);
-          world_rot[i] = root_rot;
+              math::compose_transform(cur_context.root_world_pos,
+                                      cur_context.root_world_rot, scale_value);
+          world_rot[i] = cur_context.root_world_rot;
         }
       }
 
@@ -212,13 +273,22 @@ void traj_tracking::draw_to_scene(iapp *app) {
   opengl::script_draw_to_scene_proxy(app, [&](opengl::editor *editor,
                                               transform &cam_trans,
                                               opengl::camera &cam_comp) {
-    opengl::draw_wire_spheres(t_pos, cam_comp.vp, 0.1f);
-    opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
-                       opengl::Purple);
-    for (int i = 0; i < 3; i++)
-      opengl::draw_arrow(t_pos[i], t_pos[i] + t_dir[i], cam_comp.vp,
-                         opengl::Green);
-    opengl::draw_wire_sphere(root_pos, cam_comp.vp, 0.1f, opengl::Red);
+    // opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
+    //                    opengl::Purple);
+    for (int i = 0; i < 3; i++) {
+      opengl::draw_wire_sphere(cur_context.traj_world_pos[i], cam_comp.vp, 0.1f,
+                               opengl::Green);
+      opengl::draw_arrow(cur_context.traj_world_pos[i],
+                         cur_context.traj_world_pos[i] +
+                             cur_context.traj_world_dir[i],
+                         cam_comp.vp, opengl::Green);
+    }
+
+    if (trajectory_loaded)
+      opengl::draw_wire_sphere(traj_points[applied_traj_frame], cam_comp.vp,
+                               0.1f, opengl::Purple);
+
+    // opengl::draw_wire_sphere(root_pos, cam_comp.vp, 0.1f, opengl::Red);
 
     // opengl::draw_wire_spheres(data_joints_world_pos, cam_comp.vp, 0.1f,
     //                           opengl::Purple);
@@ -249,14 +319,17 @@ void traj_tracking::draw_to_scene(iapp *app) {
       // }
 
       opengl::draw_wire_spheres(root_pos_history, cam_comp.vp, 0.005,
-                                opengl::Red);
+                                opengl::Purple);
     }
 
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_forward,
+    opengl::draw_arrow(math::vector3::Zero(),
+                       cur_context.root_world_rot * math::world_forward,
                        cam_comp.vp, opengl::Blue);
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_up,
-                       cam_comp.vp, opengl::Green);
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_right,
+    opengl::draw_arrow(math::vector3::Zero(),
+                       cur_context.root_world_rot * math::world_up, cam_comp.vp,
+                       opengl::Green);
+    opengl::draw_arrow(math::vector3::Zero(),
+                       cur_context.root_world_rot * math::world_right,
                        cam_comp.vp, opengl::Red);
   });
 }
@@ -340,6 +413,7 @@ void traj_tracking::draw_gui(iapp *app) {
   if (ImGui::Button("Select Trajectory", {-1, 30})) {
     if (open_file_dialog("Select Trajectory File", {"*.txt"}, traj_filepath)) {
       std::ifstream input(traj_filepath);
+      traj_points.clear();
       if (input.is_open()) {
         std::string line;
         while (std::getline(input, line)) {
@@ -348,8 +422,17 @@ void traj_tracking::draw_gui(iapp *app) {
           auto segs = split(trim(line));
           traj_points.push_back(math::vector3(
               std::stof(segs[0]), std::stof(segs[1]), std::stof(segs[2])));
+          // traj_facing.push_back(math::vector3(
+          //     std::stof(segs[3]), std::stof(segs[4]), std::stof(segs[5])));
         }
       }
+      traj_facing.resize(traj_points.size());
+      for (int i = 1; i < traj_points.size() - 1; i++)
+        traj_facing[i] =
+            (0.5 * (traj_points[i + 1] - traj_points[i - 1])).normalized();
+      traj_facing[0] = traj_facing[1];
+      traj_facing[traj_facing.size() - 1] = traj_facing[traj_facing.size() - 2];
+
       // auto data = cnpy::npz_load(traj_filepath);
       // auto &root_pos = data["pos"];
       // auto &root_vel = data["vel"];
@@ -369,24 +452,26 @@ void traj_tracking::draw_gui(iapp *app) {
       //   traj.facing[i] << root_facing_arr[3 * i + 0],
       //       root_facing_arr[3 * i + 1], root_facing_arr[3 * i + 2];
       // }
-      current_traj_frame = 0;
+      applied_traj_frame = 0;
       trajectory_loaded = true;
     }
   }
 }
 
 std::array<float, MM_FEATURE_DIM>
-traj_tracking::compute_runtime_feature(int frame) {
+traj_tracking::compute_runtime_feature(int frame, const mm_context &context) {
   std::array<float, MM_FEATURE_DIM> feature;
   // Xpos, Xvel
   for (int i = 0; i < 15; i++)
     feature[i] = X[frame][i] * Xscale[i] + Xoffset[i];
   // XtrajPos, XtrajDir
   for (int i = 0; i < 3; i++) {
-    auto XtrajPos = root_rot.inverse() * (t_pos[i] - root_pos);
+    auto XtrajPos = context.root_world_rot.inverse() *
+                    (context.traj_world_pos[i] - context.root_world_pos);
     feature[15 + 2 * i + 0] = XtrajPos.x();
     feature[15 + 2 * i + 1] = XtrajPos.z();
-    auto XtrajDir = root_rot.inverse() * t_dir[i];
+    auto XtrajDir =
+        context.root_world_rot.inverse() * context.traj_world_dir[i];
     feature[21 + 2 * i + 0] = XtrajDir.x();
     feature[21 + 2 * i + 1] = XtrajDir.z();
   }
@@ -399,8 +484,14 @@ traj_tracking::compute_runtime_feature(int frame) {
 float traj_tracking::feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                                   std::array<float, MM_FEATURE_DIM> &feat1) {
   float dist = 0.0f;
-  for (int i = 0; i < MM_FEATURE_DIM; i++)
-    dist += (feat0[i] - feat1[i]) * (feat0[i] - feat1[i]);
+  for (int i = 0; i < MM_FEATURE_DIM; i++) {
+    float value = (feat0[i] - feat1[i]) * (feat0[i] - feat1[i]);
+    // if (i < 15)
+    //   dist += value;
+    // else
+    //   dist += 2 * value;
+    dist += value;
+  }
   return std::sqrt(dist);
 }
 

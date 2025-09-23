@@ -164,6 +164,10 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
         anim_range = best_range;
         anim_frame = best_frame;
       }
+
+      ent_start_rot = root_rot;
+      db_start_rot = Yrot[best_frame][0];
+
       search_timer = search_time;
     }
     anim_frame = std::clamp(anim_frame + 1.0f,
@@ -174,19 +178,18 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
     if (anim_frame >= YrangeStops[anim_range] - 4)
       search_timer = 0.0f;
 
-    // spdlog::info("anim frame {0}", anim_frame);
-
     // update root
-    auto [vel, acc] =
-        spring_damper_position(root_vel, root_acc, desired_vel,
-                               math::vector3::Zero(), dt, vel_halflife);
-    auto [rot, ang] =
-        spring_damper_rotation(root_rot, root_ang, desired_rot,
-                               math::vector3::Zero(), dt, rot_halflife);
-    root_acc = acc;
-    root_ang = ang;
+    // auto [vel, acc] =
+    //     spring_damper_position(root_vel, root_acc, desired_vel,
+    //                            math::vector3::Zero(), dt, vel_halflife);
+    // auto [rot, ang] =
+    //     spring_damper_rotation(root_rot, root_ang, desired_rot,
+    //                            math::vector3::Zero(), dt, rot_halflife);
+    // root_acc = acc;
+    // root_ang = ang;
     // directly use the spring synthesized rotation as root rotation
-    root_rot = rot;
+    // root_rot = rot;
+    root_rot = (Yrot[anim_frame][0] * (db_start_rot.inverse())) * ent_start_rot;
     // motion database store the velocity in world space, remap it to local
     // space of current rotation for better alignment
     root_vel = root_rot * (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
@@ -387,8 +390,14 @@ motion_matching::compute_runtime_feature(int frame) {
 float motion_matching::feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                                     std::array<float, MM_FEATURE_DIM> &feat1) {
   float dist = 0.0f;
-  for (int i = 0; i < MM_FEATURE_DIM; i++)
-    dist += (feat0[i] - feat1[i]) * (feat0[i] - feat1[i]);
+  for (int i = 0; i < MM_FEATURE_DIM; i++) {
+    float value = (feat0[i] - feat1[i]) * (feat0[i] - feat1[i]);
+    // if (i < 15)
+    //   dist += value;
+    // else
+    //   dist += 2*value;
+    dist += value;
+  }
   return std::sqrt(dist);
 }
 
