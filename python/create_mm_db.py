@@ -207,28 +207,28 @@ def compute_db_features(
 
 
 def create_mm_db(base_dir):
-    # files = []
-    # for fn in os.listdir(base_dir):
-    #     if not fn.endswith(".bvh"):
-    #         continue
-    #     files.append((os.path.join(base_dir, fn), 0, -1))
-    files = [
-        (
-            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/pushAndStumble1_subject5.bvh",
-            397,
-            706,
-        ),
-        (
-            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/run1_subject5.bvh",
-            172,
-            14136,
-        ),
-        (
-            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/walk1_subject5.bvh",
-            160,
-            15518,
-        ),
-    ]
+    files = []
+    for fn in os.listdir(base_dir):
+        if not fn.endswith(".bvh"):
+            continue
+        files.append((os.path.join(base_dir, fn), 0, -1))
+    # files = [
+    #     (
+    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/pushAndStumble1_subject5.bvh",
+    #         397,
+    #         706,
+    #     ),
+    #     (
+    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/run1_subject5.bvh",
+    #         172,
+    #         14136,
+    #     ),
+    #     (
+    #         r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/walk1_subject5.bvh",
+    #         160,
+    #         15518,
+    #     ),
+    # ]
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
         files
     )
@@ -355,14 +355,16 @@ def extract_motion_trajectory(base_dir, output_dir):
 if __name__ == "__main__":
     import os
 
-    lafan1_base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion'
-    lafan1_processed_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed'
-    lafan1_traj_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed_traj'
-    os.makedirs(lafan1_processed_dir, exist_ok=True)
-    os.makedirs(lafan1_traj_dir, exist_ok=True)
-    # process_lafan1_data(lafan1_base_dir, lafan1_processed_dir)
+    create_mm_db('/mnt/d/datasets/InterAct/mm_processed')
+
+    # lafan1_base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion'
+    # lafan1_processed_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed'
+    # lafan1_traj_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed_traj'
+    # os.makedirs(lafan1_processed_dir, exist_ok=True)
+    # os.makedirs(lafan1_traj_dir, exist_ok=True)
+    # # process_lafan1_data(lafan1_base_dir, lafan1_processed_dir)
     
-    extract_motion_trajectory(lafan1_processed_dir, lafan1_traj_dir)
+    # extract_motion_trajectory(lafan1_processed_dir, lafan1_traj_dir)
     
     # create_mm_db(lafan1_processed_dir)
 

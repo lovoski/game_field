@@ -76,6 +76,20 @@ matrix4 perspective(float fovy, float aspect, float znear, float zfar);
 matrix4 ortho(float left, float right, float top, float bottom, float zNear,
               float zFar);
 
+/**
+ * Convert rotation matrix to angle-axis representation (matrix logarithm).
+ * @param R Input 3x3 rotation matrix
+ * @return vector3 where direction is the axis and magnitude is the angle in radians
+ */
+vector3 mat_log(matrix3 R);
+
+/**
+ * Convert angle-axis to rotation matrix (matrix exponential).
+ * @param v Input vector where direction is the axis and magnitude is the angle in radians
+ * @return 3x3 rotation matrix
+ */
+matrix3 mat_exp(vector3 v);
+
 }; // namespace toolkit::math
 
 namespace nlohmann {

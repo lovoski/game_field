@@ -566,7 +566,7 @@ void editor::draw_main_menubar() {
         std::string filepath;
         if (open_file_dialog("Open model asset file",
                              {"*.fbx", "*.FBX", "*.obj", "*.OBJ", "*.pmx",
-                              "*.PMX", "*.ply", "*.PLY"},
+                              "*.PMX", "*.ply", "*.PLY", "*.stl", "*.STL"},
                              filepath)) {
           // assets::open_model_assimp(registry, filepath);
           if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx") ||

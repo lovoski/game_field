@@ -101,6 +101,74 @@ matrix4 ortho(float left, float right, float top, float bottom, float zNear,
   return Result;
 }
 
+vector3 mat_log(matrix3 R) {
+  // Get the angle from the trace
+  float trace = R.trace();
+  float cos_theta = (trace - 1.0f) * 0.5f;
+  cos_theta = std::clamp(cos_theta, -1.0f, 1.0f); // Numerical stability
+  float theta = std::acos(cos_theta);
+
+  // If angle is close to 0 or π, handle special cases
+  if (theta < 1e-6f) {
+    return vector3::Zero(); // No rotation
+  } else if (std::abs(theta - 3.1415926) < 1e-6f) {
+    // When theta = π, find the axis using the diagonal elements
+    vector3 axis(std::sqrt((R(0, 0) + 1.0f) * 0.5f),
+                 std::sqrt((R(1, 1) + 1.0f) * 0.5f),
+                 std::sqrt((R(2, 2) + 1.0f) * 0.5f));
+    // Fix signs using off-diagonal elements
+    if (R(2, 1) < R(1, 2))
+      axis.x() = -axis.x();
+    if (R(0, 2) < R(2, 0))
+      axis.y() = -axis.y();
+    if (R(1, 0) < R(0, 1))
+      axis.z() = -axis.z();
+    return theta * axis.normalized();
+  } else {
+    // General case: extract axis using skew-symmetric part
+    vector3 axis(R(2, 1) - R(1, 2), R(0, 2) - R(2, 0), R(1, 0) - R(0, 1));
+    axis = axis.normalized() * theta;
+    return axis;
+  }
+}
+
+matrix3 mat_exp(vector3 v) {
+  float theta = v.norm();
+
+  // Handle small angle case
+  if (theta < 1e-6f) {
+    return matrix3::Identity();
+  }
+
+  vector3 axis = v.normalized();
+  float cos_theta = std::cos(theta);
+  float sin_theta = std::sin(theta);
+  float one_minus_cos = 1.0f - cos_theta;
+
+  // Build rotation matrix using Rodrigues' formula
+  matrix3 R;
+  R(0, 0) = cos_theta + axis.x() * axis.x() * one_minus_cos;
+  R(1, 1) = cos_theta + axis.y() * axis.y() * one_minus_cos;
+  R(2, 2) = cos_theta + axis.z() * axis.z() * one_minus_cos;
+
+  float tmp1 = axis.x() * axis.y() * one_minus_cos;
+  float tmp2 = axis.z() * sin_theta;
+  R(0, 1) = tmp1 - tmp2;
+  R(1, 0) = tmp1 + tmp2;
+
+  tmp1 = axis.x() * axis.z() * one_minus_cos;
+  tmp2 = axis.y() * sin_theta;
+  R(0, 2) = tmp1 + tmp2;
+  R(2, 0) = tmp1 - tmp2;
+
+  tmp1 = axis.y() * axis.z() * one_minus_cos;
+  tmp2 = axis.x() * sin_theta;
+  R(1, 2) = tmp1 - tmp2;
+  R(2, 1) = tmp1 + tmp2;
+
+  return R;
+}
+
 std::tuple<quat, quat> decompose_axis(quat q, vector3 axis) {
   axis = axis.normalized();
   vector3 axisRot = q * axis;
