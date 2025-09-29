@@ -14,7 +14,7 @@ struct material_data {
   // render wireframe to mask_tex.b
   bool wireframe = true;
   float wireframe_width = 0.1f;
-  float wireframe_smooth = 0.6f;
+  float wireframe_smooth = 1.0f;
 };
 REFLECT(material_data, albedo, wireframe, wireframe_width, wireframe_smooth)
 

@@ -37,6 +37,7 @@ public:
   int grid_spacing = 1;
 
   bool should_draw_debug = true;
+  bool enable_wireframe = true;
   bool show_textures_wnd = false;
   void show_textures_wnd_func();
 

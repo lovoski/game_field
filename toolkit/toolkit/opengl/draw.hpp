@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolkit/opengl/base.hpp"
+#include "toolkit/transform.hpp"
 
 namespace toolkit::opengl {
 
@@ -37,6 +38,8 @@ void draw_arrow(math::vector3 start, math::vector3 end, math::matrix4 vp,
 void draw_arrows(
     std::vector<std::pair<math::vector3, math::vector3>> start_end_pairs,
     math::matrix4 vp, math::vector3 color = White, float size = 0.2f);
+
+void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale = false);
 
 void draw_cube(math::vector3 position, math::vector3 forward,
                math::vector3 left, math::vector3 up, math::matrix4 vp,

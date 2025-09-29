@@ -26,6 +26,7 @@ void defered_render_system::draw_menu_gui() {
 
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
+  ImGui::Checkbox("Draw Wireframe", &enable_wireframe);
   ImGui::Checkbox("Show Texture Wnd", &show_textures_wnd);
   static int capture_frame_counter = 0;
   if (ImGui::Button("Export Frame Image", {-1, 30}))
@@ -609,7 +610,8 @@ void defered_render_system::render(entt::registry &registry) {
             return; // break if not visible
           }
           gbuffer_geometry_pass.set_vec3("albedo", data.material.albedo)
-              .set_bool("wireframe", data.material.wireframe)
+              .set_bool("wireframe",
+                        data.material.wireframe && enable_wireframe)
               .set_float("wireframe_width", data.material.wireframe_width)
               .set_float("wireframe_smooth", data.material.wireframe_smooth)
               .set_mat4("gModel", data.skinned ? math::matrix4::Identity()

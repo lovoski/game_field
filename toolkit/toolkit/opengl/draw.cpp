@@ -1086,4 +1086,22 @@ void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
   vao.unbind();
 }
 
+void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale) {
+  auto xdir = trans.world_rot() * math::world_right;
+  auto ydir = trans.world_rot() * math::world_up;
+  auto zdir = trans.world_rot() * math::world_forward;
+  if (with_scale) {
+    xdir *= trans.world_scl().x();
+    ydir *= trans.world_scl().y();
+    zdir *= trans.world_scl().z();
+  }
+
+  draw_arrow(trans.world_pos(), trans.world_pos() + xdir, vp, Red,
+             xdir.norm() * 0.2f);
+  draw_arrow(trans.world_pos(), trans.world_pos() + ydir, vp, Green,
+             ydir.norm() * 0.2f);
+  draw_arrow(trans.world_pos(), trans.world_pos() + zdir, vp, Blue,
+             zdir.norm() * 0.2f);
+}
+
 }; // namespace toolkit::opengl

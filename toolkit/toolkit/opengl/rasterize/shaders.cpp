@@ -6,20 +6,31 @@ layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;
 layout (location = 2) in vec4 aTexCoord;
 
-layout(std430, binding = 0) buffer ModelMatrices {
-  mat4 gModels[];
+layout(std430, binding = 0) readonly buffer ModelMatrices {
+  mat4 gModels[]; // kept for compatibility if you want indexed models
 };
 
-uniform mat4 gVP;
-uniform mat4 gModel;
+uniform mat4 gVP;    // projection * view
+uniform mat4 gModel; // model (per-mesh)
 
 out vec3 vworldPos;
 out vec3 vworldNormal;
 
+vec3 safe_normalize(vec3 v) {
+  float len = length(v);
+  if (len > 1e-8) return v / len;
+  return vec3(0.0, 0.0, 1.0); // fallback normal
+}
+
 void main() {
-  vworldNormal = normalize(mat3(gModel)*aNormal.xyz);
-  vworldPos = (gModel * aPos).xyz;
-  gl_Position = gVP * vec4(vworldPos, 1.0);
+  vec3 worldPos = (gModel * aPos).xyz;
+  vworldPos = worldPos;
+
+  // transform normal properly (use inverse-transpose for non-uniform scale)
+  mat3 normalMat = mat3(transpose(inverse(gModel)));
+  vworldNormal = safe_normalize(normalMat * aNormal.xyz);
+
+  gl_Position = gVP * vec4(worldPos, 1.0);
 }
 )";
 std::string gbuffer_geometry_pass_gs = R"(
@@ -28,54 +39,61 @@ layout (triangles) in;
 layout (triangle_strip) out;
 layout (max_vertices = 3) out;
 
-uniform vec2 gViewport;
+uniform vec2 gViewport; // viewport size in pixels
 
 in vec3 vworldPos[];
 in vec3 vworldNormal[];
 
 out vec3 worldPos;
 out vec3 worldNormal;
-noperspective out vec3 edgeDistance;
+noperspective out vec3 edgeDistance; // per-vertex distance to opposite edge (in pixels)
+
+const float EPS = 1e-6;
 
 void main() {
+  // Recover clip-space NDC coords (x,y,z) for screen-space projection
   vec3 ndc0 = gl_in[0].gl_Position.xyz / gl_in[0].gl_Position.w;
   vec3 ndc1 = gl_in[1].gl_Position.xyz / gl_in[1].gl_Position.w;
   vec3 ndc2 = gl_in[2].gl_Position.xyz / gl_in[2].gl_Position.w;
 
-  vec2 p0 = (ndc0.xy + 1.0) * 0.5 * gViewport;
-  vec2 p1 = (ndc1.xy + 1.0) * 0.5 * gViewport;
-  vec2 p2 = (ndc2.xy + 1.0) * 0.5 * gViewport;
+  // convert to pixel-space positions
+  vec2 p0 = (ndc0.xy * 0.5 + 0.5) * gViewport;
+  vec2 p1 = (ndc1.xy * 0.5 + 0.5) * gViewport;
+  vec2 p2 = (ndc2.xy * 0.5 + 0.5) * gViewport;
 
-  // Compute edge lengths (avoid zero)
-  float e01 = max(length(p0 - p1), 1e-6);
-  float e12 = max(length(p1 - p2), 1e-6);
-  float e20 = max(length(p2 - p0), 1e-6);
+  // compute edge vectors and lengths (in pixels)
+  vec2 e01 = p1 - p0;
+  vec2 e12 = p2 - p1;
+  vec2 e20 = p0 - p2;
 
-  // Compute edge heights
-  float a1 = acos(clamp((e01 * e01 + e12 * e12 - e20 * e20) / (2.0 * e01 * e12), -1.0, 1.0));
-  float a2 = acos(clamp((e12 * e12 + e20 * e20 - e01 * e01) / (2.0 * e12 * e20), -1.0, 1.0));
+  float l01 = max(length(e01), EPS);
+  float l12 = max(length(e12), EPS);
+  float l20 = max(length(e20), EPS);
 
-  float h20 = e12 * sin(a2);
-  float h12 = e01 * sin(a1);
-  float h01 = e12 * sin(a1);
+  // point-to-line distance (per-vertex distance to opposite edge)
+  // for vertex 0 -> distance to edge p1-p2
+  // formula: abs(cross(edge, point - edgeStart)) / length(edge)
+  float d0 = abs(e12.x * (p0.y - p1.y) - e12.y * (p0.x - p1.x)) / l12;
+  float d1 = abs(e20.x * (p1.y - p2.y) - e20.y * (p1.x - p2.x)) / l20;
+  float d2 = abs(e01.x * (p2.y - p0.y) - e01.y * (p2.x - p0.x)) / l01;
 
-  // Emit vertices with edge distance
-  gl_Position = gl_in[0].gl_Position;
+  // Emit vertices with distances packed per-vertex
   worldPos = vworldPos[0];
   worldNormal = vworldNormal[0];
-  edgeDistance = vec3(h12, 0.0, 0.0);
+  edgeDistance = vec3(d0, 0.0, 0.0);
+  gl_Position = gl_in[0].gl_Position;
   EmitVertex();
 
-  gl_Position = gl_in[1].gl_Position;
   worldPos = vworldPos[1];
   worldNormal = vworldNormal[1];
-  edgeDistance = vec3(0.0, h20, 0.0);
+  edgeDistance = vec3(0.0, d1, 0.0);
+  gl_Position = gl_in[1].gl_Position;
   EmitVertex();
 
-  gl_Position = gl_in[2].gl_Position;
   worldPos = vworldPos[2];
   worldNormal = vworldNormal[2];
-  edgeDistance = vec3(0.0, 0.0, h01);
+  edgeDistance = vec3(0.0, 0.0, d2);
+  gl_Position = gl_in[2].gl_Position;
   EmitVertex();
 
   EndPrimitive();
@@ -84,50 +102,64 @@ void main() {
 std::string gbuffer_geometry_pass_fs = R"(
 #version 460 core
 
-layout (location = 0) out vec4 gPosition; // G-buffer position output
-layout (location = 1) out vec4 gNormal;   // G-buffer normal output
-layout (location = 2) out vec4 gMask;
+layout (location = 0) out vec4 gPosition; // world-space position
+layout (location = 1) out vec4 gNormal;   // world-space normal (packed to 0..1)
+layout (location = 2) out vec4 gMask;     // x: reserved, y: linear depth [0..1], z: wireframe mask, w: reserved
 layout (location = 3) out vec4 gAlbedo;
 
 in vec3 worldPos;
 in vec3 worldNormal;
-in vec3 edgeDistance;
+noperspective in vec3 edgeDistance;
 
 uniform bool wireframe;
-uniform mat4 gproj;
+uniform mat4 gproj;      // projection matrix (for depth recon)
 uniform vec3 albedo;
 
-uniform float wireframe_width;
-uniform float wireframe_smooth;
+uniform float wireframe_width;  // in pixels
+uniform float wireframe_smooth; // smoothing size in pixels
 
-float linearize_depth(float depth) {
-  vec4 ndc = vec4(gl_FragCoord.x*2-1,gl_FragCoord.y*2-1, depth * 2.0 - 1.0, 1.0);
-  vec4 view = inverse(gproj) * ndc;
-  return view.z / view.w;
+uniform float zNear;
+uniform float zFar;
+
+float linearize_depth_from_ndc(float depth) {
+  // depth is the window-space depth (0..1). Convert to normalized device z (-1..1)
+  float ndc_z = depth * 2.0 - 1.0;
+  // reconstruct view-space z (negative in RH convention with typical projection)
+  // viewZ = (2 * n * f) / (f + n - ndc_z * (f - n))
+  float num = 2.0 * zNear * zFar;
+  float denom = zFar + zNear - ndc_z * (zFar - zNear);
+  float viewZ = num / max(denom, 1e-6);
+  // convert to positive linear depth in [0..1]
+  float linear = (-viewZ - zNear) / max((zFar - zNear), 1e-6);
+  return clamp(linear, 0.0, 1.0);
 }
 
-float wireframe_mask() {
+float compute_wire_mask() {
+  // smallest distance to any edge (pixel units)
   float d = min(edgeDistance.x, min(edgeDistance.y, edgeDistance.z));
-  float alpha = 0.0;
-  if (d < wireframe_width - wireframe_smooth) {
-    alpha = 1.0;
-  } else if (d > wireframe_width + wireframe_smooth) {
-    alpha = 0.0;
-  } else {
-    float x = d - (wireframe_width - wireframe_smooth);
-    alpha = exp2(-2.0 * x * x);
+
+  // If smoothing is zero, use hard threshold
+  if (wireframe_smooth <= 0.0) {
+    float inside = (d >= wireframe_width) ? 0.0 : 1.0;
+    return wireframe ? inside : 1.0;
   }
-  if (wireframe)
-    return mix(1.0, 0.0, clamp(alpha, 0.0, 1.0));
-  else
-    return 1.0;
+
+  // construct smooth transition: 0 at line center, 1 in interior
+  float outer = wireframe_width + wireframe_smooth;
+  float inner = max(wireframe_width - wireframe_smooth, 0.0);
+  // t = 0 at outer, 1 at inner; then interior = 1, near edge -> 0
+  float t = smoothstep(outer, inner, d);
+  // if wireframe is enabled, return interior fraction; otherwise fully interior
+  return wireframe ? 1.0 - t : 1.0;
 }
 
 void main() {
+  // outputs
   gPosition = vec4(worldPos, 1.0);
-  // map normal to range [0, 1]
   gNormal = vec4(normalize(worldNormal) * 0.5 + 0.5, 1.0);
-  gMask = vec4(1,linearize_depth(gl_FragCoord.z),wireframe_mask(),0);
+  float linDepth = linearize_depth_from_ndc(gl_FragCoord.z);
+  float wf = compute_wire_mask(); // 1.0 = filled interior, 0.0 = line center
+  gMask = vec4(1.0, linDepth, wf, 0.0);
   gAlbedo = vec4(albedo, 1.0);
 }
 )";
