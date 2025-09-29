@@ -4,8 +4,9 @@
 
 extern std::string gbuffer_geometry_pass_vs;
 extern std::string gbuffer_geometry_pass_fs;
-extern std::string defered_phong_pass_vs;
-extern std::string defered_phong_pass_fs;
+extern std::string gbuffer_geometry_pass_gs;
+
+extern std::string defered_default_pass_fs;
 
 extern std::string shadow_vs;
 extern std::string shadow_fs;

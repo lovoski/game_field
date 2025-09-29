@@ -1,6 +1,5 @@
 #include "toolkit/opengl/scripts/smplx.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
-#include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/editor.hpp"
 
 namespace toolkit::opengl {
@@ -282,9 +281,6 @@ void smplx::setup_smpl_model(cnpy::npz_t &data) {
   auto &mesh_comp = registry->emplace_or_replace<mesh_data>(entity);
   mesh_comp.model_name = model_type;
   mesh_comp.mesh_name = gender_type;
-  auto mat_ptr = registry->try_get<basic_material>(entity);
-  if (mat_ptr == nullptr)
-    registry->emplace<basic_material>(entity);
   auto &bundle_data = registry->emplace_or_replace<skinned_mesh_bundle>(entity);
   bundle_data.mesh_entities.push_back(entity);
 

@@ -1,7 +1,6 @@
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
-#include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/rasterize/shaders.hpp"
@@ -55,7 +54,7 @@ void editor::late_deserialize(nlohmann::json &j) {
   }
 
   transform_sys = get_sys<transform_system>();
-  render_sys = get_sys<defered_forward_mixed>();
+  render_sys = get_sys<defered_render_system>();
   script_sys = get_sys<script_system>();
   anim_sys = get_sys<anim::anim_system>();
 }
@@ -189,7 +188,7 @@ void editor::reset() {
   systems.clear();
 
   transform_sys = add_sys<transform_system>();
-  render_sys = add_sys<defered_forward_mixed>();
+  render_sys = add_sys<defered_render_system>();
   script_sys = add_sys<script_system>();
   anim_sys = add_sys<anim::anim_system>();
   phy_sys = add_sys<physics::physics_system>();

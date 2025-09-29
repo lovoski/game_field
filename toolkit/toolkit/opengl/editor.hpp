@@ -9,7 +9,7 @@
 
 #include "toolkit/anim/anim_system.hpp"
 #include "toolkit/opengl/components/camera.hpp"
-#include "toolkit/opengl/rasterize/mixed.hpp"
+#include "toolkit/opengl/rasterize/system.hpp"
 #include "toolkit/physics/system.hpp"
 
 namespace toolkit::assets {
@@ -75,7 +75,7 @@ public:
 
   entt::entity selected_entity = entt::null;
 
-  defered_forward_mixed *render_sys = nullptr;
+  defered_render_system *render_sys = nullptr;
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
   anim::anim_system *anim_sys = nullptr;

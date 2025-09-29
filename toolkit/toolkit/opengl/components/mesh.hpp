@@ -7,6 +7,17 @@
 
 namespace toolkit::opengl {
 
+struct material_data {
+  // render albedo to
+  math::vector3 albedo = opengl::White;
+
+  // render wireframe to mask_tex.b
+  bool wireframe = true;
+  float wireframe_width = 0.1f;
+  float wireframe_smooth = 0.6f;
+};
+REFLECT(material_data, albedo, wireframe, wireframe_width, wireframe_smooth)
+
 struct mesh_data : public icomponent {
   std::string mesh_name, model_name;
   std::vector<assets::mesh_vertex> vertices;
@@ -23,6 +34,9 @@ struct mesh_data : public icomponent {
   // axis aligned bounding box with identity transform
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
 
+  // default material data
+  material_data material;
+
   bool skinned = false;
 
   void draw_gui(iapp *app) override;
@@ -34,7 +48,8 @@ struct mesh_data : public icomponent {
   bool force_update_flag = false;
   void update_buffers(bool save_assets = false);
 };
-DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh)
+DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh,
+                  material)
 
 struct skinned_mesh_bundle : public icomponent {
   framebuffer shadowmap_fb;

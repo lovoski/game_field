@@ -4,6 +4,7 @@ std::string gbuffer_geometry_pass_vs = R"(
 #version 460 core
 layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;
+layout (location = 2) in vec4 aTexCoord;
 
 layout(std430, binding = 0) buffer ModelMatrices {
   mat4 gModels[];
@@ -12,14 +13,72 @@ layout(std430, binding = 0) buffer ModelMatrices {
 uniform mat4 gVP;
 uniform mat4 gModel;
 
-out vec3 worldPos;
-out vec3 worldNormal;
+out vec3 vworldPos;
+out vec3 vworldNormal;
 
 void main() {
-  worldNormal = normalize(mat3(gModel)*aNormal.xyz);
-  worldPos = (gModel * aPos).xyz;
+  vworldNormal = normalize(mat3(gModel)*aNormal.xyz);
+  vworldPos = (gModel * aPos).xyz;
+  gl_Position = gVP * vec4(vworldPos, 1.0);
+}
+)";
+std::string gbuffer_geometry_pass_gs = R"(
+#version 460 core
+layout (triangles) in;
+layout (triangle_strip) out;
+layout (max_vertices = 3) out;
 
-  gl_Position = gVP * vec4(worldPos, 1.0);
+uniform vec2 gViewport;
+
+in vec3 vworldPos[];
+in vec3 vworldNormal[];
+
+out vec3 worldPos;
+out vec3 worldNormal;
+noperspective out vec3 edgeDistance;
+
+void main() {
+  vec3 ndc0 = gl_in[0].gl_Position.xyz / gl_in[0].gl_Position.w;
+  vec3 ndc1 = gl_in[1].gl_Position.xyz / gl_in[1].gl_Position.w;
+  vec3 ndc2 = gl_in[2].gl_Position.xyz / gl_in[2].gl_Position.w;
+
+  vec2 p0 = (ndc0.xy + 1.0) * 0.5 * gViewport;
+  vec2 p1 = (ndc1.xy + 1.0) * 0.5 * gViewport;
+  vec2 p2 = (ndc2.xy + 1.0) * 0.5 * gViewport;
+
+  // Compute edge lengths (avoid zero)
+  float e01 = max(length(p0 - p1), 1e-6);
+  float e12 = max(length(p1 - p2), 1e-6);
+  float e20 = max(length(p2 - p0), 1e-6);
+
+  // Compute edge heights
+  float a1 = acos(clamp((e01 * e01 + e12 * e12 - e20 * e20) / (2.0 * e01 * e12), -1.0, 1.0));
+  float a2 = acos(clamp((e12 * e12 + e20 * e20 - e01 * e01) / (2.0 * e12 * e20), -1.0, 1.0));
+
+  float h20 = e12 * sin(a2);
+  float h12 = e01 * sin(a1);
+  float h01 = e12 * sin(a1);
+
+  // Emit vertices with edge distance
+  gl_Position = gl_in[0].gl_Position;
+  worldPos = vworldPos[0];
+  worldNormal = vworldNormal[0];
+  edgeDistance = vec3(h12, 0.0, 0.0);
+  EmitVertex();
+
+  gl_Position = gl_in[1].gl_Position;
+  worldPos = vworldPos[1];
+  worldNormal = vworldNormal[1];
+  edgeDistance = vec3(0.0, h20, 0.0);
+  EmitVertex();
+
+  gl_Position = gl_in[2].gl_Position;
+  worldPos = vworldPos[2];
+  worldNormal = vworldNormal[2];
+  edgeDistance = vec3(0.0, 0.0, h01);
+  EmitVertex();
+
+  EndPrimitive();
 }
 )";
 std::string gbuffer_geometry_pass_fs = R"(
@@ -28,11 +87,18 @@ std::string gbuffer_geometry_pass_fs = R"(
 layout (location = 0) out vec4 gPosition; // G-buffer position output
 layout (location = 1) out vec4 gNormal;   // G-buffer normal output
 layout (location = 2) out vec4 gMask;
+layout (location = 3) out vec4 gAlbedo;
 
 in vec3 worldPos;
 in vec3 worldNormal;
+in vec3 edgeDistance;
 
+uniform bool wireframe;
 uniform mat4 gproj;
+uniform vec3 albedo;
+
+uniform float wireframe_width;
+uniform float wireframe_smooth;
 
 float linearize_depth(float depth) {
   vec4 ndc = vec4(gl_FragCoord.x*2-1,gl_FragCoord.y*2-1, depth * 2.0 - 1.0, 1.0);
@@ -40,90 +106,67 @@ float linearize_depth(float depth) {
   return view.z / view.w;
 }
 
+float wireframe_mask() {
+  float d = min(edgeDistance.x, min(edgeDistance.y, edgeDistance.z));
+  float alpha = 0.0;
+  if (d < wireframe_width - wireframe_smooth) {
+    alpha = 1.0;
+  } else if (d > wireframe_width + wireframe_smooth) {
+    alpha = 0.0;
+  } else {
+    float x = d - (wireframe_width - wireframe_smooth);
+    alpha = exp2(-2.0 * x * x);
+  }
+  if (wireframe)
+    return mix(1.0, 0.0, clamp(alpha, 0.0, 1.0));
+  else
+    return 1.0;
+}
+
 void main() {
   gPosition = vec4(worldPos, 1.0);
   // map normal to range [0, 1]
   gNormal = vec4(normalize(worldNormal) * 0.5 + 0.5, 1.0);
-  gMask = vec4(1,linearize_depth(gl_FragCoord.z),0,0);
+  gMask = vec4(1,linearize_depth(gl_FragCoord.z),wireframe_mask(),0);
+  gAlbedo = vec4(albedo, 1.0);
 }
 )";
-
-std::string defered_phong_pass_vs = R"(
+std::string defered_default_pass_fs = R"(
 #version 430 core
 
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec2 aTexCoord;
+uniform sampler2D pos_tex;
+uniform sampler2D normal_tex;
+uniform sampler2D mask_tex;
+uniform sampler2D albedo_tex;
+uniform sampler2D light_mask;
 
-out vec2 texCoord;
+uniform sampler2D gbuffer_depth;
+uniform sampler2D cbuffer_depth;
 
-void main() {
-  texCoord = aTexCoord;
-  gl_Position = vec4(aPos, 1.0);
-}
-)";
+in vec2 texcoord;
 
-std::string defered_phong_pass_fs = R"(
-#version 430 core
-
-uniform sampler2D gPosTex;
-uniform sampler2D gNormalTex;
-uniform sampler2D gGbufferDepthTex;
-uniform sampler2D gCbufferDepthTex;
-uniform sampler2D gMaskTex;
-
-uniform vec3 gViewDir;
-
-in vec2 texCoord;
-
-out vec4 FragColor;
-
-struct light_data_pacakge {
-  ivec4 idata;
-  vec4 pos;
-  vec4 color;
-  vec4 fdata0;
-  vec4 fdata1;
-};
-layout(std430, binding = 0) buffer SceneLights {
-  light_data_pacakge gLights[];
-};
+out vec4 frag_color;
 
 void main() {
-  vec4 mask = texture(gMaskTex, texCoord);
-  // only perform color pass rendering when there's actual fragment.
-  if (mask.x == 0) {
+  vec4 mask_value = texture(mask_tex, texcoord);
+  if (mask_value.r != 1.0)
     discard;
-  }
 
-  float g_depth = texture(gGbufferDepthTex, texCoord).r;
-  float c_depth = texture(gCbufferDepthTex, texCoord).r;
-  // manual depth test
-  if (g_depth > c_depth) {
+  float gdepth = texture(gbuffer_depth, texcoord).r;
+  float cdepth = texture(cbuffer_depth, texcoord).r;
+  if (gdepth > cdepth)
     discard;
-  }
-  gl_FragDepth = g_depth;
-  vec3 result = vec3(0.0);
-  vec3 worldPos = texture(gPosTex, texCoord).xyz;
-  vec3 worldNormal = normalize(texture(gNormalTex, texCoord).xyz);
-  for (int i = 0; i < gLights.length(); i++) {
-    light_data_pacakge lightData = gLights[i];
-    vec3 lightColor = lightData.color.xyz;
-    vec3 lightPos = lightData.pos.xyz;
-    vec3 lightDir;
-    if (lightData.idata[0] == 0) {
-      lightDir = -normalize(lightData.fdata0.xyz);
-    } else if (lightData.idata[0] == 1) {
-      lightDir = normalize(lightPos-worldPos);
-    }
-    float diff = 0.5 * (dot(worldNormal, lightDir) + 1.0);
-    vec3 diffuse = diff * lightColor;
-    // vec3 halfwayDir = normalize(lightDir + normalize(gViewDir));
-    // float spec = pow(max(dot(fragWorldNormal, halfwayDir), 0.0), 32.0); // Shininess factor
-    // vec3 specular = spec * lightColor;
-    result += diffuse;
-  }
+  gl_FragDepth = gdepth;
 
-  FragColor = vec4(result, 1.0);
+  // float ldepth = mask_value.g;
+  float wireframe = mask_value.b;
+  float light_value = texture(light_mask, texcoord).r;
+  vec3 albedo = texture(albedo_tex, texcoord).xyz;
+
+  // vec3 frag_world_pos = texture(pos_tex, texcoord);
+  // vec3 frag_world_normal = texture(normal_tex, texcoord).xyz * 2.0 - vec3(1.0);
+
+  frag_color = vec4(clamp(albedo * light_value * wireframe, 0.0, 1.0), 1.0);
 }
 )";
 

@@ -2,8 +2,9 @@
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/assets/primitives.hpp"
-#include "toolkit/opengl/components/materials/all.hpp"
+#include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/transform.hpp"
+
 
 namespace toolkit::opengl {
 
@@ -153,6 +154,15 @@ void mesh_data::draw_gui(iapp *app) {
       }
       ImGui::TreePop();
     }
+  }
+  if (ImGui::TreeNode("Default Material")) {
+    gui::color_edit_3("albedo", material.albedo);
+    ImGui::Checkbox("wireframe", &material.wireframe);
+    ImGui::DragFloat("wireframe width", &material.wireframe_width, 0.01f, 0.0f,
+                     1.0);
+    ImGui::DragFloat("wireframe smooth", &material.wireframe_smooth, 0.01f, 0.0f,
+                     1.0);
+    ImGui::TreePop();
   }
 }
 
@@ -309,7 +319,6 @@ entt::entity create_cube(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  auto &mat = registry.emplace<basic_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Cube";
   mesh.indices.resize(cube_nindicies);
@@ -331,7 +340,6 @@ entt::entity create_plane(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  auto &mat = registry.emplace<basic_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Plane";
   mesh.indices.resize(plane_nindicies);
@@ -353,7 +361,6 @@ entt::entity create_sphere(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  auto &mat = registry.emplace<basic_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Sphere";
   mesh.indices.resize(sphere_nindicies);
@@ -375,7 +382,6 @@ entt::entity create_cylinder(entt::registry &registry, math::matrix4 t) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
   auto &mesh = registry.emplace<mesh_data>(ent);
-  auto &mat = registry.emplace<basic_material>(ent);
   trans.set_world_transform(t);
   trans.name = "Cylinder";
   mesh.indices.resize(cylinder_nindicies);

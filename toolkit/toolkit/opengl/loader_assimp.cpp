@@ -1,6 +1,5 @@
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
-#include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
@@ -97,7 +96,6 @@ void process_mesh(entt::registry &registry, entt::entity container,
                   std::vector<entt::entity> &bone_entities,
                   math::matrix4 pretrans) {
   auto &mesh_data = registry.emplace<opengl::mesh_data>(container);
-  auto &bp_mat = registry.emplace<opengl::basic_material>(container);
   mesh_data.mesh_name =
       str_format("%s:%s", mesh->mName.C_Str(),
                  scene->mMaterials[mesh->mMaterialIndex]->GetName().C_Str());

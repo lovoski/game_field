@@ -1,9 +1,8 @@
-#include "toolkit/opengl/rasterize/mixed.hpp"
 #include "toolkit/anim/components/actor.hpp"
-#include "toolkit/opengl/components/materials/all.hpp"
 #include "toolkit/opengl/effects/ambient_occlusion.hpp"
 #include "toolkit/opengl/rasterize/kernal.hpp"
 #include "toolkit/opengl/rasterize/shaders.hpp"
+#include "toolkit/opengl/rasterize/system.hpp"
 #include "toolkit/scriptable.hpp"
 
 namespace toolkit::opengl {
@@ -19,7 +18,7 @@ struct _bone_matrix_block {
   math::matrix4 offset_mat;
 };
 
-void defered_forward_mixed::draw_menu_gui() {
+void defered_render_system::draw_menu_gui() {
   ImGui::MenuItem("Grid", nullptr, nullptr, false);
   ImGui::Checkbox("Show Grid", &should_draw_grid);
   ImGui::InputInt("Grid Spacing", &grid_spacing);
@@ -94,7 +93,7 @@ void defered_forward_mixed::draw_menu_gui() {
   //   resize_csm_buffer();
 }
 
-void defered_forward_mixed::draw_gui(entt::registry &registry,
+void defered_render_system::draw_gui(entt::registry &registry,
                                      entt::entity entity) {
   if (auto ptr = registry.try_get<camera>(entity)) {
     if (ImGui::CollapsingHeader("Camera"))
@@ -105,19 +104,12 @@ void defered_forward_mixed::draw_gui(entt::registry &registry,
       ptr->draw_gui(nullptr); // TODO: no need for mesh data component to access
                               // app settings
   }
-  if (has_any_materials(registry, entity)) {
-    if (ImGui::CollapsingHeader("Materials")) {
-      for (auto &func : material::__material_draw_gui__) {
-        func.second(registry, entity);
-      }
-    }
-  }
 
   if (show_textures_wnd)
     show_textures_wnd_func();
 }
 
-void defered_forward_mixed::show_textures_wnd_func() {
+void defered_render_system::show_textures_wnd_func() {
   ImGui::Begin("mixed_rsys_tex_wnd", &show_textures_wnd);
   auto size = ImGui::GetWindowSize();
   ImGui::Text("Shadow Mask");
@@ -128,7 +120,7 @@ void defered_forward_mixed::show_textures_wnd_func() {
   ImGui::End();
 }
 
-void defered_forward_mixed::init0(entt::registry &registry) {
+void defered_render_system::init0(entt::registry &registry) {
   pos_tex.create(GL_TEXTURE_2D);
   normal_tex.create(GL_TEXTURE_2D);
   gbuffer_depth_tex.create(GL_TEXTURE_2D);
@@ -139,6 +131,7 @@ void defered_forward_mixed::init0(entt::registry &registry) {
   csm_depth_atlas.create(GL_TEXTURE_2D);
   scene_light_mask_tex.create(GL_TEXTURE_2D);
   color_backup_tex.create(GL_TEXTURE_2D);
+  albedo_tex.create(GL_TEXTURE_2D);
 
   noise_tex_random.create(GL_TEXTURE_2D);
   assets::image img;
@@ -153,9 +146,10 @@ void defered_forward_mixed::init0(entt::registry &registry) {
                                    {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
 
   gbuffer_geometry_pass.compile_shader_from_source(gbuffer_geometry_pass_vs,
-                                                   gbuffer_geometry_pass_fs);
-  defered_phong_pass.compile_shader_from_source(defered_phong_pass_vs,
-                                                defered_phong_pass_fs);
+                                                   gbuffer_geometry_pass_fs,
+                                                   gbuffer_geometry_pass_gs);
+  defered_default_pass.compile_shader_from_source(quad_vs,
+                                                  defered_default_pass_fs);
 
   collect_scene_vertex_buffer_program.create(str_format(
       collect_scene_vertex_buffer_program_source.c_str(), work_group_size));
@@ -186,52 +180,57 @@ void defered_forward_mixed::init0(entt::registry &registry) {
       quad_vs, static_mesh_light_mask_fs);
   fxaa_program.compile_shader_from_source(quad_vs, fxaa_fs);
 
-  light_data_buffer.create();
-
   float sun_v_rad = sun_v / 180 * 3.1415927f;
   float sun_h_rad = sun_h / 180 * 3.1415927f;
   math::vector3 sun_dir(cos(sun_v_rad) * cos(sun_h_rad),
                         cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
   ss_model.update(sun_dir, sun_turbidity);
 
-  // ---------------- call resize after all initialzation finishes
-  // ----------------
+  // ---------- call resize after all initialzation finishes ----------
   resize(g_instance.scene_width, g_instance.scene_height);
-
-  // initialize materials
-  for (auto &initialier : material::__material_constructors__)
-    initialier.second(registry);
 }
 
-void defered_forward_mixed::init1(entt::registry &registry) {}
+void defered_render_system::init1(entt::registry &registry) {}
 
-void defered_forward_mixed::resize(int width, int height) {
+void defered_render_system::resize(int width, int height) {
   gbuffer.bind();
   gbuffer.begin_draw_buffers();
+
   pos_tex.set_data(width, height, GL_RGBA32F, GL_RGBA, GL_FLOAT);
   pos_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
                           {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                           {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                           {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
-  normal_tex.set_data(width, height, GL_RGBA32F, GL_RGBA, GL_FLOAT);
+
+  normal_tex.set_data(width, height, GL_RGB8, GL_RGB, GL_FLOAT);
   normal_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
                              {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                              {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                              {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+
   mask_tex.set_data(width, height, GL_RGBA32F, GL_RGBA, GL_FLOAT);
   mask_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
                            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+
+  albedo_tex.set_data(width, height, GL_RGBA8, GL_RGBA, GL_FLOAT);
+  albedo_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                             {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+
   gbuffer_depth_tex.set_data(width, height, GL_DEPTH_COMPONENT24,
                              GL_DEPTH_COMPONENT, GL_FLOAT);
   gbuffer_depth_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
                                     {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
                                     {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
                                     {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+
   gbuffer.attach_color_buffer(pos_tex, GL_COLOR_ATTACHMENT0);
   gbuffer.attach_color_buffer(normal_tex, GL_COLOR_ATTACHMENT1);
   gbuffer.attach_color_buffer(mask_tex, GL_COLOR_ATTACHMENT2);
+  gbuffer.attach_color_buffer(albedo_tex, GL_COLOR_ATTACHMENT3);
   gbuffer.end_draw_buffers();
   gbuffer.attach_depth_buffer(gbuffer_depth_tex);
   if (!gbuffer.check_status())
@@ -294,7 +293,7 @@ void defered_forward_mixed::resize(int width, int height) {
   resize_csm_buffer();
 }
 
-void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
+void defered_render_system::preupdate(entt::registry &registry, float dt) {
   // update vp matrices for cameras
   registry.view<camera>().each([&](entt::entity entity, camera &camera) {
     compute_vp_matrix(registry, entity, g_instance.scene_width,
@@ -302,7 +301,7 @@ void defered_forward_mixed::preupdate(entt::registry &registry, float dt) {
   });
 }
 
-void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
+void defered_render_system::update_scene_buffers(entt::registry &registry) {
   auto mesh_data_entities = registry.view<entt::entity, transform, mesh_data>();
 
   bool any_force_update_flag = false;
@@ -541,32 +540,15 @@ void defered_forward_mixed::update_scene_buffers(entt::registry &registry) {
   scene_index_buffer.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
 }
 
-void defered_forward_mixed::update_scene_lights(entt::registry &registry) {
+void defered_render_system::update_scene_lights(entt::registry &registry) {
   float sun_v_rad = sun_v / 180 * 3.1415927f;
   float sun_h_rad = sun_h / 180 * 3.1415927f;
   sun_direction =
       -math::vector3(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
                      cos(sun_v_rad) * cos(sun_h_rad));
-  std::vector<light_data_pacakge> lights;
-  if (enable_sun) {
-    light_data_pacakge package;
-    package.idata[0] = 0;
-    package.color << sun_color, 1.0f;
-    package.fdata0 << sun_direction, 0.0f;
-    lights.emplace_back(package);
-  }
-  registry.view<point_light, transform>().each(
-      [&](entt::entity entity, point_light &light, transform &trans) {
-        light_data_pacakge package;
-        package.idata[0] = 1;
-        package.pos << trans.world_pos(), 1.0f;
-        package.color << light.color, 1.0f;
-        lights.emplace_back(package);
-      });
-  light_data_buffer.set_data_ssbo(lights);
 }
 
-void defered_forward_mixed::resize_csm_buffer() {
+void defered_render_system::resize_csm_buffer() {
   csm_buffer.bind();
   csm_depth_atlas.set_data(num_cascades * csm_depth_dim, csm_depth_dim,
                            GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT, GL_FLOAT);
@@ -585,14 +567,14 @@ void defered_forward_mixed::resize_csm_buffer() {
   csm_buffer.unbind();
 }
 
-void defered_forward_mixed::update_scene_data_structures(
+void defered_render_system::update_scene_data_structures(
     entt::registry &registry) {
   // build scene bvh on cpu with obb (static mesh) and aabb (deformable mesh)
   registry.view<entt::entity, transform, mesh_data>().each(
       [&](entt::entity entity, transform &trans, mesh_data &mesh_comp) {});
 }
 
-void defered_forward_mixed::render(entt::registry &registry) {
+void defered_render_system::render(entt::registry &registry) {
   if (auto cam_ptr = registry.try_get<camera>(g_instance.active_camera)) {
     auto &cam_trans = registry.get<transform>(g_instance.active_camera);
     auto &cam_comp = *cam_ptr;
@@ -617,6 +599,8 @@ void defered_forward_mixed::render(entt::registry &registry) {
         gbuffer_geometry_pass.use();
         gbuffer_geometry_pass.set_mat4("gVP", cam_comp.vp);
         gbuffer_geometry_pass.set_mat4("gproj", cam_comp.proj);
+        gbuffer_geometry_pass.set_vec2("gViewport",
+                                       g_instance.get_scene_size());
         trans_mesh_view.each([&](entt::entity entity, transform &trans,
                                  mesh_data &data) {
           if (!visibility_check(cam_comp.planes, data.bb_min, data.bb_max,
@@ -624,9 +608,12 @@ void defered_forward_mixed::render(entt::registry &registry) {
                                              : trans.matrix())) {
             return; // break if not visible
           }
-          gbuffer_geometry_pass.set_mat4(
-              "gModel",
-              data.skinned ? math::matrix4::Identity() : trans.matrix());
+          gbuffer_geometry_pass.set_vec3("albedo", data.material.albedo)
+              .set_bool("wireframe", data.material.wireframe)
+              .set_float("wireframe_width", data.material.wireframe_width)
+              .set_float("wireframe_smooth", data.material.wireframe_smooth)
+              .set_mat4("gModel", data.skinned ? math::matrix4::Identity()
+                                               : trans.matrix());
           glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
                          (void *)(data.scene_index_offset * sizeof(GLuint)));
         });
@@ -649,67 +636,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
     // ---------------- render scene csm if sun is enabled ----------------
     {
-      // if (enable_sun) {
-      //   csm_buffer.bind();
-      //   glClear(GL_DEPTH_BUFFER_BIT);
-      //   glClearColor(0, 0, 0, 1);
-      //   csm_cascades[0] = cam_comp.z_near;
-      //   math::vector3 csm_side_dir = math::world_up;
-      //   if (abs(csm_side_dir.dot(sun_direction)) < 1e-3f)
-      //     csm_side_dir =
-      //         (csm_side_dir + 0.1f * math::world_forward).normalized();
-      //   shadow_depth_program.use();
-      //   scene_vao.bind();
-      //   csm_vp_matrix.resize(num_cascades);
-      //   for (int i = 0; i < num_cascades; i++) {
-      //     // render to atlas by setting up viewports
-      //     csm_buffer.set_viewport(i * csm_depth_dim, 0, csm_depth_dim,
-      //                             csm_depth_dim);
-      //     // compute depth for view frustom split
-      //     csm_cascades[i + 1] =
-      //         csm_split_lambda *
-      //             (cam_comp.z_near * pow(cam_comp.z_far / cam_comp.z_near,
-      //                                    (float)(i + 1) / num_cascades)) +
-      //         (1.0f - csm_split_lambda) *
-      //             (cam_comp.z_near +
-      //              (i + 1) * (cam_comp.z_far - cam_comp.z_near) /
-      //              num_cascades);
-      //     auto [bb_sphere_center, bb_sphere_radius] =
-      //     frustom_bounding_sphere(
-      //         csm_cascades[i], csm_cascades[i + 1], cam_comp.fovy_degree,
-      //         g_instance.scene_width, g_instance.scene_height);
-      //     math::vector4 tmp_point;
-      //     tmp_point << bb_sphere_center, 1.0f;
-      //     tmp_point = cam_trans.matrix() * tmp_point;
-      //     csm_vp_matrix[i] =
-      //         math::ortho(-bb_sphere_radius, bb_sphere_radius,
-      //         bb_sphere_radius,
-      //                     -bb_sphere_radius,
-      //                     std::min(-bb_sphere_radius, -300.0f),
-      //                     bb_sphere_radius) *
-      //         math::lookat(tmp_point.head<3>(),
-      //                      tmp_point.head<3>() + sun_direction.normalized(),
-      //                      csm_side_dir);
-      //     update_bounding_planes(csm_frustom_planes, csm_vp_matrix[i]);
-      //     shadow_depth_program.set_mat4("gVP", csm_vp_matrix[i]);
-      //     trans_mesh_view.each([&](entt::entity entity, transform &trans,
-      //                              mesh_data &data) {
-      //       if (data.skinned ||
-      //           !visibility_check(csm_frustom_planes, data.bb_min,
-      //           data.bb_max,
-      //                             trans.matrix()))
-      //         return;
-      //       shadow_depth_program.set_mat4("gModel", trans.matrix());
-      //       glDrawElements(GL_TRIANGLES, data.indices.size(),
-      //       GL_UNSIGNED_INT,
-      //                      (void *)(data.scene_index_offset *
-      //                      sizeof(GLuint)));
-      //     });
-      //   }
-      //   scene_vao.unbind();
-      //   csm_buffer.unbind();
-      // }
-
       // render per bundle shadow map if sun is enabled
       static math::vector3 tmp_sun_up_dir =
           math::vector3(0.0, 0.97, 0.3).normalized();
@@ -762,30 +688,6 @@ void defered_forward_mixed::render(entt::registry &registry) {
 
       // render scene csm shadow mask
       if (enable_sun) {
-        // csm_vp_matrix_buffer.set_data_ssbo(csm_vp_matrix, GL_DYNAMIC_DRAW);
-        // csm_selection_mask_program.use();
-        // csm_selection_mask_program.set_buffer_ssbo(csm_vp_matrix_buffer, 0)
-        //     .set_int("num_cascades", num_cascades)
-        //     .set_int("csm_depth_dim", csm_depth_dim)
-        //     .set_float("min_bias", csm_min_bias)
-        //     .set_float("max_bias", csm_max_bias)
-        //     .set_vec3("light_dir", sun_direction)
-        //     .set_int("pcf_kernal_size", pcf_kernal_size)
-        //     .set_mat4("cam_view", cam_comp.view)
-        //     .set_vec2("viewport_size", g_instance.get_scene_size());
-
-        // csm_selection_mask_program.set_texture2d("scene_pos",
-        //                                          pos_tex.get_handle(), 0);
-        // csm_selection_mask_program.set_texture2d("scene_normal",
-        //                                          normal_tex.get_handle(), 1);
-        // csm_selection_mask_program.set_texture2d("scene_mask",
-        //                                          mask_tex.get_handle(), 2);
-        // csm_selection_mask_program.set_texture2d(
-        //     "cascade_depth", csm_depth_atlas.get_handle(), 3);
-        // glUniform1fv(glGetUniformLocation(csm_selection_mask_program.gl_handle,
-        //                                   "csm_cascades"),
-        //              10, csm_cascades);
-        // quad_draw_call();
         static_mesh_light_mask_program.use();
         static_mesh_light_mask_program.set_vec3("light_dir", sun_direction)
             .set_float("shadow_weight", light_mask_shadow_weight);
@@ -824,8 +726,7 @@ void defered_forward_mixed::render(entt::registry &registry) {
       scene_light_mask_buffer.unbind();
     }
 
-    // ------------------- render to default color framebuffer
-    // -------------------
+    // ------------- render to default color framebuffer -------------
     {
       cbuffer.bind();
       cbuffer.set_viewport(0, 0, g_instance.scene_width,
@@ -837,54 +738,20 @@ void defered_forward_mixed::render(entt::registry &registry) {
       ss_model.render(cam_comp.vp, cam_trans.world_pos());
       glEnable(GL_DEPTH_TEST);
 
-      // iterate through all material types
-      scene_vao.bind();
-      for (auto &mat_shader_pair : material::__material_shaders__) {
-        auto mat_name = mat_shader_pair.first;
-        auto &mat_shader = mat_shader_pair.second;
-        material::__material_instance__[mat_name]->prepare0(registry);
-        mat_shader.use();
-        // bind common bindings
-        mat_shader.set_mat4("gViewMat", cam_comp.view);
-        mat_shader.set_mat4("gProjMat", cam_comp.proj);
-        mat_shader.set_vec3("gViewDir", -cam_trans.local_forward());
-        mat_shader.set_vec2("gViewport", g_instance.get_scene_size());
-        mat_shader.set_texture2d("gLightMask",
-                                 scene_light_mask_tex.get_handle(), 0);
-        mat_shader.set_vec3("gSunDir", sun_direction);
-        ss_model.setup_uniforms(mat_shader);
-        material::__material_view__[mat_name](registry, [&](entt::entity entity,
-                                                            material *mat) {
-          if (auto mesh_ptr = registry.try_get<mesh_data>(entity)) {
-            if (mesh_ptr->should_render_mesh) {
-              auto &trans = registry.get<transform>(entity);
-              if (!visibility_check(
-                      cam_comp.planes, mesh_ptr->bb_min, mesh_ptr->bb_max,
-                      mesh_ptr->skinned ? math::matrix4::Identity()
-                                        : trans.matrix())) {
-                // spdlog::info("Cpu cull mesh {0}", mesh_ptr->mesh_name);
-                return;
-              }
-              mat_shader.set_int("gVertexOffset",
-                                 mesh_ptr->scene_vertex_offset);
-              mat_shader.set_mat4("gModelToWorldPoint",
-                                  mesh_ptr->skinned ? math::matrix4::Identity()
-                                                    : trans.matrix());
-              mat_shader.set_mat3(
-                  "gModelToWorldDir",
-                  mesh_ptr->skinned
-                      ? (math::matrix3)(math::matrix3::Identity())
-                      : (math::matrix3)(trans.matrix().block<3, 3>(0, 0)));
-              mat->bind_uniforms(mat_shader);
-              glDrawElements(
-                  GL_TRIANGLES, mesh_ptr->indices.size(), GL_UNSIGNED_INT,
-                  (void *)(mesh_ptr->scene_index_offset * sizeof(GLuint)));
-            }
-          }
-        });
-        material::__material_instance__[mat_name]->prepare1(registry);
-      }
-      scene_vao.unbind();
+      defered_default_pass.use();
+      defered_default_pass.set_texture2d("pos_tex", pos_tex.get_handle(), 0);
+      defered_default_pass.set_texture2d("normal_tex", normal_tex.get_handle(),
+                                         1);
+      defered_default_pass.set_texture2d("mask_tex", mask_tex.get_handle(), 2);
+      defered_default_pass.set_texture2d("albedo_tex", albedo_tex.get_handle(),
+                                         3);
+      defered_default_pass.set_texture2d("light_mask",
+                                         scene_light_mask_tex.get_handle(), 4);
+      defered_default_pass.set_texture2d("gbuffer_depth",
+                                         gbuffer_depth_tex.get_handle(), 5);
+      defered_default_pass.set_texture2d("cbuffer_depth",
+                                         cbuffer_depth.get_handle(), 6);
+      quad_draw_call();
 
       // ------------------- debug rendering -------------------
 
@@ -923,11 +790,13 @@ void defered_forward_mixed::render(entt::registry &registry) {
       // 2. fxaa
       if (enable_fxaa) {
         glCopyImageSubData(color_tex.get_handle(), GL_TEXTURE_2D, 0, 0, 0, 0,
-                           color_backup_tex.get_handle(), GL_TEXTURE_2D, 0, 0, 0,
-                           0, g_instance.scene_width, g_instance.scene_height, 1);
+                           color_backup_tex.get_handle(), GL_TEXTURE_2D, 0, 0,
+                           0, 0, g_instance.scene_width,
+                           g_instance.scene_height, 1);
         fxaa_program.use();
         fxaa_program.set_vec2("viewport_size", g_instance.get_scene_size());
-        fxaa_program.set_texture2d("color_tex", color_backup_tex.get_handle(), 0);
+        fxaa_program.set_texture2d("color_tex", color_backup_tex.get_handle(),
+                                   0);
         quad_draw_call();
       }
 

@@ -13,18 +13,7 @@
 
 namespace toolkit::opengl {
 
-struct light_data_pacakge {
-  /**
-   * [0]: type of light, 0 for dir_light, 1 for point_light
-   */
-  int idata[4];
-  math::vector4 pos;
-  math::vector4 color;
-  math::vector4 fdata0;
-  math::vector4 fdata1;
-};
-
-class defered_forward_mixed : public isystem {
+class defered_render_system : public isystem {
 public:
   void init0(entt::registry &registry) override;
   void init1(entt::registry &registry) override;
@@ -64,19 +53,20 @@ public:
   preetham_sun_sky ss_model;
 
 protected:
-  framebuffer gbuffer, cbuffer;
-  shader gbuffer_geometry_pass, defered_phong_pass;
-  texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex, cbuffer_depth;
+  shader gbuffer_geometry_pass, defered_default_pass;
+  // gbuffer
+  framebuffer gbuffer;
+  texture pos_tex, normal_tex, gbuffer_depth_tex, mask_tex, albedo_tex;
+  // cbuffer
+  framebuffer cbuffer;
+  texture cbuffer_depth, color_tex, color_backup_tex;
 
   framebuffer ao_buffer;
   texture ao_color;
 
-  // uniform buffer storing all active lights
-  buffer light_data_buffer;
   float shadowmap_max_bias = 0.00006f, shadowmap_min_bias = 0.00002f;
   float light_mask_shadow_weight = 0.5f;
 
-  texture color_tex, color_backup_tex;
   bool enable_fxaa = false;
   shader fxaa_program;
 
@@ -111,9 +101,9 @@ protected:
 
   std::map<entt::entity, bool> main_cam_visible_cache;
 
-  REFLECT_PRIVATE(defered_forward_mixed)
+  REFLECT_PRIVATE(defered_render_system)
 };
-DECLARE_SYSTEM(defered_forward_mixed, should_draw_grid, grid_spacing,
+DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
                sun_v, sun_h, sun_turbidity, sun_color, num_cascades,

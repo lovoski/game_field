@@ -779,8 +779,6 @@ vec4 grid_color(vec3 worldPos) {
     color.x = 1.0;
     setup = true;
   }
-  // if (!setup)
-  //  discard;
   return color;
 }
 
