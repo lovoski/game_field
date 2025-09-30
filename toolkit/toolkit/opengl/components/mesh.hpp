@@ -43,10 +43,11 @@ struct mesh_data : public icomponent {
 
   void draw(GLenum mode = GL_TRIANGLES);
 
-  void init1() override;
+  nlohmann::json late_serialize() override;
+  void late_deserialize(nlohmann::json &data) override;
 
   bool force_update_flag = false;
-  void update_buffers(bool save_assets = false);
+  void update_buffers();
 };
 DECLARE_COMPONENT(mesh_data, data, mesh_name, model_name, should_render_mesh,
                   material)
@@ -64,7 +65,7 @@ struct skinned_mesh_bundle : public icomponent {
 };
 DECLARE_COMPONENT(skinned_mesh_bundle, data, bone_entities, mesh_entities)
 
-void init_opengl_buffers(mesh_data &data, bool save_asset = true);
+void init_opengl_buffers(mesh_data &data);
 
 void draw_mesh_data(mesh_data &data, GLenum mode = GL_TRIANGLES);
 

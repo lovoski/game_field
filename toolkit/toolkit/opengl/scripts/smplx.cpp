@@ -345,7 +345,7 @@ void smplx::setup_smpl_model(cnpy::npz_t &data) {
   }
   bundle_data.bone_entities = bone_entities;
   apply_smpl_betas(beta_cache);
-  mesh_comp.update_buffers(true);
+  mesh_comp.update_buffers();
 }
 
 void smplx::apply_smpl_betas(std::vector<float> betas) {

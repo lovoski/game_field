@@ -5,7 +5,6 @@
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/transform.hpp"
 
-
 namespace toolkit::opengl {
 
 struct _render_vertex {
@@ -28,8 +27,9 @@ struct _blendshape_data {
   std::vector<_blendshape_vertex> vertices;
 };
 
-template <typename T> void read_vector(std::ifstream &in, std::vector<T> &vec) {
-  uint64_t size = 0;
+template <typename T>
+void read_vector(std::istringstream &in, std::vector<T> &vec) {
+  std::size_t size = 0;
   in.read(reinterpret_cast<char *>(&size), sizeof(size));
   if (size > 0) {
     vec.resize(size);
@@ -39,34 +39,44 @@ template <typename T> void read_vector(std::ifstream &in, std::vector<T> &vec) {
   }
 }
 template <typename T>
-void write_vector(std::ofstream &out, const std::vector<T> &vec) {
-  uint64_t size = vec.size(); // Use uint64_t for size to be safe
+std::size_t write_vector(std::ostringstream &out, const std::vector<T> &vec) {
+  std::size_t size = vec.size(),
+              bytes_count = 0; // Use uint64_t for size to be safe
   out.write(reinterpret_cast<const char *>(&size), sizeof(size));
+  bytes_count += sizeof(size);
   if (size > 0) {
     out.write(reinterpret_cast<const char *>(vec.data()), size * sizeof(T));
+    bytes_count += (size * sizeof(T));
   }
+  return bytes_count;
 }
-void read_blendshape_data(std::ifstream &in,
+void read_blendshape_data(std::vector<char> &data,
                           std::vector<_blendshape_data> &vec) {
-  uint64_t size = 0;
-  in.read(reinterpret_cast<char *>(&size), sizeof(size));
+  std::size_t size = 0;
+  std::istringstream ss(
+      std::string(reinterpret_cast<const char *>(data.data()), data.size()),
+      std::ios::binary);
+  ss.read(reinterpret_cast<char *>(&size), sizeof(size));
   vec.resize(size);
   for (int i = 0; i < size; i++) {
-    in.read(vec[i].name, sizeof(vec[i].name));
-    in.read(reinterpret_cast<char *>(&vec[i].weight), sizeof(vec[i].weight));
-    read_vector(in, vec[i].vertices);
+    ss.read(vec[i].name, sizeof(vec[i].name));
+    ss.read(reinterpret_cast<char *>(&vec[i].weight), sizeof(vec[i].weight));
+    read_vector(ss, vec[i].vertices);
   }
 }
-void write_blendshape_data(std::ofstream &out,
-                           std::vector<_blendshape_data> &vec) {
-  uint64_t size = vec.size();
-  out.write(reinterpret_cast<const char *>(&size), sizeof(size));
+std::tuple<std::string, std::size_t>
+write_blendshape_data(std::vector<_blendshape_data> &vec) {
+  std::ostringstream ss(std::ios::binary);
+  std::size_t size = vec.size(), bytes_count = 0;
+  ss.write(reinterpret_cast<const char *>(&size), sizeof(size));
+  bytes_count += sizeof(size);
   for (int i = 0; i < size; i++) {
-    out.write(vec[i].name, sizeof(vec[i].name));
-    out.write(reinterpret_cast<const char *>(&vec[i].weight),
-              sizeof(vec[i].weight));
-    write_vector(out, vec[i].vertices);
+    ss.write(vec[i].name, sizeof(vec[i].name));
+    ss.write(reinterpret_cast<const char *>(&vec[i].weight),
+             sizeof(vec[i].weight));
+    bytes_count += write_vector(ss, vec[i].vertices);
   }
+  return {ss.str(), bytes_count};
 }
 
 void prepare_plain_data(mesh_data &data, std::vector<_render_vertex> &vertices,
@@ -104,8 +114,7 @@ void prepare_plain_data(mesh_data &data, std::vector<_render_vertex> &vertices,
 
 void init_opengl_buffers_internal(mesh_data &data,
                                   std::vector<_render_vertex> &vertices,
-                                  std::vector<_blendshape_data> &blendshapes,
-                                  bool save_asset);
+                                  std::vector<_blendshape_data> &blendshapes);
 
 void mesh_data::draw_gui(iapp *app) {
   if (ImGui::BeginTable(("##mesh" + mesh_name).c_str(), 2,
@@ -160,27 +169,74 @@ void mesh_data::draw_gui(iapp *app) {
     ImGui::Checkbox("wireframe", &material.wireframe);
     ImGui::DragFloat("wireframe width", &material.wireframe_width, 0.01f, 0.0f,
                      1.0);
-    ImGui::DragFloat("wireframe smooth", &material.wireframe_smooth, 0.01f, 0.0f,
-                     1.0);
+    ImGui::DragFloat("wireframe smooth", &material.wireframe_smooth, 0.01f,
+                     0.0f, 1.0);
     ImGui::TreePop();
   }
 }
 
-void mesh_data::init1() {
-  std::string base_path = join_path(
-      ".", "assets", "meshes", replace(replace(model_name, " ", ""), ":", ""));
-  std::string asset_path =
-      join_path(base_path, str_format("%s.mesh", mesh_name.c_str()));
-  asset_path = replace(replace(asset_path, ":", ""), " ", "");
-  unzip_file(asset_path, asset_path + ".tmp");
-  std::ifstream input(asset_path + ".tmp", std::ios::binary);
-  if (input.is_open()) {
-    spdlog::info("Load mesh {0} from path {1}", mesh_name, asset_path);
+nlohmann::json mesh_data::late_serialize() {
+  // save vertices, indices and blendshapes as compressed base64 string
+  nlohmann::json data;
+
+  std::vector<_render_vertex> save_vertices;
+  std::vector<_blendshape_data> save_blendshapes;
+  prepare_plain_data(*this, save_vertices, save_blendshapes);
+
+  std::ostringstream ss0(std::ios::binary);
+  auto ss0_size = write_vector(ss0, save_vertices);
+  auto ss0_str = ss0.str();
+
+  std::ostringstream ss1(std::ios::binary);
+  auto ss1_size = write_vector(ss1, indices);
+  auto ss1_str = ss1.str();
+
+  auto [ss2_str, ss2_size] = write_blendshape_data(save_blendshapes);
+
+  auto ss0_compressed = compress_bytes(ss0_str.data(), ss0_size);
+  auto ss1_compressed = compress_bytes(ss1_str.data(), ss1_size);
+  auto ss2_compressed = compress_bytes(ss2_str.data(), ss2_size);
+
+  auto ss0_base64 = base64_encode(ss0_compressed.data(), ss0_compressed.size());
+  auto ss1_base64 = base64_encode(ss1_compressed.data(), ss1_compressed.size());
+  auto ss2_base64 = base64_encode(ss2_compressed.data(), ss2_compressed.size());
+
+  data["vertices"] = ss0_base64;
+  data["indices"] = ss1_base64;
+  data["blendshapes"] = ss2_base64;
+
+  return data;
+}
+
+void mesh_data::late_deserialize(nlohmann::json &data) {
+  if (!data.is_null()) {
+    std::string ss0_base64 = data["vertices"];
+    std::string ss1_base64 = data["indices"];
+    std::string ss2_base64 = data["blendshapes"];
+
+    auto ss0_base64_decode = base64_decode(ss0_base64);
+    auto ss1_base64_decode = base64_decode(ss1_base64);
+    auto ss2_base64_decode = base64_decode(ss2_base64);
+
+    auto ss0_decompressed =
+        decompress_bytes(ss0_base64_decode.data(), ss0_base64_decode.size());
+    auto ss1_decompressed =
+        decompress_bytes(ss1_base64_decode.data(), ss1_base64_decode.size());
+    auto ss2_decompressed =
+        decompress_bytes(ss2_base64_decode.data(), ss2_base64_decode.size());
+
     std::vector<_render_vertex> data_vertices;
     std::vector<_blendshape_data> data_blendshapes;
-    read_vector(input, data_vertices);
-    read_vector(input, indices);
-    read_blendshape_data(input, data_blendshapes);
+
+    std::string ss0_str(ss0_decompressed.begin(), ss0_decompressed.end());
+    std::istringstream ss0(ss0_str, std::ios::binary);
+    read_vector(ss0, data_vertices);
+
+    std::string ss1_str(ss1_decompressed.begin(), ss1_decompressed.end());
+    std::istringstream ss1(ss1_str, std::ios::binary);
+    read_vector(ss1, indices);
+
+    read_blendshape_data(ss2_decompressed, data_blendshapes);
 
     vertices.resize(data_vertices.size());
     for (int i = 0; i < data_vertices.size(); i++) {
@@ -216,13 +272,10 @@ void mesh_data::init1() {
       }
     }
 
-    init_opengl_buffers_internal(*this, data_vertices, data_blendshapes, false);
+    init_opengl_buffers_internal(*this, data_vertices, data_blendshapes);
   } else {
-    spdlog::error("Failed to load mesh {0} from path {1}", mesh_name,
-                  asset_path);
+    spdlog::error("Can't load mesh data from null late_deserialize");
   }
-  input.close();
-  std::remove((asset_path + ".tmp").c_str());
 }
 
 void mesh_data::draw(GLenum mode) { draw_mesh_data(*this, mode); }
@@ -233,15 +286,14 @@ void draw_mesh_data(mesh_data &data, GLenum mode) {
   data.vertex_array.unbind();
 }
 
-void mesh_data::update_buffers(bool save_assets) {
+void mesh_data::update_buffers() {
   force_update_flag = true;
-  init_opengl_buffers(*this, save_assets);
+  init_opengl_buffers(*this);
 }
 
 void init_opengl_buffers_internal(mesh_data &data,
                                   std::vector<_render_vertex> &vertices,
-                                  std::vector<_blendshape_data> &blendshapes,
-                                  bool save_asset) {
+                                  std::vector<_blendshape_data> &blendshapes) {
   // prepare default bounding box
   for (int i = 0; i < data.vertices.size(); i++) {
     data.bb_max = math::max3(data.bb_max, data.vertices[i].position.head<3>());
@@ -279,40 +331,17 @@ void init_opengl_buffers_internal(mesh_data &data,
                                                GL_STATIC_DRAW);
     }
   }
-
-  if (save_asset) {
-    // save data into text file relative to binary file
-    std::string base_path =
-        join_path(".", "assets", "meshes",
-                  replace(replace(data.model_name, " ", ""), ":", ""));
-    mkdir(base_path);
-    std::string asset_path =
-        join_path(base_path, str_format("%s.mesh.tmp", data.mesh_name.c_str()));
-    asset_path = replace(replace(asset_path, ":", ""), " ", "");
-    std::ofstream output(asset_path, std::ios::binary);
-    if (output.is_open()) {
-      write_vector(output, vertices);
-      write_vector(output, data.indices);
-      write_blendshape_data(output, blendshapes);
-      spdlog::info("Save mesh asset at path {0}", asset_path);
-    } else {
-      spdlog::error("Failed to create mesh asset at path {0}", asset_path);
-    }
-    output.close();
-    zip_file(asset_path, asset_path.substr(0, asset_path.size() - 4));
-    std::remove(asset_path.c_str());
-  }
 }
 
 /**
  * Setup opengl buffer for a mesh, serialize the data into a .mesh text file
  * relative to output binary.
  */
-void init_opengl_buffers(mesh_data &data, bool save_asset) {
+void init_opengl_buffers(mesh_data &data) {
   std::vector<_render_vertex> vertices;
   std::vector<_blendshape_data> blendshapes;
   prepare_plain_data(data, vertices, blendshapes);
-  init_opengl_buffers_internal(data, vertices, blendshapes, save_asset);
+  init_opengl_buffers_internal(data, vertices, blendshapes);
 }
 
 entt::entity create_cube(entt::registry &registry, math::matrix4 t) {

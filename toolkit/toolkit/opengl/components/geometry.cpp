@@ -25,7 +25,7 @@ void smooth_normal(opengl::mesh_data &data) {
   for (int i = 0; i < data.vertices.size(); i++) {
     data.vertices[i].normal << (normal_cache[i] / 3), 0.0f;
   }
-  data.update_buffers(false);
+  data.update_buffers();
 }
 
 }; // namespace toolkit::opengl
