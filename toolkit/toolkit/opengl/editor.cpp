@@ -514,7 +514,7 @@ void editor::draw_main_menubar() {
           auto data = serialize();
           std::ofstream output(filepath);
           if (output.is_open()) {
-            output << data.dump(2) << std::endl;
+            output << data.dump() << std::endl;
             output.close();
             spdlog::info("Save scene to {0}", filepath);
           } else {
@@ -784,7 +784,7 @@ void editor::draw_entity_hierarchy() {
         auto data = make_bundle(entity);
         std::ofstream output(filepath);
         if (output.is_open()) {
-          output << data.dump(2) << std::endl;
+          output << data.dump() << std::endl;
           spdlog::info("Save bundle to filepath {0}", filepath);
         } else {
           spdlog::error("Failed to save bundle to filepath {0}", filepath);
