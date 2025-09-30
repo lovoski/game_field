@@ -539,20 +539,20 @@ void editor::draw_main_menubar() {
       }
       ImGui::Separator();
 
-      ImGui::MenuItem("Prefab", nullptr, false, false);
-      if (ImGui::MenuItem("Import Prefab")) {
+      ImGui::MenuItem("Bundle", nullptr, false, false);
+      if (ImGui::MenuItem("Import Bundle")) {
         std::string filepath;
-        if (open_file_dialog("Import prefab to current scene", {"*.prefab"},
+        if (open_file_dialog("Import bundle to current scene", {"*.bundle"},
                              filepath)) {
           std::ifstream input(filepath);
           if (input.is_open()) {
             auto data = nlohmann::json::parse(
                 std::string((std::istreambuf_iterator<char>(input)),
                             std::istreambuf_iterator<char>()));
-            load_prefab(data);
-            spdlog::info("Import prefab to current scene from {0}", filepath);
+            load_bundle(data);
+            spdlog::info("Import bundle to current scene from {0}", filepath);
           } else {
-            spdlog::error("Failed to import prefab from {0}", filepath);
+            spdlog::error("Failed to import bundle from {0}", filepath);
           }
           input.close();
         }
@@ -778,16 +778,16 @@ void editor::draw_entity_hierarchy() {
     if (ImGui::MenuItem("Select")) {
       selected_entity = entity;
     }
-    if (ImGui::MenuItem("Make Prefab")) {
+    if (ImGui::MenuItem("Make Bundle")) {
       std::string filepath;
-      if (save_file_dialog("Save entity hierarchy as prefab", {"*.prefab"}, filepath)) {
-        auto data = make_prefab(entity);
+      if (save_file_dialog("Save entity hierarchy as bundle", {"*.bundle"}, filepath)) {
+        auto data = make_bundle(entity);
         std::ofstream output(filepath);
         if (output.is_open()) {
           output << data.dump(2) << std::endl;
-          spdlog::info("Save prefab to filepath {0}", filepath);
+          spdlog::info("Save bundle to filepath {0}", filepath);
         } else {
-          spdlog::error("Failed to save prefab to filepath {0}", filepath);
+          spdlog::error("Failed to save bundle to filepath {0}", filepath);
         }
         output.close();
       }

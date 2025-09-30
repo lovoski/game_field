@@ -13,7 +13,7 @@ namespace toolkit {
  *
  * `start` function would gets executed at the start of the next main loop when
  * one script is created and added to a valid entity. So deserializing scripts
- * from scenes and prefabs would still gets correct `start` functions since the
+ * from scenes and bundles would still gets correct `start` functions since the
  * member variables are already properly deserialized when the next main loop
  * starts.
  *

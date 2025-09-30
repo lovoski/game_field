@@ -80,8 +80,8 @@ public:
   virtual void deserialize(nlohmann::json &j);
   virtual void late_deserialize(nlohmann::json &j) {}
 
-  nlohmann::json make_prefab(entt::entity root);
-  void load_prefab(nlohmann::json &j);
+  nlohmann::json make_bundle(entt::entity root);
+  void load_bundle(nlohmann::json &j);
 
   entt::registry registry;
 
