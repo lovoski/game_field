@@ -203,4 +203,49 @@ std::string trans_hierarchy_as_bvh_frame(entt::registry &registry,
   return result;
 }
 
+std::vector<proxy_skeleton> estimate_proxy_skeleton(entt::registry &registry,
+                                                    actor &actor_comp) {
+  auto [parents, children, roots] =
+      estimate_actor_bone_hierarchy(registry, actor_comp, true);
+  std::vector<proxy_skeleton> results;
+  for (auto root : roots) {
+    proxy_skeleton skel;
+    std::stack<int> s, p;
+    s.push(root);
+    p.push(-1);
+    while (!s.empty()) {
+      int cur_idx = s.top();
+      int parent_idx = p.top();
+      s.pop();
+      p.pop();
+
+      skel.ordered_entities.push_back(actor_comp.ordered_entities[cur_idx]);
+      skel.parents.push_back(parent_idx);
+      if (parent_idx != -1)
+        skel.children[parent_idx].push_back(skel.ordered_entities.size() - 1);
+
+      for (auto c : children[cur_idx]) {
+        s.push(c);
+        p.push(skel.ordered_entities.size() - 1);
+      }
+    }
+    results.emplace_back(skel);
+  }
+  return results;
+}
+
+std::string make_current_pose_bvh(entt::registry &registry,
+                                  proxy_skeleton &skel) {
+  return "";
+}
+
+std::string proxy_hierarchy_as_bvh_skel(entt::registry &registry,
+                                        proxy_skeleton &skel) {
+  return "";
+}
+std::string proxy_hierarchy_as_bvh_frame(entt::registry &registry,
+                                         proxy_skeleton &skel) {
+  return "";
+}
+
 }; // namespace toolkit::anim

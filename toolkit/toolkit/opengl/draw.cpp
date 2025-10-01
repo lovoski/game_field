@@ -1086,6 +1086,65 @@ void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
   vao.unbind();
 }
 
+const std::string mesh_vs = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoord;
+
+uniform mat4 vp;
+
+void main() {
+    gl_Position = vp * vec4(aPos, 1.0);
+}
+)";
+
+const std::string mesh_fs = R"(
+#version 330 core
+uniform vec3 color;
+out vec4 FragColor;
+
+void main() {
+    FragColor = vec4(color, 1.0);
+}
+)";
+
+void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
+               std::vector<std::uint32_t> &indices, math::matrix4 &vp,
+               math::vector3 color) {
+  static bool initialized = false;
+  static shader shader;
+  static vao vao;
+  static buffer vbo, ebo;
+
+  if (!initialized) {
+    vao.create();
+    vbo.create();
+    ebo.create();
+    shader.compile_shader_from_source(mesh_vs, mesh_fs);
+    initialized = true;
+  }
+  vao.bind();
+
+  vbo.set_data_as(GL_ARRAY_BUFFER, vertices);
+  ebo.set_data_as(GL_ELEMENT_ARRAY_BUFFER, indices);
+
+  vao.link_attribute(vbo, 0, 3, GL_FLOAT, sizeof(assets::mesh_vertex),
+                     (void *)offsetof(assets::mesh_vertex, position));
+  vao.link_attribute(vbo, 1, 3, GL_FLOAT, sizeof(assets::mesh_vertex),
+                     (void *)offsetof(assets::mesh_vertex, normal));
+
+  shader.use();
+  shader.set_mat4("vp", vp);
+  shader.set_vec3("color", color);
+
+  glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+
+  vbo.unbind_as(GL_ARRAY_BUFFER);
+  ebo.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
+  vao.unbind();
+}
+
 void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale) {
   auto xdir = trans.world_rot() * math::world_right;
   auto ydir = trans.world_rot() * math::world_up;

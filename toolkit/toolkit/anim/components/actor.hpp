@@ -20,6 +20,18 @@ struct bone_node : public icomponent {
 };
 DECLARE_COMPONENT(bone_node, data, name, offset_matrix)
 
+/**
+ * The parent-child relation in a proxy skeleton is not neccessarily the
+ * parent-child relation in the transform hierarchy, local transforms should be
+ * computed from global transforms.
+ */
+struct proxy_skeleton {
+  std::vector<entt::entity> ordered_entities;
+
+  std::vector<int> parents;
+  std::vector<std::vector<int>> children;
+};
+
 void create_actor_with_skeleton(entt::registry &registry,
                                 entt::entity container, assets::skeleton &skel);
 
@@ -28,6 +40,16 @@ std::string trans_hierarchy_as_bvh_skel(entt::registry &registry,
                                         transform &root);
 std::string trans_hierarchy_as_bvh_frame(entt::registry &registry,
                                          transform &root);
+
+std::vector<proxy_skeleton> estimate_proxy_skeleton(entt::registry &registry,
+                                                    actor &actor_comp);
+
+std::string make_current_pose_bvh(entt::registry &registry,
+                                  proxy_skeleton &skel);
+std::string proxy_hierarchy_as_bvh_skel(entt::registry &registry,
+                                        proxy_skeleton &skel);
+std::string proxy_hierarchy_as_bvh_frame(entt::registry &registry,
+                                         proxy_skeleton &skel);
 
 /**
  * We assume at default state, there's only one root node in the provided actor

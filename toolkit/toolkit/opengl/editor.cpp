@@ -191,7 +191,7 @@ void editor::reset() {
   render_sys = add_sys<defered_render_system>();
   script_sys = add_sys<script_system>();
   anim_sys = add_sys<anim::anim_system>();
-  phy_sys = add_sys<physics::physics_system>();
+  phy_sys = add_sys<sim::xpbd_system>();
 }
 
 void editor::add_default_objects() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolkit/opengl/base.hpp"
+#include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/transform.hpp"
 
 namespace toolkit::opengl {
@@ -44,6 +45,10 @@ void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale = false);
 void draw_cube(math::vector3 position, math::vector3 forward,
                math::vector3 left, math::vector3 up, math::matrix4 vp,
                math::vector3 size, math::vector3 color = White);
+
+void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
+               std::vector<std::uint32_t> &indices, math::matrix4 &vp,
+               math::vector3 color = White);
 
 /**
  * Visualize a list of bones, with <start, end> pair.

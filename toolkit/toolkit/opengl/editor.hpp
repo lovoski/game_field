@@ -10,7 +10,7 @@
 #include "toolkit/anim/anim_system.hpp"
 #include "toolkit/opengl/components/camera.hpp"
 #include "toolkit/opengl/rasterize/system.hpp"
-#include "toolkit/physics/system.hpp"
+#include "toolkit/sim/systems.hpp"
 
 namespace toolkit::assets {
 
@@ -79,7 +79,7 @@ public:
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
   anim::anim_system *anim_sys = nullptr;
-  physics::physics_system *phy_sys = nullptr;
+  sim::xpbd_system *phy_sys = nullptr;
 
   float click_selection_max_sin = 2e-2f;
   std::vector<ray_query_data> selection_candidates;
