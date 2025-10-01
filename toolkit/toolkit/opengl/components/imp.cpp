@@ -114,9 +114,10 @@ frustom_bounding_sphere(float znear, float zfar, float fovy_deg, float width,
                         float height) {
   float alpha = fovy_deg / 360.0f * 3.1415927f;
   float a = width / height, z0 = znear, z1 = zfar;
-  float m = std::min(0.5f * ((a * a + 1.0f) * tan(alpha) * tan(alpha) + 1) *
-                    (znear + zfar),
-                zfar);
+  float comp0 =
+      0.5f * ((a * a + 1.0f) * tan(alpha) * tan(alpha) + 1) * (znear + zfar);
+  float comp1 = zfar;
+  float m = comp0 < comp1 ? comp0 : comp1;
   float r = sqrt((zfar - m) * (zfar - m) +
                  (a * a + 1.0f) * tan(alpha) * tan(alpha) * zfar * zfar);
   return {math::vector3(0.0f, 0.0f, -m), r};

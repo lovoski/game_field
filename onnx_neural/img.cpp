@@ -7,7 +7,7 @@ int main() {
   MNIST model;
   int total_count = 0, acc_count = 0, current_count = 0;
   if (toolkit::open_file_dialog("Select MNIST dataset label annotation",
-                                {"*.json"}, "*.json", filepath)) {
+                                {"*.json"}, filepath)) {
     std::ifstream input(filepath);
     auto data = nlohmann::json::parse(input);
     total_count = data.size();

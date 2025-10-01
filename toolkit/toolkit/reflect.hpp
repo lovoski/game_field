@@ -446,7 +446,7 @@ template <typename T> bool is_reflectable() {
     toolkit::for_each(get_reflect_fields_##class_name(), [&](auto field) {     \
       using FieldType = std::decay_t<decltype(obj.*(field.ptr))>;              \
       if (j.contains(field.name))                                              \
-        obj.*(field.ptr) = j[field.name].get<FieldType>();                     \
+        obj.*(field.ptr) = j[field.name].template get<FieldType>();            \
     });                                                                        \
   }
 

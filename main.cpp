@@ -16,8 +16,10 @@ using namespace toolkit;
 
 int main() {
 #ifdef _WIN32
+#ifdef _MSC_VER
   SetConsoleOutputCP(CP_UTF8);
   std::locale::global(std::locale("zh_CN.UTF-8"));
+#endif
 #endif
   toolkit::opengl::editor editor;
   editor.init();
