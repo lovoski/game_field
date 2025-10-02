@@ -2,9 +2,6 @@
 
 namespace toolkit::opengl {
 
-void convex_hull(mesh_data &data, std::vector<assets::mesh_vertex> &vertices,
-                 std::vector<uint32_t> &indices) {}
-
 void smooth_normal(opengl::mesh_data &data) {
   int num_triangles = data.indices.size() / 3;
   std::vector<math::vector3> normal_cache(data.vertices.size(),

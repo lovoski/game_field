@@ -14,7 +14,7 @@ void xpbd_system::update(entt::registry &registry, float dt) {
 }
 
 void xpbd_system::fixedupdate(entt::registry &registry, float dt) {
-  spdlog::info("xpbd system fixed update");
+  // spdlog::info("xpbd system fixed update");
 }
 
 }; // namespace toolkit::sim

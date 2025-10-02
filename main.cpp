@@ -1,4 +1,3 @@
-#include "scripts/mesh_modify.hpp"
 #include "scripts/mixamo_manipulate.hpp"
 #include "scripts/record_proj_traj.hpp"
 #include "scripts/spring_damper.hpp"

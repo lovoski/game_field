@@ -1138,7 +1138,13 @@ void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
   shader.set_mat4("vp", vp);
   shader.set_vec3("color", color);
 
+  // Enable wireframe mode
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  
   glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+  
+  // Restore default fill mode
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
   vbo.unbind_as(GL_ARRAY_BUFFER);
   ebo.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
