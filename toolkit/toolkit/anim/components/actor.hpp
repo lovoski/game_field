@@ -35,15 +35,8 @@ struct proxy_skeleton {
 void create_actor_with_skeleton(entt::registry &registry,
                                 entt::entity container, assets::skeleton &skel);
 
-std::string make_current_pose_bvh(entt::registry &registry, transform &root);
-std::string trans_hierarchy_as_bvh_skel(entt::registry &registry,
-                                        transform &root);
-std::string trans_hierarchy_as_bvh_frame(entt::registry &registry,
-                                         transform &root);
-
 std::vector<proxy_skeleton> estimate_proxy_skeleton(entt::registry &registry,
                                                     actor &actor_comp);
-
 std::string make_current_pose_bvh(entt::registry &registry,
                                   proxy_skeleton &skel);
 std::string proxy_hierarchy_as_bvh_skel(entt::registry &registry,

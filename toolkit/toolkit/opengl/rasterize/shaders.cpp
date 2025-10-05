@@ -1,7 +1,7 @@
 #include "toolkit/opengl/rasterize/shaders.hpp"
 
 std::string gbuffer_geometry_pass_vs = R"(
-#version 460 core
+#version 450 core
 layout (location = 0) in vec4 aPos;
 layout (location = 1) in vec4 aNormal;
 layout (location = 2) in vec4 aTexCoord;
@@ -34,7 +34,7 @@ void main() {
 }
 )";
 std::string gbuffer_geometry_pass_gs = R"(
-#version 460 core
+#version 450 core
 layout (triangles) in;
 layout (triangle_strip) out;
 layout (max_vertices = 3) out;
@@ -100,7 +100,7 @@ void main() {
 }
 )";
 std::string gbuffer_geometry_pass_fs = R"(
-#version 460 core
+#version 450 core
 
 layout (location = 0) out vec4 gPosition; // world-space position
 layout (location = 1) out vec4 gNormal;   // world-space normal (packed to 0..1)
@@ -203,7 +203,7 @@ void main() {
 )";
 
 std::string shadow_vs = R"(
-#version 460 core
+#version 450 core
 layout (location = 0) in vec4 aPos;
 
 uniform mat4 gVP;
@@ -213,12 +213,12 @@ void main() {
 }
 )";
 std::string shadow_fs = R"(
-#version 460 core
+#version 450 core
 void main() {}
 )";
 
 std::string quad_vs = R"(
-#version 460 core
+#version 450 core
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec2 aTexCoord;
 out vec2 texcoord;

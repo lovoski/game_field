@@ -62,12 +62,24 @@ void vis_skeleton::draw_to_scene(iapp *app) {
         opengl::draw_wire_spheres(joint_positions, cam_comp.vp,
                                   0.08f * avg_bone_length, bone_color);
       }
+      if (draw_names) {
+        for (int i = 0; i < actor_ptr->ordered_entities.size(); i++) {
+          if (actor_ptr->joint_active[i]) {
+            auto &joint_trans =
+                registry->get<transform>(actor_ptr->ordered_entities[i]);
+            opengl::draw_text3d(joint_trans.name, joint_trans.world_pos(),
+                                math::quat::Identity(), cam_comp.vp,
+                                opengl::White, 0.0f, 0.02f);
+          }
+        }
+      }
     }
   });
 }
 
 void vis_skeleton::draw_gui(iapp *app) {
   ImGui::Checkbox("Draw Axes", &draw_axes);
+  ImGui::Checkbox("Draw Names", &draw_names);
   ImGui::DragFloat("Axes Size", &axes_length, 0.05f, 0.0f, 1.0f);
   ImGui::Checkbox("Draw Spheres", &draw_spheres);
   gui::color_edit_3("Bone Color", bone_color);

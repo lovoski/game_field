@@ -15,7 +15,7 @@ public:
   void start() override;
   void destroy() override;
 
-  bool draw_axes = false, draw_spheres = true;
+  bool draw_axes = false, draw_spheres = true, draw_names = false;
   float axes_length = 1.0f;
   math::vector3 bone_color = opengl::Green;
 
@@ -27,7 +27,7 @@ private:
   std::vector<std::pair<math::vector3, math::vector3>> draw_queue, x_dir, y_dir,
       z_dir;
 };
-DECLARE_SCRIPT(vis_skeleton, animation, draw_axes, draw_spheres, axes_length,
-               bone_color)
+DECLARE_SCRIPT(vis_skeleton, animation, draw_axes, draw_spheres, draw_names,
+               axes_length, bone_color)
 
 }; // namespace toolkit::anim

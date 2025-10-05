@@ -1,10 +1,11 @@
-#include "toolkit/opengl/editor.hpp"
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
+#include "toolkit/opengl/editor.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
 #include <ufbx.h>
+
 
 namespace toolkit::assets {
 
@@ -63,7 +64,10 @@ read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
     auto unode = scene->nodes[i];
     auto ent = registry.create();
     auto &trans = registry.emplace<transform>(ent);
-    trans.name = unode->is_root ? filename : std::string(unode->name.data);
+    trans.name =
+        unode->is_root
+            ? filename
+            : toolkit::replace(std::string(unode->name.data), " ", "_");
     ufbx_node_to_entity[unode] = ent;
   }
   // setup parent child hierarchy

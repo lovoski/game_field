@@ -124,85 +124,6 @@ std::string padding_tabs(int n) {
   return tabs;
 }
 
-std::string get_joint_string(entt::registry &registry, transform &bone_trans,
-                             int level) {
-  math::vector3 offset =
-      bone_trans.local_pos().array() * bone_trans.world_scl().array();
-  std::string result =
-      padding_tabs(level) + "JOINT " + bone_trans.name + "\n" +
-      padding_tabs(level) + "{\n" + padding_tabs(level) + "\tOFFSET\t" +
-      str_format("%.6f\t%.6f\t%.6f", offset.x(), offset.y(), offset.z()) +
-      "\n" + padding_tabs(level) +
-      "\tCHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation "
-      "Xrotation\n";
-  if (bone_trans.m_children.size() > 0) {
-    for (auto child_ent : bone_trans.m_children)
-      result += get_joint_string(registry, registry.get<transform>(child_ent),
-                                 level + 1);
-  } else {
-    result += padding_tabs(level + 1) + "End Site\n" + padding_tabs(level + 1) +
-              "{\n" + padding_tabs(level + 1) + "\tOFFSET\t 0\t0\t0 \n" +
-              padding_tabs(level + 1) + "}\n";
-  }
-  result += padding_tabs(level) + "}\n";
-  return result;
-}
-std::string get_joint_6dof_string(entt::registry &registry,
-                                  transform &bone_trans) {
-  auto angles = math::rad_to_deg(math::quat_to_euler(bone_trans.local_rot()));
-  math::vector3 offset =
-      bone_trans.local_pos().array() * bone_trans.world_scl().array();
-  std::string result =
-      str_format("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t", offset.x(), offset.y(),
-                 offset.z(), angles.z(), angles.y(), angles.x());
-  for (auto child_ent : bone_trans.m_children)
-    result +=
-        get_joint_6dof_string(registry, registry.get<transform>(child_ent));
-  return result;
-}
-std::string make_current_pose_bvh(entt::registry &registry, transform &root) {
-  std::string result = "";
-  result += trans_hierarchy_as_bvh_skel(registry, root);
-  result +=
-      str_format("\nMOTION\nFrames: %d\nFrame Time: %6f\n", 1, 1.0f / 30.0f);
-  result += trans_hierarchy_as_bvh_frame(registry, root);
-  return result;
-}
-std::string trans_hierarchy_as_bvh_skel(entt::registry &registry,
-                                        transform &root) {
-  std::string result = "";
-  auto root_rot = root.world_rot();
-  root.set_world_rot(math::quat::Identity());
-  root.force_update_hierarchy();
-
-  result = result + "HIERARCHY\nROOT " + root.name +
-           "\n{\n\tOFFSET\t0.00\t0.00\t0.00\n\tCHANNELS 6 Xposition "
-           "Yposition Zposition Zrotation Yrotation Xrotation\n";
-
-  for (auto child_ent : root.m_children)
-    result += get_joint_string(registry, registry.get<transform>(child_ent), 1);
-  result += "}\n";
-
-  root.set_world_rot(root_rot);
-  root.force_update_hierarchy();
-
-  return result;
-}
-std::string trans_hierarchy_as_bvh_frame(entt::registry &registry,
-                                         transform &root) {
-  std::string result = "";
-  auto root_angles = math::rad_to_deg(math::quat_to_euler(root.world_rot()));
-  result +=
-      str_format("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t", root.world_pos().x(),
-                 root.world_pos().y(), root.world_pos().z(), root_angles.z(),
-                 root_angles.y(), root_angles.x());
-  for (auto child_ent : root.m_children)
-    result +=
-        get_joint_6dof_string(registry, registry.get<transform>(child_ent));
-  result += "\n";
-  return result;
-}
-
 std::vector<proxy_skeleton> estimate_proxy_skeleton(entt::registry &registry,
                                                     actor &actor_comp) {
   auto [parents, children, roots] =
@@ -210,6 +131,7 @@ std::vector<proxy_skeleton> estimate_proxy_skeleton(entt::registry &registry,
   std::vector<proxy_skeleton> results;
   for (auto root : roots) {
     proxy_skeleton skel;
+    skel.children.resize(parents.size(), std::vector<int>());
     std::stack<int> s, p;
     s.push(root);
     p.push(-1);
@@ -236,16 +158,96 @@ std::vector<proxy_skeleton> estimate_proxy_skeleton(entt::registry &registry,
 
 std::string make_current_pose_bvh(entt::registry &registry,
                                   proxy_skeleton &skel) {
-  return "";
+  std::string result = "";
+  result += proxy_hierarchy_as_bvh_skel(registry, skel);
+  result +=
+      str_format("\nMOTION\nFrames: %d\nFrame Time: %6f\n", 1, 1.0f / 30.0f);
+  result += proxy_hierarchy_as_bvh_frame(registry, skel);
+  return result;
 }
-
+std::string get_joint_skel_str(entt::registry &registry, proxy_skeleton &skel,
+                               int joint_idx, int level) {
+  auto &bone_trans = registry.get<transform>(skel.ordered_entities[joint_idx]);
+  auto &parent_trans =
+      registry.get<transform>(skel.ordered_entities[skel.parents[joint_idx]]);
+  auto local_mat = parent_trans.matrix().inverse() * bone_trans.matrix();
+  math::vector3 local_pos, local_scale;
+  math::quat local_rot;
+  math::decompose_transform(local_mat, local_pos, local_rot, local_scale);
+  math::vector3 offset = local_pos;
+  std::string joint_name = toolkit::replace(bone_trans.name, " ", "_");
+  std::string result =
+      padding_tabs(level) + "JOINT " + joint_name + "\n" + padding_tabs(level) +
+      "{\n" + padding_tabs(level) + "\tOFFSET\t" +
+      str_format("%.6f\t%.6f\t%.6f", offset.x(), offset.y(), offset.z()) +
+      "\n" + padding_tabs(level) +
+      "\tCHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation "
+      "Xrotation\n";
+  if (skel.children[joint_idx].size() > 0) {
+    for (auto child_idx : skel.children[joint_idx])
+      result += get_joint_skel_str(registry, skel, child_idx, level + 1);
+  } else {
+    result += padding_tabs(level + 1) + "End Site\n" + padding_tabs(level + 1) +
+              "{\n" + padding_tabs(level + 1) + "\tOFFSET\t0\t0\t0\n" +
+              padding_tabs(level + 1) + "}\n";
+  }
+  result += padding_tabs(level) + "}\n";
+  return result;
+}
 std::string proxy_hierarchy_as_bvh_skel(entt::registry &registry,
                                         proxy_skeleton &skel) {
-  return "";
+  std::string result = "";
+  auto &root = registry.get<transform>(skel.ordered_entities[0]);
+  auto root_rot = root.world_rot();
+  root.set_world_rot(math::quat::Identity());
+  root.force_update_hierarchy();
+  std::string joint_name = toolkit::replace(root.name, " ", "_");
+
+  result = result + "HIERARCHY\nROOT " + joint_name +
+           "\n{\n\tOFFSET\t0.00\t0.00\t0.00\n\tCHANNELS 6 Xposition "
+           "Yposition Zposition Zrotation Yrotation Xrotation\n";
+
+  for (auto child_idx : skel.children[0])
+    result += get_joint_skel_str(registry, skel, child_idx, 1);
+  result += "}\n";
+
+  root.set_world_rot(root_rot);
+  root.force_update_hierarchy();
+
+  return result;
+}
+std::string get_joint_6dof_str(entt::registry &registry, proxy_skeleton &skel,
+                               int joint_idx) {
+  auto &bone_trans = registry.get<transform>(skel.ordered_entities[joint_idx]);
+  auto &parent_trans =
+      registry.get<transform>(skel.ordered_entities[skel.parents[joint_idx]]);
+  auto local_mat = parent_trans.matrix().inverse() * bone_trans.matrix();
+  math::vector3 local_pos, local_scale;
+  math::quat local_rot;
+  math::decompose_transform(local_mat, local_pos, local_rot, local_scale);
+  auto angles = math::rad_to_deg(math::quat_to_euler(local_rot));
+  math::vector3 offset = local_pos;
+  std::string result_template = "%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t";
+  std::string result =
+      str_format(result_template.c_str(), offset.x(), offset.y(), offset.z(),
+                 angles.z(), angles.y(), angles.x());
+  for (auto child_idx : skel.children[joint_idx])
+    result += get_joint_6dof_str(registry, skel, child_idx);
+  return result;
 }
 std::string proxy_hierarchy_as_bvh_frame(entt::registry &registry,
                                          proxy_skeleton &skel) {
-  return "";
+  std::string result = "";
+  auto &root = registry.get<transform>(skel.ordered_entities[0]);
+  auto root_angles = math::rad_to_deg(math::quat_to_euler(root.world_rot()));
+  result +=
+      str_format("%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t", root.world_pos().x(),
+                 root.world_pos().y(), root.world_pos().z(), root_angles.z(),
+                 root_angles.y(), root_angles.x());
+  for (auto child_idx : skel.children[0])
+    result += get_joint_6dof_str(registry, skel, child_idx);
+  result += "\n";
+  return result;
 }
 
 }; // namespace toolkit::anim

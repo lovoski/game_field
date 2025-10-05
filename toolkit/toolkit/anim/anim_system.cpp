@@ -6,7 +6,6 @@
 #include "toolkit/anim/scripts/traj_tracking.hpp"
 #include <spdlog/spdlog.h>
 
-
 namespace toolkit::anim {
 
 void anim_system::draw_gui(entt::registry &registry, entt::entity entity) {
@@ -16,16 +15,18 @@ void anim_system::draw_gui(entt::registry &registry, entt::entity entity) {
         draw_skeleton_gui(registry, entity);
         ImGui::TreePop();
       }
-      if (ImGui::Button("Export Current Pose", {-1, 30})) {
-        auto bvh_str = make_current_pose_bvh(
-            registry, registry.get<transform>(ptr->ordered_entities[0]));
-        std::string save_filepath;
-        if (save_file_dialog(str_format("Save .bvh pose"), {"*.bvh"},
-                             save_filepath)) {
-          std::ofstream output(save_filepath);
-          if (output.is_open())
-            output << bvh_str;
-          output.close();
+      if (ImGui::Button("Export Proxy Pose", {-1, 30})) {
+        auto proxies = estimate_proxy_skeleton(registry, *ptr);
+        for (int i = 0; i < proxies.size(); i++) {
+          std::string save_filepath;
+          auto bvh_str = make_current_pose_bvh(registry, proxies[i]);
+          if (save_file_dialog(str_format("Save .bvh pose no.%d", i), {"*.bvh"},
+                               save_filepath)) {
+            std::ofstream output(save_filepath);
+            if (output.is_open())
+              output << bvh_str;
+            output.close();
+          }
         }
       }
     }

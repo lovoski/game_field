@@ -74,7 +74,8 @@ void collect_bone_entities(entt::registry &registry,
     // find the first parent that's a bone entity
     while (cur_trans->m_parent != entt::null) {
       cur_trans = registry.try_get<transform>(cur_trans->m_parent);
-      if (name_to_bone_entity.find(cur_trans->name) != name_to_bone_entity.end())
+      if (name_to_bone_entity.find(cur_trans->name) !=
+          name_to_bone_entity.end())
         break;
       cur = cur_trans->m_parent;
     }
@@ -238,7 +239,7 @@ build_node_mapping(entt::registry &registry, aiNode *node, const aiScene *scene,
                    std::map<aiNode *, entt::entity> &node_mapping) {
   auto ent = registry.create();
   auto &trans = registry.emplace<transform>(ent);
-  trans.name = node->mName.C_Str();
+  trans.name = toolkit::replace(node->mName.C_Str(), " ", "_");
   trans.set_local_transform(convert_assimp_mat4(node->mTransformation));
   node_mapping[node] = ent;
   for (int i = 0; i < node->mNumChildren; i++) {
