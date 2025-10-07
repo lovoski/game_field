@@ -178,8 +178,11 @@ bool bvh_motion::load(string filename, float scale) {
             std::vector<vector3>(skel.get_num_joints(), vector3::Ones());
 
         // parse pose data
-        getline(fileInput, line);
-        lineSeg = SplitByWhiteSpace(line);
+        while (getline(fileInput, line)) {
+          lineSeg = SplitByWhiteSpace(line);
+          if (lineSeg[0] == "MOTION")
+            break;
+        }
         if (lineSeg[0] == "MOTION") {
           getline(fileInput, line);
           lineSeg = SplitByWhiteSpace(line);

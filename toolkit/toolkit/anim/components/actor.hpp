@@ -1,5 +1,6 @@
 #pragma once
 
+#include "toolkit/loaders/bvh.hpp"
 #include "toolkit/loaders/motion.hpp"
 #include "toolkit/system.hpp"
 #include "toolkit/transform.hpp"
@@ -64,6 +65,7 @@ instantiate_skeleton_data(entt::registry &registry, assets::skeleton &skel,
                           std::vector<entt::entity> &ordered_entities,
                           std::map<std::string, entt::entity> &name_to_entity);
 
-entt::entity create_bvh_actor(entt::registry &registry, std::string filepath);
+entt::entity create_bvh_actor(entt::registry &registry, std::string filepath,
+                              bool v0 = true);
 
 }; // namespace toolkit::anim

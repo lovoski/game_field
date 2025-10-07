@@ -49,14 +49,19 @@ void create_actor_with_skeleton(entt::registry &registry,
   actor_trans.add_child(skel_root);
 }
 
-entt::entity create_bvh_actor(entt::registry &registry, std::string filepath) {
+entt::entity create_bvh_actor(entt::registry &registry, std::string filepath,
+                              bool v0) {
   auto container = registry.create();
   auto &container_trans = registry.emplace<transform>(container);
   auto &vis_script = registry.emplace<vis_skeleton>(container);
   container_trans.name = std::filesystem::path(filepath).filename().string();
-  assets::bvh_motion motion_data;
-  motion_data.load(filepath);
-  create_actor_with_skeleton(registry, container, motion_data.skel);
+  if (v0) {
+    assets::bvh_motion motion_data;
+    motion_data.load(filepath);
+    create_actor_with_skeleton(registry, container, motion_data.skel);
+  } else {
+    auto motion_data = assets::load_bvh(filepath);
+  }
   return container;
 }
 
@@ -161,7 +166,7 @@ std::string make_current_pose_bvh(entt::registry &registry,
   std::string result = "";
   result += proxy_hierarchy_as_bvh_skel(registry, skel);
   result +=
-      str_format("\nMOTION\nFrames: %d\nFrame Time: %6f\n", 1, 1.0f / 30.0f);
+      str_format("MOTION\nFrames: %d\nFrame Time: %6f\n", 1, 1.0f / 30.0f);
   result += proxy_hierarchy_as_bvh_frame(registry, skel);
   return result;
 }
@@ -174,7 +179,7 @@ std::string get_joint_skel_str(entt::registry &registry, proxy_skeleton &skel,
   math::vector3 local_pos, local_scale;
   math::quat local_rot;
   math::decompose_transform(local_mat, local_pos, local_rot, local_scale);
-  math::vector3 offset = local_pos;
+  math::vector3 offset = local_pos.array() * bone_trans.world_scl().array();
   std::string joint_name = toolkit::replace(bone_trans.name, " ", "_");
   std::string result =
       padding_tabs(level) + "JOINT " + joint_name + "\n" + padding_tabs(level) +
@@ -226,7 +231,7 @@ std::string get_joint_6dof_str(entt::registry &registry, proxy_skeleton &skel,
   math::quat local_rot;
   math::decompose_transform(local_mat, local_pos, local_rot, local_scale);
   auto angles = math::rad_to_deg(math::quat_to_euler(local_rot));
-  math::vector3 offset = local_pos;
+  math::vector3 offset = local_pos.array() * bone_trans.world_scl().array();
   std::string result_template = "%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t%.6f\t";
   std::string result =
       str_format(result_template.c_str(), offset.x(), offset.y(), offset.z(),
