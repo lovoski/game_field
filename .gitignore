@@ -19,3 +19,5 @@ __pycache__
 /*.bvh
 /python/*.bvh
 /python/data
+
+/scripts/onnxruntime/models

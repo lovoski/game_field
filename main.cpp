@@ -1,4 +1,5 @@
 #include "scripts/mixamo_manipulate.hpp"
+#include "scripts/onnxruntime/camdmpp.hpp"
 #include "scripts/record_proj_traj.hpp"
 #include "scripts/spring_damper.hpp"
 #include "scripts/task_verify.hpp"
