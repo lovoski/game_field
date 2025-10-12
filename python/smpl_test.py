@@ -1,49 +1,48 @@
 import smplx
+from smplx.joint_names import JOINT_NAMES
 import os
-from smpl_joint_names import SMPLX_JOINT_NAMES, SMPLH_JOINT_NAMES, SMPL_JOINT_NAMES
 import numpy as np
 import torch
 from scipy.spatial.transform import Rotation
+import utils.bvh as bvh
 
-def smplx_to_bvh():
-  pass
+def smpl_to_bvh(filepath, model, betas, rots, trans):
+    """
+    betas: (1, 10)
+    rots: (nframes, njoints, 3)
+    trans: (nframes, 3)
+    """
+    njoints = model.parents.detach().shape[0]
+    parents = model.parents.detach().numpy()
+    output = model(betas=betas, body_pose=rots)
+    rest = output.joints.detach().numpy()[0, :njoints]
+    offsets = rest.copy()
+    names = []
+    for j in range(njoints):
+        names.append(JOINT_NAMES[j])
+        if parents[j] != -1:
+            offsets[j] -= rest[parents[j]]
+    offsets[0] = 0
 
-if __name__ == '__main__':
-  smpl_model_base_dir = 'data/models'
-  smpl_data = dict(np.load(os.path.join(smpl_model_base_dir, 'smpl/SMPL_NEUTRAL.npz')))
-  
-  print(smpl_data.keys())
-  # for idx, x in enumerate(smpl_data['J_regressor'][0]):
-  #   if x != 0:
-  #     print(idx)
-
-  data = smpl_data['J_regressor']
-  njoints, nvertices = data.shape
-  jregressor_indices, jregressor_weights = [], []
-  for i in range(njoints):
-    non_zeros, non_zeros_data = [], []
-    for j in range(nvertices):
-      if data[i,j] != 0:
-        non_zeros_data.append(float(data[i,j]))
-        non_zeros.append(j)
-    jregressor_indices.append(non_zeros)
-    jregressor_weights.append(non_zeros_data)
-    # print(non_zeros)
-    # print(non_zeros_data)
-    # print(non_zeros)
-  result = ''
-  for i in range(len(jregressor_weights)):
-    tmp = '{'
-    for j in range(len(jregressor_weights[i])-1):
-      tmp = tmp + str(jregressor_weights[i][j]) + ','
-    tmp = tmp + str(jregressor_weights[i][-1]) + '},\n'
-    result = result + tmp
-  print(result)
+    rotations = np.zeros((1, njoints, 4))
+    rotations[:, :, 0] = 1
+    positions = np.zeros((1, njoints, 3))
+    positions[0] = offsets
+    bvh.save(
+        filepath,
+        {
+            "rotations": rotations,
+            "positions": positions,
+            "offsets": offsets,
+            "parents": parents,
+            "names": names,
+            "frametime": 1.0 / 30.0,
+        },
+        True,
+    )
 
 
-
-  # print(non_zero_digits)
-  # print(non_zero_data)
-
-  # model = smplx.create('./data/models', model_type='smpl', gender='NEUTRAL')
-  # print(model.parents)
+if __name__ == "__main__":
+    smpl_model_base_dir = "data/models"
+    model = smplx.create(smpl_model_base_dir, model_type="smplx", gender="NEUTRAL")
+    smpl_to_bvh('template.bvh', model, torch.zeros((1, 10)))

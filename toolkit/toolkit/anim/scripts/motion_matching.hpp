@@ -58,18 +58,16 @@ public:
   void draw_gui(iapp *app) override;
 
   void update(iapp *app, float dt) override;
-  void fixedupdate(iapp *app, float dt);
+  void fixedupdate(iapp *app, float dt) override;
 
 private:
   bool db_loaded, mapping_loaded = false;
   std::string db_filepath = "", mapping_filepath = "";
   std::map<std::string, int> joint_name_to_idx;
 
-  int cur_exec_fixed = 0;
   float joystick_deadzone = 0.2f;
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;
-  float cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
   float search_time = 0.25f, search_timer = search_time;
   math::vector3 root_pos = math::vector3::Zero(),
                 root_vel = math::vector3::Zero(),

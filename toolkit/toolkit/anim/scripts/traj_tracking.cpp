@@ -34,14 +34,6 @@ void traj_tracking::start() {
 }
 
 void traj_tracking::update(iapp *app, float dt) {
-  float residual = cur_time - cur_exec_fixed * fixed_interval;
-  while (residual > fixed_interval) {
-    residual -= fixed_interval;
-    fixedupdate(app, fixed_interval);
-    cur_exec_fixed += 1;
-  }
-  cur_time += dt;
-
   // // update camera settings
   // auto &cam_trans =
   // registry->get<transform>(opengl::g_instance.active_camera); math::vector3

@@ -46,10 +46,6 @@ private:
   std::tuple<float, int, int> lhmm(mm_context context, int cur_frame,
                                    int cur_range, int k, int l);
 
-  // fixed update related local variables
-  int cur_exec_fixed = 0;
-  float cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
-
   float joystick_deadzone = 0.2f;
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;

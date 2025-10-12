@@ -49,20 +49,45 @@ void create_actor_with_skeleton(entt::registry &registry,
   actor_trans.add_child(skel_root);
 }
 
-entt::entity create_bvh_actor(entt::registry &registry, std::string filepath,
-                              bool v0) {
+entt::entity create_bvh_actor(entt::registry &registry, std::string filepath) {
   auto container = registry.create();
   auto &container_trans = registry.emplace<transform>(container);
   auto &vis_script = registry.emplace<vis_skeleton>(container);
   container_trans.name = std::filesystem::path(filepath).filename().string();
-  if (v0) {
-    assets::bvh_motion motion_data;
-    motion_data.load(filepath);
-    create_actor_with_skeleton(registry, container, motion_data.skel);
-  } else {
-    auto motion_data = assets::load_bvh(filepath);
-  }
+  assets::bvh_motion motion_data;
+  motion_data.load(filepath);
+  create_actor_with_skeleton(registry, container, motion_data.skel);
   return container;
+}
+
+void create_bvh_actor(entt::registry &registry, assets::bvh_data &motion,
+                      entt::entity container) {
+  auto &container_actor = registry.emplace_or_replace<anim::actor>(container);
+  auto &container_trans = registry.get<transform>(container);
+  if (registry.try_get<vis_skeleton>(container) == nullptr)
+    registry.emplace<vis_skeleton>(container);
+  auto &vis_script = registry.get<vis_skeleton>(container);
+
+  container_actor.joint_active.resize(motion.names.size(), true);
+  container_actor.ordered_entities.clear();
+  container_actor.name_to_entity.clear();
+
+  for (int i = 0; i < motion.names.size(); i++) {
+    auto joint_ent = registry.create();
+    auto &joint_trans = registry.emplace<transform>(joint_ent);
+    joint_trans.name = motion.names[i];
+    container_actor.ordered_entities.push_back(joint_ent);
+    container_actor.name_to_entity[joint_trans.name] = joint_ent;
+    // use the first frame motion
+    joint_trans.set_local_pos(motion.local_pos[0][i]);
+    joint_trans.set_local_rot(motion.local_rot[0][i]);
+    if (motion.parents[i] == -1)
+      joint_trans.set_parent(container, false);
+    else
+      joint_trans.set_parent(
+          container_actor.ordered_entities[motion.parents[i]], false);
+  }
+  container_trans.force_update_hierarchy();
 }
 
 std::tuple<std::vector<int>, std::vector<std::vector<int>>, std::vector<int>>

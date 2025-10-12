@@ -144,22 +144,22 @@ bvh_data load_bvh(std::string filepath) {
     std::istringstream iss(line);
 
     for (size_t j = 0; j < data.names.size(); j++) {
-      float x = 0, y = 0, z = 0;
+      float xpos = 0, ypos = 0, zpos = 0, xrot = 0, yrot = 0, zrot = 0;
       for (const auto &ch : joint_channels[j]) {
         float v;
         iss >> v;
         if (ch == "Xposition")
-          x = v;
+          xpos = v;
         else if (ch == "Yposition")
-          y = v;
+          ypos = v;
         else if (ch == "Zposition")
-          z = v;
+          zpos = v;
         else if (ch == "Xrotation")
-          x = v * (float)3.14159265f / 180.0f;
+          xrot = v * (float)3.14159265f / 180.0f;
         else if (ch == "Yrotation")
-          y = v * (float)3.14159265f / 180.0f;
+          yrot = v * (float)3.14159265f / 180.0f;
         else if (ch == "Zrotation")
-          z = v * (float)3.14159265f / 180.0f;
+          zrot = v * (float)3.14159265f / 180.0f;
       }
       // Save
       if (!joint_channels[j].empty()) {
@@ -167,13 +167,13 @@ bvh_data load_bvh(std::string filepath) {
             (std::find(joint_channels[j].begin(), joint_channels[j].end(),
                        "Xposition") != joint_channels[j].end());
         if (has_pos) {
-          data.local_pos[f][j] = math::vector3(x, y, z);
+          data.local_pos[f][j] = math::vector3(xpos, ypos, zpos);
         } else {
           data.local_pos[f][j] = data.offsets[j];
         }
         // use euler_to_quat with channel order
         data.local_rot[f][j] =
-            detail::euler_to_quat(x, y, z, joint_channels[j]);
+            detail::euler_to_quat(xrot, yrot, zrot, joint_channels[j]);
       }
     }
   }

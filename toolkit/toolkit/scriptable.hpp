@@ -35,10 +35,26 @@ public:
   virtual void update(iapp *app, float dt) {}
   virtual void lateupdate(iapp *app, float dt) {}
 
+  virtual void fixedupdate(iapp *app, float dt) {}
+
+  void __fixedupdate_caller__(iapp *app, float dt) {
+    double residual = __cur_time - __cur_exec_fixed * fixed_interval;
+    while (residual > fixed_interval) {
+      residual -= fixed_interval;
+      fixedupdate(app, static_cast<float>(fixed_interval));
+      __cur_exec_fixed += 1;
+    }
+    __cur_time += dt;
+  }
+
   bool enabled = true;
 
   entt::registry *registry = nullptr;
   entt::entity entity = entt::null;
+
+protected:
+  std::int64_t __cur_exec_fixed = 0;
+  double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
 };
 
 /**
@@ -112,8 +128,10 @@ public:
   void update(iapp *app, float dt) {
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
-        if (script->enabled)
+        if (script->enabled) {
           script->update(app, dt);
+          script->__fixedupdate_caller__(app, dt);
+        }
       });
     }
   }

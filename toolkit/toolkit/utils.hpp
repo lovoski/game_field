@@ -77,6 +77,8 @@ std::string base64_encode(const char *data, size_t len);
 // Decode base64 string into byte array (vector<char>)
 std::vector<char> base64_decode(const std::string &input);
 
+std::wstring string_to_wstring(const std::string &str);
+
 class stopwatch {
 public:
   stopwatch() { reset(); }

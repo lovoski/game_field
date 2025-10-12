@@ -139,7 +139,19 @@ std::string str_format(const char *format, ...) {
   // Return the result as a std::string
   return std::string(buffer.data());
 }
+std::wstring string_to_wstring(const std::string &str) {
+  if (str.empty())
+    return L"";
 
+  size_t size_needed = std::mbstowcs(nullptr, str.c_str(), 0);
+  if (size_needed == static_cast<size_t>(-1)) {
+    throw std::runtime_error("Conversion error");
+  }
+
+  std::wstring result(size_needed, 0);
+  std::mbstowcs(&result[0], str.c_str(), size_needed);
+  return result;
+}
 bool listdir(std::string dirpath, std::function<void(std::string)> f) {
 #ifdef _WIN32
   std::wstring wdirpath = std::filesystem::u8path(dirpath).wstring();

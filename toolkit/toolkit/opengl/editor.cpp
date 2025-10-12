@@ -1,5 +1,6 @@
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/anim/components/actor.hpp"
+#include "toolkit/anim/scripts/motion_player.hpp"
 #include "toolkit/anim/scripts/vis.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
@@ -583,12 +584,20 @@ void editor::draw_main_menubar() {
           }
         }
       }
-      if (ImGui::MenuItem("Import   BVH")) {
+      if (ImGui::MenuItem("Import BVH")) {
         std::string filepath;
         if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
                              filepath)) {
           spdlog::info("Load motion file {0}", filepath);
           anim::create_bvh_actor(registry, filepath);
+        }
+      }
+      if (ImGui::MenuItem("Import All BVH")) {
+        std::string dirpath;
+        if (open_folder_dialog("Import folder containing .bvh files",
+                               dirpath)) {
+          spdlog::info("Load all .bvh motion files under {0}", dirpath);
+          anim::import_all_bvh_motion(registry, dirpath);
         }
       }
       ImGui::EndMenu();
@@ -780,7 +789,8 @@ void editor::draw_entity_hierarchy() {
     }
     if (ImGui::MenuItem("Make Bundle")) {
       std::string filepath;
-      if (save_file_dialog("Save entity hierarchy as bundle", {"*.bundle"}, filepath)) {
+      if (save_file_dialog("Save entity hierarchy as bundle", {"*.bundle"},
+                           filepath)) {
         auto data = make_bundle(entity);
         std::ofstream output(filepath);
         if (output.is_open()) {
