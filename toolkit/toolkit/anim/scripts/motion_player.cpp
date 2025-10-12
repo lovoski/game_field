@@ -65,9 +65,14 @@ void bvh_motion_player::draw_gui(iapp *app) {
 
   ImGui::SeparatorText("Motion Settings");
   ImGui::Checkbox("Apply Motion", &apply_motion);
-  ImGui::Text("Motion Duration: %.3f s",
-              motion_loaded ? motion.local_pos.size() * motion.frametime
-                            : 0.0f);
+  ImGui::Text("Motion Duration: %.3f s, played %.2f %%",
+              motion_loaded ? motion.local_pos.size() * motion.frametime : 0.0f,
+              motion_loaded
+                  ? std::clamp(current_time /
+                                   (motion.local_pos.size() * motion.frametime),
+                               0.0f, 1.0f) *
+                        100.0f
+                  : 0.0f);
   if (ImGui::Button("Import Motion", {-1, 30})) {
     std::string filepath;
     if (open_file_dialog("Slect Motion File", {"*.bvh"}, filepath)) {
@@ -76,7 +81,8 @@ void bvh_motion_player::draw_gui(iapp *app) {
   }
 }
 
-void import_all_bvh_motion(entt::registry &registry, std::string dirpath) {
+void import_all_bvh_motion(entt::registry &registry, std::string dirpath,
+                           float scale) {
   listdir(dirpath, [&](std::string filepath) {
     if (!endswith(filepath, ".bvh"))
       return;
@@ -86,6 +92,7 @@ void import_all_bvh_motion(entt::registry &registry, std::string dirpath) {
     container_trans.name = std::filesystem::path(filepath).string();
     auto &motion_player = registry.emplace<bvh_motion_player>(container);
     motion_player.load_motion(filepath);
+    container_trans.set_world_scale(math::vector3(scale, scale, scale));
   });
 }
 

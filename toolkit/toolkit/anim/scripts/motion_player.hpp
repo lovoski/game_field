@@ -32,6 +32,7 @@ private:
 };
 DECLARE_SCRIPT(bvh_motion_player, animation)
 
-void import_all_bvh_motion(entt::registry &registry, std::string dirpath);
+void import_all_bvh_motion(entt::registry &registry, std::string dirpath,
+                           float scale = 1.0f);
 
 }; // namespace toolkit::anim
