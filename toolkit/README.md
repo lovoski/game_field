@@ -1,12 +1,12 @@
-# toolkit 文档
+# Document
 
-## 首要说明
+## Important
 
-工具包本身完全采用 c++20 编写，在 msvc 上编译，通过 cmake 构建，没有使用到编译器独有的特性，支持 window，linux 平台。（macos 原生不支持 opengl 4.6，可能无法编译）。
+工具包本身完全采用 c++20 编写，在 msvc 和 gcc 上通过了编译，支持 window，linux 平台。
 
-工具包中使用右手坐标系，以正 Y 为上方向，正 Z 为前方向（不同于 unity 中的左手系，正 Y 上方向，正 Z 前方向）；内部长度单位默认为1m；渲染时摄像机朝向负 Z 方向，遵循 opengl 的规范；采用 32 位浮点数。
+类似 unreal engine，工具包中使用右手坐标系（正 Y 为上方向，正 Z 为前方向）；内部长度单位默认为1m；渲染时摄像机朝向负 Z 方向，遵循 opengl 的规范；采用 32 位浮点数；数学库直接采用 Eigen。
 
-`toolkit` 完全 `self-contained`，可以直接复制到别的项目中，通过以下 cmake 命令链接使用：
+`toolkit` 可以直接复制到别的项目中，通过以下 cmake 命令链接使用：
 
 ```cmake
 add_subdirectory(toolkit)
@@ -16,7 +16,7 @@ target_link_libraries(main PRIVATE toolkit)
 
 ## 支持文件格式
 
-我编写 `toolkit` 的目标不是实现一个界面、功能完善的游戏引擎取代工作中 unity，unreal 的位置，而是提供一个我自己足够熟悉的平台，快速实践一些想法，或者快速可视化一些 python 处理后的数据。
+我编写这个项目的目标不是实现一个界面、功能完善的游戏引擎取代工作中 unity，unreal 的位置，而是提供一个我自己足够熟悉的平台，快速实践一些想法，或者快速可视化一些 python 处理后的数据。
 
 为此，这个工具包必须对多种输入文件提供支持，目前支持下面的文件：
 
@@ -35,15 +35,7 @@ target_link_libraries(main PRIVATE toolkit)
 
 ## script 的说明
 
-script 的概念非常类似 unity 中的 c# script。在使用方式上两者基本保持一致，不过本引擎中的 script 其实是引擎源代码的一部分，需要直接编译到引擎中发生效果，也不支持热更新。
-
-所有的 script 都应当继承自 scriptable 基类。虽然 c++ 带有构造函数和析构函数，一个 script 的成员变量初始化和销毁应该在重载的 `start` 和 `destroy` 函数中进行。每一个 script 都会带有两个默认的变量 `registry` 以及 `entity`，系统确保这两个变量在 start 之前一定是有效的。其中 `registry` 是当前场景的 ecs registry，可以用于访问和管理场景中的所有 entity，component 和 system；`entity` 则是挂载了当前 script 的实体，通过 `entity` 我们可以管理当前实体上挂载的其他 component。
-
-所有 script 都需要在末尾通过宏 `DECLARE_SCRIPT` 声明，由于已经引擎中包含简单的编译时期反射，可以直接将需要序列化的数据声明到 `DECLARE_SCRIPT` 中。script 的成员变量中可以保存 entity 以及 entity 的模板，但是不应该保存 component 的拷贝，指针或者引用，对于 component 的可持久化非常容易因为内存管理无效，对于 component 的管理应该直接在运行时实时获取。
-
-如果需要在 script 中创建新的 entity 并保存，应当在 `start` 函数中确保实体被正确初始化，具体可以参考 `scripts/mixamo_manipulate.hpp`。
-
-引擎采用了非常简易的 main loop，所有函数单线程执行，其中 `preupdate`, `update` 和 `lateupdate` 均与 unity 中的用法相同。具体的用法如下：
+script 的概念非常类似 unity 中的 c# script。在使用方式上两者基本保持一致，不过本引擎中的 script 其实是引擎源代码的一部分，需要直接编译到引擎中发生效果，也不支持热更新。请参考以下例子或者引擎中的其他例子编写 script。
 
 ```c++
 #pragma once
@@ -56,6 +48,7 @@ class test_script : public toolkit::scriptable {
 public:
   void start() override {
     // initialize member variables here
+    // use the member variables "registry" and "entity" if needed.
   }
   void destroy() override {
     // destroy member variables if neccessary
@@ -87,3 +80,18 @@ public:
 // to add an instance of this script with editor gui automatically.
 DECLARE_SCRIPT(test_script, utils)
 ```
+
+## system 的说明
+
+系统通过继承， entt 以及自定义的宏实现，所有的 script 继承自 scriptable，scriptable 继承自 icomponent，都可以通过 entt 的接口管理：
+
+```c++
+auto &comp = registry.get<some_component_class>(some_entity);
+auto &script = registry.get<some_script_class>(some_entity);
+```
+
+script 的功能借助 `toolkit/toolkit/opengl/rasterize/defered.cpp` 和 `toolkit/toolkit/scriptable.hpp` 中的两个 system 实现，前者实现了 `draw_to_scene`，后者维护其余的逻辑。
+
+渲染系统（`toolkit/toolkit/opengl/rasterize/defered.cpp`）采用延迟渲染，实现了 blendshape，LBS skinned mesh，高质量角色阴影等展示常用的效果。
+
+[![motion_matching](../docs/motion_matching.jpg)](https://www.bilibili.com/video/BV1eVHazJEvf/?spm_id_from=333.1007.top_right_bar_window_history.content.click&vd_source=bcaf713b6b1c92e7d54cf304c76ff4d2)
