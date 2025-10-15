@@ -43,10 +43,47 @@ script 的概念非常类似 unity 中的 c# script。在使用方式上两者�
 
 如果需要在 script 中创建新的 entity 并保存，应当在 `start` 函数中确保实体被正确初始化，具体可以参考 `scripts/mixamo_manipulate.hpp`。
 
-引擎采用了非常简易的 main loop，所有函数单线程执行，其中 `preupdate`, `update` 和 `lateupdate` 均与 unity 中的用法相同。
+引擎采用了非常简易的 main loop，所有函数单线程执行，其中 `preupdate`, `update` 和 `lateupdate` 均与 unity 中的用法相同。具体的用法如下：
 
-## 编程应当遵循的规范
+```c++
+#pragma once
 
-为了方便代码的维护和拓展，尽量注意以下几点：
-1. 把不同功能的函数份文件存放不是必需的，一切以方便浏览为前提
-2. 尽量不要声明过多类内的全局变量，能够在函数内部声明的变量在内部解决
+#include "toolkit/opengl/editor.hpp"
+#include "toolkit/scriptable.hpp"
+#include "toolkit/system.hpp"
+
+class test_script : public toolkit::scriptable {
+public:
+  void start() override {
+    // initialize member variables here
+  }
+  void destroy() override {
+    // destroy member variables if neccessary
+  }
+  void update(toolkit::iapp *app, float dt) override {
+    // single thread main loop update
+  }
+  void fixedupdate(toolkit::iapp *app, float dt) override {
+    // single thread main loop update with fixed interval
+    // you can modify the interval with inherited member variable "fixed_interval"
+  }
+  void draw_to_scene(toolkit::iapp *app) override {
+    toolkit::opengl::script_draw_to_scene_proxy(app, 
+      [&](toolkit::opengl::editor *editor, 
+          toolkit::transform &cam_trans,
+          toolkit::opengl::camera &cam_comp) {
+        // dispatch draw calls from "toolkit/opengl/draw.hpp"
+        // or write your own debug draw functions.
+        // draw calls here will be rendered on top of the main scene.
+    });
+  }
+
+  void draw_gui(toolkit::iapp *app) override {
+    // use ImGui here to provide gui support to modify member variables
+  }
+};
+// The first parameter to "DECLARE_SCRIPT" is the name for your custom script
+// The second parameter is the category of your own script, this makes it possible
+// to add an instance of this script with editor gui automatically.
+DECLARE_SCRIPT(test_script, utils)
+```
