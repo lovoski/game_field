@@ -589,7 +589,13 @@ void editor::draw_main_menubar() {
         if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
                              filepath)) {
           spdlog::info("Load motion file {0}", filepath);
-          anim::create_bvh_actor(registry, filepath);
+          auto container = registry.create();
+          auto &container_trans = registry.emplace<transform>(container);
+          container_trans.name =
+              std::filesystem::path(filepath).filename().string();
+          auto &motion_player =
+              registry.emplace<anim::bvh_motion_player>(container);
+          motion_player.load_motion(filepath);
         }
       }
       if (ImGui::MenuItem("Import All BVH")) {

@@ -30,9 +30,12 @@ void defered_render_system::draw_menu_gui() {
   ImGui::Checkbox("Draw Wireframe", &enable_wireframe);
   ImGui::Checkbox("Show Texture Wnd", &show_textures_wnd);
   static int capture_frame_counter = 0;
-  if (ImGui::Button("Export Frame Image", {-1, 30}))
-    color_tex.save_as_image().save_png(
-        str_format("frame_capture_%d.png", capture_frame_counter++));
+  if (ImGui::Button("Export Frame Image", {-1, 30})) {
+    std::string save_frame_capture_filepath;
+    if (save_file_dialog("Save Frame Capture", {"*.png"},
+                         save_frame_capture_filepath))
+      color_tex.save_as_image().save_png(save_frame_capture_filepath);
+  }
   ImGui::Separator();
 
   ImGui::MenuItem("Ambient Occlusion", nullptr, nullptr, false);

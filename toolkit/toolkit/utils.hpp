@@ -3,6 +3,7 @@
 #include "toolkit/math.hpp"
 #include <chrono>
 #include <filesystem>
+#include <random>
 #include <zlib.h>
 
 namespace toolkit {
