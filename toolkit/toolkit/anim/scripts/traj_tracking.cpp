@@ -48,6 +48,7 @@ void traj_tracking::update(iapp *app, float dt) {
 std::tuple<float, int, int> traj_tracking::lhmm(mm_context context,
                                                 int cur_frame, int cur_range,
                                                 int k, int l) {
+  // recursive best motion clip search
   auto cur_query = compute_runtime_feature(cur_frame, context);
   float best;
   if (best_frame < YrangeStops[cur_range] - search_time) {
@@ -72,6 +73,7 @@ std::tuple<float, int, int> traj_tracking::lhmm(mm_context context,
     }
     return {best, best_pred_frame, best_pred_range};
   } else {
+    // top k best candidates
     std::vector<float> k_best_dist(k, best);
     std::vector<int> k_best_idx(k, cur_frame), k_best_range(k, cur_range);
     for (int i = 1; i < k; i++) {
@@ -103,8 +105,27 @@ std::tuple<float, int, int> traj_tracking::lhmm(mm_context context,
     float best_pred_dist = std::numeric_limits<float>::max();
     int best_pred_k = -1;
     for (int i = 0; i < k; i++) {
-      // contruct the predicted context after search_time
+      // contruct the predicted context start from "context" after "search_time"
       mm_context pred_context;
+      int apply_best_idx = k_best_idx[i];
+      int apply_best_range = k_best_range[i];
+
+      math::quat _db_start_rot = Yrot[apply_best_idx][0];
+      math::quat _ent_start_rot = context.root_world_rot;
+
+      int _anim_frame = apply_best_idx;
+      for (float time = 0; time < search_time; time += fixed_interval) {
+        pred_context.root_world_rot =
+            (Yrot[_anim_frame][0] * (_db_start_rot.inverse())) * _ent_start_rot;
+        pred_context.root_world_vel =
+            pred_context.root_world_rot *
+            (Yrot[_anim_frame][0].inverse() * Yvel[_anim_frame][0]);
+        if (pred_context.root_world_vel.norm() < 0.015)
+          pred_context.root_world_vel = math::vector3::Zero();
+        pred_context.root_world_pos +=
+            pred_context.root_world_vel * fixed_interval;
+        _anim_frame++;
+      }
 
       // use the predicted context to perform recursive search
       auto [pred_dist, pred_frame, pred_range] =
@@ -122,7 +143,7 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
   auto actor_comp = registry->try_get<anim::actor>(entity);
   if (db_loaded && mapping_loaded && trajectory_loaded &&
       (actor_comp != nullptr)) {
-    if (search_timer < 0.0f) {
+    if (search_timer <= 0.0f) {
       // find the closest point on trajectory as a start point
       float min_traj_diff = std::numeric_limits<float>::max();
       int min_traj_idx = -1;
@@ -152,7 +173,7 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
 
       // perform the optimized recursive search
       auto [search_best_dist, search_best_frame, search_best_range] =
-          lhmm(cur_context, anim_frame, anim_range, 3, 1);
+          lhmm(cur_context, anim_frame, anim_range, 3, 3);
       best_frame = search_best_frame;
       best_range = search_best_range;
 
@@ -164,7 +185,6 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
         inertialize_transition_rotation(off_rot, off_ang, Yrot[anim_frame],
                                         Yang[anim_frame], Yrot[best_frame],
                                         Yang[best_frame]);
-
         anim_range = best_range;
         anim_frame = best_frame;
       }
@@ -194,68 +214,81 @@ void traj_tracking::fixedupdate(iapp *app, float dt) {
     cur_context.root_world_vel =
         cur_context.root_world_rot *
         (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
+    // clamp small velocity to prevent drifting
+    if (cur_context.root_world_vel.norm() < 0.015)
+      cur_context.root_world_vel = math::vector3::Zero();
+    // spdlog::info("anim_frame={0}", anim_frame);
     cur_context.root_world_pos += cur_context.root_world_vel * dt;
 
     root_pos_history.push_back(cur_context.root_world_pos);
 
     // return;
     // update the rest of the pose
-    {
-      data_joints_world_pos.resize(parents.size());
-      // Ypos -> local position
-      // Yrot -> local rotation
-      std::vector<math::matrix4> local_trans(parents.size()),
-          global_trans(parents.size());
-      std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
-          world_rot(parents.size(), math::quat::Identity());
-      std::vector<math::vector3> local_pos(parents.size(),
-                                           math::vector3::Zero()),
-          old_local_pos(parents.size(), math::vector3::Zero());
-      math::vector3 scale_value = math::vector3::Ones();
-      float iner_halflife = 0.075;
-      for (int i = 0; i < parents.size(); i++) {
-        auto [op, ov, out_pos, out_vel] = inertialize_update_position(
-            off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
-            iner_halflife, dt);
-        auto [orf, oa, out_rot, out_ang] = inertialize_update_rotation(
-            off_rot[i], off_ang[i], Yrot[anim_frame][i], Yang[anim_frame][i],
-            iner_halflife, dt);
-        off_pos[i] = op;
-        off_vel[i] = ov;
-        off_rot[i] = orf;
-        off_ang[i] = oa;
-        local_rot[i] = out_rot;
-        local_pos[i] = out_pos;
-        local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
-      }
-      old_local_pos = local_pos;
-      for (int i = 0; i < parents.size(); i++) {
-        if (parents[i] != -1) {
-          global_trans[i] = global_trans[parents[i]] * local_trans[i];
-          world_rot[i] = world_rot[parents[i]] * local_rot[i];
-        } else {
-          global_trans[i] =
-              math::compose_transform(cur_context.root_world_pos,
-                                      cur_context.root_world_rot, scale_value);
-          world_rot[i] = cur_context.root_world_rot;
-        }
-      }
+    animate_character_with_context(dt);
+  }
+}
 
-      for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
-        auto joint_entity = actor_comp->ordered_entities[i];
-        auto &joint_trans = registry->get<transform>(joint_entity);
-        if (joint_name_to_idx.find(joint_trans.name) !=
-            joint_name_to_idx.end()) {
-          int joint_data_idx = joint_name_to_idx[joint_trans.name];
-          if (i == 0) {
-            math::vector3 world_pos =
-                global_trans[joint_data_idx].col(3).head<3>();
-            joint_trans.set_world_pos(world_pos);
-            joint_trans.set_world_rot(world_rot[joint_data_idx]);
-          } else {
-            joint_trans.set_local_rot(local_rot[joint_data_idx]);
-          }
-        }
+/**
+ * root position and rotation from "cur_context"
+ * the rest joint position and rotation from animation database
+ */
+void traj_tracking::animate_character_with_context(float dt) {
+  data_joints_world_pos.resize(parents.size());
+  // Ypos -> local position
+  // Yrot -> local rotation
+  std::vector<math::matrix4> local_trans(parents.size()),
+      global_trans(parents.size());
+  std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
+      world_rot(parents.size(), math::quat::Identity());
+  std::vector<math::vector3> local_pos(parents.size(), math::vector3::Zero()),
+      old_local_pos(parents.size(), math::vector3::Zero());
+  math::vector3 scale_value = math::vector3::Ones();
+  float iner_halflife = 0.075;
+  for (int i = 0; i < parents.size(); i++) {
+    if (inertialize) {
+      auto [op, ov, out_pos, out_vel] = inertialize_update_position(
+          off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
+          iner_halflife, dt);
+      auto [orf, oa, out_rot, out_ang] = inertialize_update_rotation(
+          off_rot[i], off_ang[i], Yrot[anim_frame][i], Yang[anim_frame][i],
+          iner_halflife, dt);
+      off_pos[i] = op;
+      off_vel[i] = ov;
+      off_rot[i] = orf;
+      off_ang[i] = oa;
+      local_rot[i] = out_rot;
+      local_pos[i] = out_pos;
+    } else {
+      local_rot[i] = Yrot[anim_frame][i];
+      local_pos[i] = Ypos[anim_frame][i];
+    }
+    local_trans[i] =
+        math::compose_transform(local_pos[i], local_rot[i], scale_value);
+  }
+  old_local_pos = local_pos;
+  for (int i = 0; i < parents.size(); i++) {
+    if (parents[i] != -1) {
+      global_trans[i] = global_trans[parents[i]] * local_trans[i];
+      world_rot[i] = world_rot[parents[i]] * local_rot[i];
+    } else {
+      global_trans[i] = math::compose_transform(
+          cur_context.root_world_pos, cur_context.root_world_rot, scale_value);
+      world_rot[i] = cur_context.root_world_rot;
+    }
+  }
+
+  auto &actor_comp = registry->get<actor>(entity);
+  for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
+    auto joint_entity = actor_comp.ordered_entities[i];
+    auto &joint_trans = registry->get<transform>(joint_entity);
+    if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
+      int joint_data_idx = joint_name_to_idx[joint_trans.name];
+      if (i == 0) {
+        math::vector3 world_pos = global_trans[joint_data_idx].col(3).head<3>();
+        joint_trans.set_world_pos(world_pos);
+        joint_trans.set_world_rot(world_rot[joint_data_idx]);
+      } else {
+        joint_trans.set_local_rot(local_rot[joint_data_idx]);
       }
     }
   }
@@ -276,14 +309,11 @@ void traj_tracking::draw_to_scene(iapp *app) {
                          cam_comp.vp, opengl::Green);
     }
 
-    if (trajectory_loaded)
+    if (trajectory_loaded && applied_traj_frame >= 0 &&
+        applied_traj_frame < traj_points.size())
       opengl::draw_wire_sphere(traj_points[applied_traj_frame], cam_comp.vp,
                                0.1f, opengl::Purple);
 
-    // opengl::draw_wire_sphere(root_pos, cam_comp.vp, 0.1f, opengl::Red);
-
-    // opengl::draw_wire_spheres(data_joints_world_pos, cam_comp.vp, 0.1f,
-    //                           opengl::Purple);
     if (db_loaded && data_joints_world_pos.size() > 0) {
       std::vector<std::pair<math::vector3, math::vector3>> bone_pairs;
       for (int i = 0; i < parents.size(); i++) {
@@ -296,20 +326,8 @@ void traj_tracking::draw_to_scene(iapp *app) {
     }
 
     if (trajectory_loaded) {
-      // std::vector<std::pair<math::vector3, math::vector3>> arrows;
-      // for (int i = 0; i < traj.facing.size(); i += 20)
-      //   arrows.emplace_back(
-      //       std::make_pair(traj.pos[i], traj.pos[i] + 0.1 * traj.facing[i]));
-      // opengl::draw_arrows(arrows, cam_comp.vp, opengl::White, 0.005f);
       opengl::draw_wire_spheres(traj_points, cam_comp.vp, 0.005f, opengl::Red);
       opengl::draw_linestrip(traj_points, cam_comp.vp, opengl::Red);
-      // for (int i = 0; i < traj.facing.size(); i += 20) {
-      //   const float arrow_length = 0.05;
-      //   opengl::draw_arrow(traj.pos[i],
-      //                      traj.pos[i] + traj.facing[i] * arrow_length,
-      //                      cam_comp.vp, opengl::Green, arrow_length * 0.2);
-      // }
-
       opengl::draw_wire_spheres(root_pos_history, cam_comp.vp, 0.005,
                                 opengl::Purple);
     }
@@ -327,6 +345,7 @@ void traj_tracking::draw_to_scene(iapp *app) {
 }
 
 void traj_tracking::draw_gui(iapp *app) {
+  ImGui::Checkbox("Inertialize", &inertialize);
   ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());
   ImGui::Text(str_format("Traj File: %s", traj_filepath.c_str()).c_str());

@@ -336,7 +336,6 @@ def load(filename, order=None):
         offsets: one joint's local position defined in hierarchy section, use positions instead
         parents: numpy array for one joint's parent index
         names: list of string for joint names
-        order: order for euler angles
         frametime: time duration of a frame
     """
     f = open(filename, "r")
@@ -540,5 +539,102 @@ def save(filename, data, save_positions=False):
 
             f.write("\n")
 
+def mirrored_motion(data):
+  mirror_bones = []
+  pos = data['positions'].copy()
+  rot = data['rotations'].copy()
+  for ni, n in enumerate(data["names"]):
+      if "Right" in n and n.replace("Right", "Left") in data["names"]:
+          mirror_bones.append(
+              data["names"].index(n.replace("Right", "Left"))
+          )
+      elif "Left" in n and n.replace("Left", "Right") in data["names"]:
+          mirror_bones.append(
+              data["names"].index(n.replace("Left", "Right"))
+          )
+      else:
+          mirror_bones.append(ni)
+  mirror_bones = np.array(mirror_bones)
+  gloRot, gloPos = fk(rot, pos, data["parents"])
+  gloPos = np.array([-1, 1, 1]) * gloPos[:, mirror_bones]
+  gloRot = np.array([1, 1, -1, -1]) * gloRot[:, mirror_bones]
+  rot, pos = ik(gloRot, gloPos, data["parents"])
 
+  m_data = data.copy()
+  m_data['rotations'] = rot.copy()
+  m_data['positions'] = pos.copy()
+  return m_data
 
+def remove_joint(data, joint_name):
+  """
+  Remove the given joint and all its children if exists
+  """
+  nframes = data['rotations'].shape[0]
+  njoints = len(data['names'])
+  children = []
+  for i in range(njoints):
+    children.append([])
+    if data['parents'][i] != -1:
+      children[data['parents'][i]].append(i)
+  joint_idx = data['names'].index(joint_name)
+  joints_to_be_removed = []
+  s = [joint_idx]
+  while len(s) > 0:
+    last = s.pop()
+    joints_to_be_removed.append(last)
+    for c in children[last]:
+      s.append(c)
+  old_id_to_new = {}
+  for i in range(njoints):
+    if joints_to_be_removed.count(i) == 0:
+      old_id_to_new[i] = len(old_id_to_new.items())
+  rotations = np.zeros((nframes, njoints-len(joints_to_be_removed), 4))
+  positions = np.zeros((nframes, njoints-len(joints_to_be_removed), 3))
+  offsets = np.zeros((njoints-len(joints_to_be_removed), 3))
+  names, parents = [], []
+  for k, v in old_id_to_new.items():
+    rotations[:,v] = data['rotations'][:,k]
+    positions[:,v] = data['positions'][:,k]
+    offsets[v] = data['offsets'][k]
+    names.append(data['names'][k])
+    if data['parents'][k] == -1:
+      parents.append(-1)
+    else:
+      parents.append(old_id_to_new[data['parents'][k]])
+  return {
+    'rotations': rotations,
+    'positions': positions,
+    'offsets': offsets,
+    'names': names,
+    'parents': parents,
+    'frametime': data['frametime']
+  }
+
+def resample_motion(data, target_fps=60):
+  nframes = data['rotations'].shape[0]
+  njoints = len(data['parents'])
+  duration = nframes * data['frametime']
+  target_frametime = 1.0/target_fps
+  target_nframes = int(np.floor(duration / target_frametime))
+  rotations = np.zeros((target_nframes, njoints, 4))
+  positions = np.zeros((target_nframes, njoints, 3))
+  for i in range(target_nframes):
+    timestamp = i*target_frametime
+    start = np.clip(int(np.floor(timestamp/data['frametime'])), 0, nframes-1)
+    end = np.clip(start+1, 0, nframes-1)
+    blending_alpha = np.clip((timestamp-start*data['frametime'])/data['frametime'], 0.0, 1.0)
+    positions[i,:] = data['positions'][start,:]*(1.0-blending_alpha)+data['positions'][end,:]*blending_alpha
+    for j in range(njoints):
+      if np.dot(data['rotations'][start,j], data['rotations'][end,j]) < 0:
+        rotations[i,j] = data['rotations'][start,j]*(1.0-blending_alpha)-data['rotations'][end,j]*blending_alpha
+      else:
+        rotations[i,j] = data['rotations'][start,j]*(1.0-blending_alpha)+data['rotations'][end,j]*blending_alpha
+      rotations[i,j] /= (np.linalg.norm(rotations[i,j])+1e-8)
+  return {
+    'rotations': rotations,
+    'positions': positions,
+    'offsets': data['offsets'],
+    'names': data['names'],
+    'parents': data['parents'],
+    'frametime': target_frametime
+  }

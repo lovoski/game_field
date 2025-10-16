@@ -72,19 +72,19 @@ void motion_matching::start() {
     }
   }
 
-  // disable default editor camera manipulation
-  static_cast<opengl::editor *>(registry->ctx().get<iapp *>())
-      ->editor_manipulate_camera = false;
+  // // disable default editor camera manipulation
+  // static_cast<opengl::editor *>(registry->ctx().get<iapp *>())
+  //     ->editor_manipulate_camera = false;
 }
 
 void motion_matching::update(iapp *app, float dt) {
-  // update camera settings
-  auto &cam_trans = registry->get<transform>(opengl::g_instance.active_camera);
-  math::vector3 cam_fixed_pos =
-      root_pos + 3 * math::world_forward + 2 * math::world_up;
-  math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
-  cam_trans.set_world_transform(
-      math::lookat(cam_fixed_pos, cam_focus_target, math::world_up).inverse());
+  // // update camera settings
+  // auto &cam_trans = registry->get<transform>(opengl::g_instance.active_camera);
+  // math::vector3 cam_fixed_pos =
+  //     root_pos + 3 * math::world_forward + 2 * math::world_up;
+  // math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
+  // cam_trans.set_world_transform(
+  //     math::lookat(cam_fixed_pos, cam_focus_target, math::world_up).inverse());
 }
 
 void motion_matching::fixedupdate(iapp *app, float dt) {
@@ -119,7 +119,7 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
     }
 
     // search
-    if (search_timer < 0.0f) {
+    if (search_timer <= 0.0f) {
       auto Xquery = compute_runtime_feature(anim_frame);
 
       best_range = anim_range;
@@ -170,22 +170,10 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
     if (anim_frame >= YrangeStops[anim_range] - 4)
       search_timer = 0.0f;
 
-    // update root
-    // auto [vel, acc] =
-    //     spring_damper_position(root_vel, root_acc, desired_vel,
-    //                            math::vector3::Zero(), dt, vel_halflife);
-    // auto [rot, ang] =
-    //     spring_damper_rotation(root_rot, root_ang, desired_rot,
-    //                            math::vector3::Zero(), dt, rot_halflife);
-    // root_acc = acc;
-    // root_ang = ang;
-    // directly use the spring synthesized rotation as root rotation
-    // root_rot = rot;
     root_rot = (Yrot[anim_frame][0] * (db_start_rot.inverse())) * ent_start_rot;
-    // motion database store the velocity in world space, remap it to local
-    // space of current rotation for better alignment
     root_vel = root_rot * (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
-    // update the position based on velocity from the matched motion
+    if (root_vel.norm() < 0.015)
+      root_vel = math::vector3::Zero();
     root_pos = root_pos + root_vel * dt;
 
     // update the rest of the pose

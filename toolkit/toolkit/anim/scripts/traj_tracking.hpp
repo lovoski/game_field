@@ -46,10 +46,14 @@ private:
   std::tuple<float, int, int> lhmm(mm_context context, int cur_frame,
                                    int cur_range, int k, int l);
 
+  void animate_character_with_context(float dt);
+
   float joystick_deadzone = 0.2f;
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;
-  float search_time = 0.25f, search_timer = search_time;
+  float search_time = 0.5f, search_timer = search_time;
+
+  bool inertialize = false;
 
   std::vector<math::quat> actor_bind_rot;
   std::vector<math::vector3> actor_bind_pos, data_joints_world_pos;
