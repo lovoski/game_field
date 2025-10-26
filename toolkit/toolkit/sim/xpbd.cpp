@@ -13,8 +13,12 @@ void xpbd_system::update(entt::registry &registry, float dt) {
   cur_time += dt;
 }
 
-void xpbd_system::fixedupdate(entt::registry &registry, float dt) {
-  // spdlog::info("xpbd system fixed update");
-}
+void xpbd_system::fixedupdate(entt::registry &registry, float dt) {}
+
+void xpbd_system::draw_gui(entt::registry &registry, entt::entity entity) {}
+
+void xpbd_system::draw_menu_gui() {}
+
+void xpbd_system::draw_to_scene(entt::registry &registry, iapp *app) {}
 
 }; // namespace toolkit::sim

@@ -7,16 +7,31 @@
 
 namespace toolkit::opengl {
 
+enum material_type {
+  OPAQUE_LIT,
+  OPAQUE_UNLIT,
+  TRANSPARENT,
+};
+
 struct material_data {
-  // render albedo to
+  // render type to a texture, so we can use branching in a huge shader to
+  // render different materials.
+  material_type type = material_type::OPAQUE_LIT;
   math::vector3 albedo = opengl::White;
 
   // render wireframe to mask_tex.b
   bool wireframe = true;
   float wireframe_width = 0.1f;
   float wireframe_smooth = 1.0f;
+
+  texture albedo_tex;
+  std::filesystem::path albedo_tex_filepath = "";
+
+  texture normal_tex;
+  std::filesystem::path normal_tex_filepath = "";
 };
-REFLECT(material_data, albedo, wireframe, wireframe_width, wireframe_smooth)
+REFLECT(material_data, albedo, wireframe, wireframe_width, wireframe_smooth,
+        albedo_tex_filepath, normal_tex_filepath)
 
 struct mesh_data : public icomponent {
   std::string mesh_name, model_name;

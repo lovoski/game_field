@@ -15,6 +15,7 @@ uniform mat4 gModel; // model (per-mesh)
 
 out vec3 vworldPos;
 out vec3 vworldNormal;
+out vec2 vtexCoord;
 
 vec3 safe_normalize(vec3 v) {
   float len = length(v);
@@ -23,6 +24,8 @@ vec3 safe_normalize(vec3 v) {
 }
 
 void main() {
+  vtexCoord = aTexCoord.xy;
+
   vec3 worldPos = (gModel * aPos).xyz;
   vworldPos = worldPos;
 
@@ -43,9 +46,11 @@ uniform vec2 gViewport; // viewport size in pixels
 
 in vec3 vworldPos[];
 in vec3 vworldNormal[];
+in vec2 vtexCoord[];
 
 out vec3 worldPos;
 out vec3 worldNormal;
+out vec2 texCoord;
 noperspective out vec3 edgeDistance; // per-vertex distance to opposite edge (in pixels)
 
 const float EPS = 1e-6;
@@ -80,18 +85,21 @@ void main() {
   // Emit vertices with distances packed per-vertex
   worldPos = vworldPos[0];
   worldNormal = vworldNormal[0];
+  texCoord = vtexCoord[0];
   edgeDistance = vec3(d0, 0.0, 0.0);
   gl_Position = gl_in[0].gl_Position;
   EmitVertex();
 
   worldPos = vworldPos[1];
   worldNormal = vworldNormal[1];
+  texCoord = vtexCoord[1];
   edgeDistance = vec3(0.0, d1, 0.0);
   gl_Position = gl_in[1].gl_Position;
   EmitVertex();
 
   worldPos = vworldPos[2];
   worldNormal = vworldNormal[2];
+  texCoord = vtexCoord[2];
   edgeDistance = vec3(0.0, 0.0, d2);
   gl_Position = gl_in[2].gl_Position;
   EmitVertex();
@@ -109,11 +117,15 @@ layout (location = 3) out vec4 gAlbedo;
 
 in vec3 worldPos;
 in vec3 worldNormal;
+in vec2 texCoord;
 noperspective in vec3 edgeDistance;
 
 uniform bool wireframe;
 uniform mat4 gproj;      // projection matrix (for depth recon)
 uniform vec3 albedo;
+
+uniform bool has_albedo_tex;
+uniform sampler2D model_albedo_tex;
 
 uniform float wireframe_width;  // in pixels
 uniform float wireframe_smooth; // smoothing size in pixels
@@ -160,7 +172,11 @@ void main() {
   float linDepth = linearize_depth_from_ndc(gl_FragCoord.z);
   float wf = compute_wire_mask(); // 1.0 = filled interior, 0.0 = line center
   gMask = vec4(1.0, linDepth, wf, 0.0);
-  gAlbedo = vec4(albedo, 1.0);
+  if (has_albedo_tex)
+    gAlbedo = vec4(texture(model_albedo_tex,texCoord).rgb, 1.0);
+  else
+    gAlbedo = vec4(albedo, 1.0);
+  // gAlbedo = vec4(texCoord.x,texCoord.y,0.0,1.0);
 }
 )";
 std::string defered_default_pass_fs = R"(

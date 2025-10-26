@@ -26,4 +26,6 @@ void combo(
     std::string label, int &index, std::vector<std::string> names,
     std::function<void(int)> handleCurrent = [](int) {});
 
+void texture_select(opengl::texture &tex, std::filesystem::path &filepath);
+
 }; // namespace toolkit::gui

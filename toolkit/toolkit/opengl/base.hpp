@@ -14,6 +14,101 @@ extern math::vector3 Blue;
 extern math::vector3 Yellow;
 extern math::vector3 Purple;
 
+bool create_image_from_texture(GLuint texture_handle, assets::image &img,
+                               bool flip_vertical = true);
+
+class texture {
+public:
+  texture() {}
+  ~texture() {}
+
+  // Constructor: Initializes the texture object
+  void create(GLenum target = GL_TEXTURE_2D);
+  void set_data_from_image(assets::image &img);
+  void create_from_image(assets::image &img) {
+    create();
+    set_data_from_image(img);
+  }
+  assets::image save_as_image() {
+    assets::image img;
+    create_image_from_texture(get_handle(), img);
+    return img;
+  }
+
+  void del() {
+    if (glIsTexture(gl_handle))
+      glDeleteTextures(1, &gl_handle);
+  }
+
+  // Binds the texture to a specific texture unit (default: 0)
+  void bind(GLuint unit = 0) const {
+    glActiveTexture(GL_TEXTURE0 + unit);
+    glBindTexture(gl_target, gl_handle);
+  }
+
+  // Unbinds the texture from the current target
+  void unbind() const { glBindTexture(gl_target, 0); }
+
+  // Sets the texture data and allocates storage
+  void set_data(GLsizei width, GLsizei height, GLint internalFormat = GL_RGBA8,
+                GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE,
+                const void *data = nullptr) {
+    m_width = width;
+    m_height = height;
+    m_internal_format = internalFormat;
+    m_format = format;
+    bind();
+    glTexImage2D(gl_target, 0, internalFormat, width, height, 0, format, type,
+                 data);
+    unbind();
+  }
+
+  void clear_data() {
+    static GLubyte whitePixel[4] = {255, 255, 255, 255};
+    m_width = 1;
+    m_height = 1;
+    m_internal_format = GL_RGBA8;
+    m_format = GL_RGBA;
+    bind();
+    glTexImage2D(gl_target, 0, m_internal_format, m_width, m_height, 0,
+                 m_format, GL_UNSIGNED_BYTE, whitePixel);
+    unbind();
+  }
+
+  // Configures texture parameters
+  void set_parameters(const std::vector<std::pair<GLenum, GLint>> params) {
+    bind();
+    for (const auto &[pname, param] : params) {
+      glTexParameteri(gl_target, pname, param);
+    }
+    unbind();
+  }
+
+  GLenum get_format() const { return m_format; }
+  GLint get_internal_format() const { return m_internal_format; }
+
+  // Returns the opengl texture ID
+  GLuint get_handle() const { return gl_handle; }
+  GLenum get_target() const { return gl_target; }
+
+  // Returns the texture dimensions
+  GLsizei get_width() const { return m_width; }
+  GLsizei get_height() const { return m_height; }
+
+  const bool inited() const { return initialized; }
+
+private:
+  bool initialized = false;
+
+  GLuint gl_handle; // texture object ID
+  GLenum gl_target; // texture target (e.g., GL_TEXTURE_2D)
+
+  GLsizei m_width;         // texture width
+  GLsizei m_height;        // texture height
+  GLenum m_format;         // GL_RGBA
+  GLint m_internal_format; // GL_RGBA8
+};
+
 class context {
 public:
   // Get the singleton instance
@@ -141,6 +236,8 @@ public:
 
   static inline std::set<unsigned int> buffer_handles, vertex_array_handles,
       texture_handles, program_handles, framebuffer_handles;
+
+  texture white_tex, black_tex, checkerboard_tex;
 
 private:
   // Private constructor to prevent direct instantiation
@@ -305,128 +402,6 @@ public:
 
 private:
   GLuint gl_handle;
-};
-
-bool create_image_from_texture(GLuint texture_handle, assets::image &img,
-                               bool flip_vertical = true);
-
-class texture {
-public:
-  texture() {}
-  ~texture() {}
-
-  // Constructor: Initializes the texture object
-  void create(GLenum target = GL_TEXTURE_2D) {
-    gl_handle = 0;
-    gl_target = target;
-    initialized = true;
-    glGenTextures(1, &gl_handle);
-    context::texture_handles.insert(gl_handle);
-  }
-
-  void set_data_from_image(assets::image &img) {
-    int nChannels = img.nchannels;
-    if (nChannels == 3 || nChannels == 1)
-      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    else
-      glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-    GLint iformat = GL_R8;
-    GLenum format = GL_RED;
-    if (nChannels == 3) {
-      iformat = GL_RGB8;
-      format = GL_RGB;
-    } else if (nChannels == 4) {
-      iformat = GL_RGBA8;
-      format = GL_RGBA;
-    } else if (nChannels == 2) {
-      iformat = GL_RG8;
-      format = GL_RG;
-    }
-    set_data(img.width, img.height, iformat, format, GL_UNSIGNED_BYTE,
-             img.data.data());
-  }
-  void create_from_image(assets::image &img) {
-    create();
-    set_data_from_image(img);
-  }
-  assets::image save_as_image() {
-    assets::image img;
-    create_image_from_texture(get_handle(), img);
-    return img;
-  }
-
-  void del() {
-    if (glIsTexture(gl_handle))
-      glDeleteTextures(1, &gl_handle);
-  }
-
-  // Binds the texture to a specific texture unit (default: 0)
-  void bind(GLuint unit = 0) const {
-    glActiveTexture(GL_TEXTURE0 + unit);
-    glBindTexture(gl_target, gl_handle);
-  }
-
-  // Unbinds the texture from the current target
-  void unbind() const { glBindTexture(gl_target, 0); }
-
-  // Sets the texture data and allocates storage
-  void set_data(GLsizei width, GLsizei height, GLint internalFormat = GL_RGBA8,
-                GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE,
-                const void *data = nullptr) {
-    m_width = width;
-    m_height = height;
-    m_internal_format = internalFormat;
-    m_format = format;
-    bind();
-    glTexImage2D(gl_target, 0, internalFormat, width, height, 0, format, type,
-                 data);
-    unbind();
-  }
-
-  void clear_data() {
-    static GLubyte whitePixel[4] = {255, 255, 255, 255};
-    m_width = 1;
-    m_height = 1;
-    m_internal_format = GL_RGBA8;
-    m_format = GL_RGBA;
-    bind();
-    glTexImage2D(gl_target, 0, m_internal_format, m_width, m_height, 0,
-                 m_format, GL_UNSIGNED_BYTE, whitePixel);
-    unbind();
-  }
-
-  // Configures texture parameters
-  void set_parameters(const std::vector<std::pair<GLenum, GLint>> params) {
-    bind();
-    for (const auto &[pname, param] : params) {
-      glTexParameteri(gl_target, pname, param);
-    }
-    unbind();
-  }
-
-  GLenum get_format() const { return m_format; }
-  GLint get_internal_format() const { return m_internal_format; }
-
-  // Returns the opengl texture ID
-  GLuint get_handle() const { return gl_handle; }
-  GLenum get_target() const { return gl_target; }
-
-  // Returns the texture dimensions
-  GLsizei get_width() const { return m_width; }
-  GLsizei get_height() const { return m_height; }
-
-  const bool inited() const { return initialized; }
-
-private:
-  bool initialized = false;
-
-  GLuint gl_handle; // texture object ID
-  GLenum gl_target; // texture target (e.g., GL_TEXTURE_2D)
-
-  GLsizei m_width;         // texture width
-  GLsizei m_height;        // texture height
-  GLenum m_format;         // GL_RGBA
-  GLint m_internal_format; // GL_RGBA8
 };
 
 class framebuffer {

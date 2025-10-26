@@ -11,6 +11,35 @@ math::vector3 Blue = math::vector3(0.0, 0.0, 1.0);
 math::vector3 Yellow = math::vector3(1.0, 1.0, 0.0);
 math::vector3 Purple = math::vector3(1.0, 0.0, 1.0);
 
+void texture::create(GLenum target) {
+  gl_handle = 0;
+  gl_target = target;
+  initialized = true;
+  glGenTextures(1, &gl_handle);
+  context::texture_handles.insert(gl_handle);
+}
+void texture::set_data_from_image(assets::image &img) {
+  int nChannels = img.nchannels;
+  if (nChannels == 3 || nChannels == 1)
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  else
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  GLint iformat = GL_R8;
+  GLenum format = GL_RED;
+  if (nChannels == 3) {
+    iformat = GL_RGB8;
+    format = GL_RGB;
+  } else if (nChannels == 4) {
+    iformat = GL_RGBA8;
+    format = GL_RGBA;
+  } else if (nChannels == 2) {
+    iformat = GL_RG8;
+    format = GL_RG;
+  }
+  set_data(img.width, img.height, iformat, format, GL_UNSIGNED_BYTE,
+           img.data.data());
+}
+
 void context::init(unsigned int width, unsigned int height, const char *title,
                    int majorVersion, int minorVersion) {
   wnd_width = width;
@@ -58,6 +87,47 @@ void context::init(unsigned int width, unsigned int height, const char *title,
   icon_font_config.MergeMode = true;
   icon_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
       lucide_ttf, lucide_ttf_len, 16.0f, &icon_font_config, icons_ranges);
+
+  // create system default textures
+  white_tex.create();
+  black_tex.create();
+  checkerboard_tex.create();
+  assets::image img;
+  img.resize(10, 10, 4);
+  for (int i = 0; i < img.width; i++)
+    for (int j = 0; j < img.height; j++) {
+      for (int k = 0; k < 3; k++)
+        img.pixel(i, j, k) = static_cast<unsigned char>(255);
+      img.pixel(i, j, 3) = static_cast<unsigned char>(255);
+    }
+  white_tex.set_data_from_image(img);
+  white_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+  for (int i = 0; i < img.width; i++)
+    for (int j = 0; j < img.height; j++)
+      for (int k = 0; k < 3; k++)
+        img.pixel(i, j, k) = static_cast<unsigned char>(0);
+  black_tex.set_data_from_image(img);
+  black_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+  // Create checkerboard pattern
+  const int squareSize = 2; // Size of each checker square
+  for (int i = 0; i < img.width; i++) {
+    for (int j = 0; j < img.height; j++) {
+      bool isWhite = ((i / squareSize) + (j / squareSize)) % 2 == 0;
+      for (int k = 0; k < 3; k++)
+        img.pixel(i, j, k) = static_cast<unsigned char>(isWhite ? 255 : 120);
+    }
+  }
+  checkerboard_tex.set_data_from_image(img);
+  checkerboard_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                                   {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                                   {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                                   {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
 }
 
 void context::shutdown() {

@@ -49,4 +49,36 @@ void combo(std::string label, int &index, std::vector<std::string> names,
   }
 }
 
+void texture_select(opengl::texture &tex, std::filesystem::path &filepath) {
+  auto size = ImGui::GetContentRegionAvail();
+  auto select_image = [&]() {
+    std::string tmp_filepath;
+    if (open_file_dialog("Select texture image",
+                         {"*.png", "*.jpg", "*.jpeg", "*.bmp"}, tmp_filepath)) {
+      assets::image img;
+      filepath = relpath(tmp_filepath);
+      img.load(filepath.string(), true);
+      if (!tex.inited())
+        tex.create();
+      tex.set_data_from_image(img);
+      tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+                          {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+                          {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+                          {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+    }
+  };
+  if (!tex.inited()) {
+    if (ImGui::ImageButton(
+            (void *)static_cast<std::uintptr_t>(
+                opengl::g_instance.checkerboard_tex.get_handle()),
+            {size.x * 0.5f, size.x * 0.5f}, ImVec2(0, 1), ImVec2(1, 0)))
+      select_image();
+  } else {
+    if (ImGui::ImageButton(
+            (void *)static_cast<std::uintptr_t>(tex.get_handle()),
+            {size.x * 0.5f, size.x * 0.5f}, ImVec2(0, 1), ImVec2(1, 0)))
+      select_image();
+  }
+}
+
 }; // namespace toolkit::gui

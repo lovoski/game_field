@@ -2,6 +2,7 @@
 
 #include "toolkit/math.hpp"
 #include "toolkit/reflect.hpp"
+#include "toolkit/utils.hpp"
 
 namespace toolkit::assets {
 
@@ -41,6 +42,7 @@ struct image {
    */
   bool save_png(std::string path, bool flipy = false);
 };
-REFLECT(image, data, width, height, nchannels, filepath)
+void to_json(nlohmann::json &j, const image &obj);
+void from_json(const nlohmann::json &j, image &obj);
 
 }; // namespace toolkit::assets

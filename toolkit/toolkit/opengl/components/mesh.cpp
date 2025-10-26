@@ -164,13 +164,19 @@ void mesh_data::draw_gui(iapp *app) {
       ImGui::TreePop();
     }
   }
-  if (ImGui::TreeNode("Default Material")) {
+  if (ImGui::TreeNode("Material Settings")) {
     gui::color_edit_3("albedo", material.albedo);
     ImGui::Checkbox("wireframe", &material.wireframe);
     ImGui::DragFloat("wireframe width", &material.wireframe_width, 0.01f, 0.0f,
                      1.0);
     ImGui::DragFloat("wireframe smooth", &material.wireframe_smooth, 0.01f,
                      0.0f, 1.0);
+
+    ImGui::SeparatorText("Albedo Texture");
+    gui::texture_select(material.albedo_tex, material.albedo_tex_filepath);
+    ImGui::SeparatorText("Normal Texture");
+    gui::texture_select(material.normal_tex, material.normal_tex_filepath);
+
     ImGui::TreePop();
   }
 }

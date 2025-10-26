@@ -147,4 +147,7 @@ unsigned char &image::pixel(int x, int y, int channel) {
   return data[(y * width + x) * nchannels + channel];
 }
 
+void to_json(nlohmann::json &j, const image &obj) {}
+void from_json(const nlohmann::json &j, image &obj) {}
+
 }; // namespace toolkit::assets

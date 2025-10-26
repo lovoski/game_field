@@ -540,6 +540,8 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
                            sizeof(_packed_vertex), (void *)0);
   scene_vao.link_attribute(scene_vertex_buffer, 1, 4, GL_FLOAT,
                            sizeof(_packed_vertex), (void *)(4 * sizeof(float)));
+  scene_vao.link_attribute(scene_vertex_buffer, 2, 4, GL_FLOAT,
+                           sizeof(_packed_vertex), (void *)(8 * sizeof(float)));
   scene_vao.unbind();
   scene_vertex_buffer.unbind_as(GL_ARRAY_BUFFER);
   scene_index_buffer.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
@@ -619,7 +621,12 @@ void defered_render_system::render(entt::registry &registry) {
               .set_float("wireframe_width", data.material.wireframe_width)
               .set_float("wireframe_smooth", data.material.wireframe_smooth)
               .set_mat4("gModel", data.skinned ? math::matrix4::Identity()
-                                               : trans.matrix());
+                                               : trans.matrix())
+              .set_bool("has_albedo_tex",
+                        data.material.albedo_tex_filepath != "");
+          if (data.material.albedo_tex_filepath != "")
+            gbuffer_geometry_pass.set_texture2d(
+                "model_albedo_tex", data.material.albedo_tex.get_handle(), 0);
           glDrawElements(GL_TRIANGLES, data.indices.size(), GL_UNSIGNED_INT,
                          (void *)(data.scene_index_offset * sizeof(GLuint)));
         });

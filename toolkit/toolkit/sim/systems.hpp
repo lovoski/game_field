@@ -8,8 +8,12 @@ namespace toolkit::sim {
 class xpbd_system : public isystem {
 public:
   void update(entt::registry &registry, float dt) override;
-
   void fixedupdate(entt::registry &registry, float dt);
+
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+  void draw_menu_gui() override;
+
+  void draw_to_scene(entt::registry &registry, iapp *app);
 
 private:
   int cur_exec_fixed = 0;
