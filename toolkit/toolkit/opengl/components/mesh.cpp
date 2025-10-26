@@ -279,6 +279,26 @@ void mesh_data::late_deserialize(nlohmann::json &data) {
     }
 
     init_opengl_buffers_internal(*this, data_vertices, data_blendshapes);
+
+    // load and create textures if exists
+    if (material.albedo_tex_filepath != "") {
+      if (std::filesystem::exists(material.albedo_tex_filepath)) {
+        if (!material.albedo_tex.inited())
+          material.albedo_tex.create();
+        assets::image img;
+        img.load(material.albedo_tex_filepath.string(), true);
+        material.albedo_tex.set_data_from_image(img);
+        material.albedo_tex.set_parameters(
+            {{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
+             {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
+             {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
+             {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+      } else {
+        material.albedo_tex_filepath = "";
+        spdlog::error("Albedo texture filepath {0} doesn't exist",
+                      material.albedo_tex_filepath.string());
+      }
+    }
   } else {
     spdlog::error("Can't load mesh data from null late_deserialize");
   }
