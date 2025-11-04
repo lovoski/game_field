@@ -12,7 +12,8 @@ void test_draw::draw_gui(iapp *app) {
   ImGui::SliderFloat("Text Line Height", &text_line_height, 0.0f, 10.0f);
 }
 
-void test_draw::draw_to_scene(iapp *app) {
+void test_draw::draw_to_scene(iapp *app, transform &cam_trans,
+                              camera &cam_comp) {
   if (auto editor_ptr = dynamic_cast<editor *>(app)) {
     auto &trans = editor_ptr->registry.get<transform>(entity);
     if (auto cam_trans =

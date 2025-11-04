@@ -1,10 +1,11 @@
 #pragma once
 
+#include "toolkit/common/camera.hpp"
 #include "toolkit/opengl/base.hpp"
-#include "toolkit/opengl/gui/utils.hpp"
-#include "toolkit/system.hpp"
-#include "toolkit/scriptable.hpp"
 #include "toolkit/opengl/draw.hpp"
+#include "toolkit/opengl/gui/utils.hpp"
+#include "toolkit/scriptable.hpp"
+#include "toolkit/system.hpp"
 
 namespace toolkit::opengl {
 
@@ -20,8 +21,8 @@ struct point_light : public scriptable {
       ImGui::EndDisabled();
   }
 
-  void draw_to_scene(iapp *app) override;
-
+  void draw_to_scene(iapp *app, transform &cam_trans,
+                     camera &cam_comp) override {}
   bool enabled = true;
 };
 DECLARE_SCRIPT(point_light, graphics, color, enabled)

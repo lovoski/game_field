@@ -61,6 +61,8 @@ void editor::late_deserialize(nlohmann::json &j) {
 }
 
 void editor::game_mode_main_loop() {
+  auto &active_cam_trans = registry.get<transform>(g_instance.active_camera);
+  auto &active_cam_comp = registry.get<camera>(g_instance.active_camera);
   float dt = timer.elapse_s();
   timer.reset();
 
@@ -90,7 +92,7 @@ void editor::game_mode_main_loop() {
     g_instance.scene_height = g_instance.wnd_height;
     render_sys->resize(g_instance.scene_width, g_instance.scene_height);
   }
-  render_sys->render(registry);
+  render_sys->render(registry, active_cam_trans, active_cam_comp);
 
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -103,6 +105,8 @@ void editor::game_mode_main_loop() {
   g_instance.swap_buffer();
 }
 void editor::editor_mode_main_loop() {
+  auto &active_cam_trans = registry.get<transform>(g_instance.active_camera);
+  auto &active_cam_comp = registry.get<camera>(g_instance.active_camera);
   float dt = timer.elapse_s();
   timer.reset();
 
@@ -127,7 +131,7 @@ void editor::editor_mode_main_loop() {
   if (script_sys->active)
     script_sys->lateupdate(this, dt);
 
-  render_sys->render(registry);
+  render_sys->render(registry, active_cam_trans, active_cam_comp);
 
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -150,7 +154,7 @@ void editor::editor_mode_main_loop() {
     g_instance.scene_width = size.x;
     g_instance.scene_height = size.y;
     render_sys->resize(size.x, size.y);
-    render_sys->render(registry);
+    render_sys->render(registry, active_cam_trans, active_cam_comp);
   }
   draw_gizmos();
   ImGui::EndChild();
@@ -192,7 +196,7 @@ void editor::reset() {
   render_sys = add_sys<defered_render_system>();
   script_sys = add_sys<script_system>();
   anim_sys = add_sys<anim::anim_system>();
-  phy_sys = add_sys<sim::xpbd_system>();
+  phy_sys = add_sys<sim::phy_system>();
 }
 
 void editor::add_default_objects() {
@@ -365,7 +369,10 @@ void editor::active_camera_manipulate(float dt) {
     math::vector2 mouse_current_pos = g_instance.get_mouse_position();
     // only handle mouse input when cursor in scene window
     if ((press_mouse_mid_btn || press_mouse_right_btn) &&
-        g_instance.cursor_in_scene_window()) {
+        (mouse_current_pos.x() > 0 &&
+         mouse_current_pos.x() < g_instance.wnd_width &&
+         mouse_current_pos.y() > 0 &&
+         mouse_current_pos.y() < g_instance.wnd_width)) {
       if (cam_manip_data.mouse_first_move) {
         cam_manip_data.mouse_last_pos = mouse_current_pos;
         cam_manip_data.mouse_first_move = false;

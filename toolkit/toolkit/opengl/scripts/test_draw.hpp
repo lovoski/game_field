@@ -25,7 +25,8 @@ struct test_draw : public scriptable {
   }
 
   void draw_gui(iapp *app) override;
-  void draw_to_scene(iapp *app) override;
+  void draw_to_scene(iapp *app, transform &cam_trans,
+                     camera &cam_comp) override;
 };
 DECLARE_SCRIPT(test_draw, debug, text_width, text_height, text_scale,
                text_spacing, text_line_height, text_thickness)

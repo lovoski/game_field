@@ -10,71 +10,68 @@ void vis_skeleton::start() { spdlog::info("Start vis_skeleton script"); }
 
 void vis_skeleton::destroy() { spdlog::info("Destroy vis_skeleton script"); }
 
-void vis_skeleton::draw_to_scene(iapp *app) {
-  opengl::script_draw_to_scene_proxy(app, [&](opengl::editor *eptr,
-                                              transform &cam_trans,
-                                              opengl::camera &cam_comp) {
-    if (auto actor_ptr = eptr->registry.try_get<actor>(entity)) {
-      collect_skeleton_draw_queue(*actor_ptr);
-      opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
-      // get the average length of bone
-      float avg_bone_length = 0.0f;
-      for (int i = 0; i < draw_queue.size(); i++)
-        avg_bone_length += (draw_queue[i].first - draw_queue[i].second).norm();
-      avg_bone_length /= draw_queue.size();
+void vis_skeleton::draw_to_scene(iapp *app, transform &cam_trans,
+                                 camera &cam_comp) {
+  if (auto actor_ptr = app->registry.try_get<actor>(entity)) {
+    collect_skeleton_draw_queue(*actor_ptr);
+    opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
+    // get the average length of bone
+    float avg_bone_length = 0.0f;
+    for (int i = 0; i < draw_queue.size(); i++)
+      avg_bone_length += (draw_queue[i].first - draw_queue[i].second).norm();
+    avg_bone_length /= draw_queue.size();
 
-      if (draw_axes) {
-        x_dir.clear();
-        y_dir.clear();
-        z_dir.clear();
-        x_dir.reserve(active_joint_entities.size());
-        y_dir.reserve(active_joint_entities.size());
-        z_dir.reserve(active_joint_entities.size());
-        for (auto joint_entity : active_joint_entities) {
-          auto &joint_trans = eptr->registry.get<transform>(joint_entity);
-          x_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
-                                            joint_trans.world_pos() +
-                                                axes_length * avg_bone_length *
-                                                    joint_trans.local_right()));
-          y_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
-                                            joint_trans.world_pos() +
-                                                axes_length * avg_bone_length *
-                                                    joint_trans.local_up()));
-          z_dir.emplace_back(std::make_pair(
-              joint_trans.world_pos(),
-              joint_trans.world_pos() +
-                  axes_length * avg_bone_length * joint_trans.local_forward()));
-        }
-        opengl::draw_arrows(x_dir, cam_comp.vp, opengl::Red,
-                            0.1f * axes_length * avg_bone_length);
-        opengl::draw_arrows(y_dir, cam_comp.vp, opengl::Green,
-                            0.1f * axes_length * avg_bone_length);
-        opengl::draw_arrows(z_dir, cam_comp.vp, opengl::Blue,
-                            0.1f * axes_length * avg_bone_length);
+    if (draw_axes) {
+      x_dir.clear();
+      y_dir.clear();
+      z_dir.clear();
+      x_dir.reserve(active_joint_entities.size());
+      y_dir.reserve(active_joint_entities.size());
+      z_dir.reserve(active_joint_entities.size());
+      for (auto joint_entity : active_joint_entities) {
+        auto &joint_trans = app->registry.get<transform>(joint_entity);
+        x_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
+                                          joint_trans.world_pos() +
+                                              axes_length * avg_bone_length *
+                                                  joint_trans.local_right()));
+        y_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
+                                          joint_trans.world_pos() +
+                                              axes_length * avg_bone_length *
+                                                  joint_trans.local_up()));
+        z_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
+                                          joint_trans.world_pos() +
+                                              axes_length * avg_bone_length *
+                                                  joint_trans.local_forward()));
       }
-      if (draw_spheres) {
-        joint_positions.clear();
-        joint_positions.reserve(active_joint_entities.size());
-        for (auto joint_entity : active_joint_entities) {
-          joint_positions.push_back(
-              eptr->registry.get<transform>(joint_entity).world_pos());
-        }
-        opengl::draw_wire_spheres(joint_positions, cam_comp.vp,
-                                  0.08f * avg_bone_length, bone_color);
+      opengl::draw_arrows(x_dir, cam_comp.vp, opengl::Red,
+                          0.1f * axes_length * avg_bone_length);
+      opengl::draw_arrows(y_dir, cam_comp.vp, opengl::Green,
+                          0.1f * axes_length * avg_bone_length);
+      opengl::draw_arrows(z_dir, cam_comp.vp, opengl::Blue,
+                          0.1f * axes_length * avg_bone_length);
+    }
+    if (draw_spheres) {
+      joint_positions.clear();
+      joint_positions.reserve(active_joint_entities.size());
+      for (auto joint_entity : active_joint_entities) {
+        joint_positions.push_back(
+            app->registry.get<transform>(joint_entity).world_pos());
       }
-      if (draw_names) {
-        for (int i = 0; i < actor_ptr->ordered_entities.size(); i++) {
-          if (actor_ptr->joint_active[i]) {
-            auto &joint_trans =
-                registry->get<transform>(actor_ptr->ordered_entities[i]);
-            opengl::draw_text3d(joint_trans.name, joint_trans.world_pos(),
-                                math::quat::Identity(), cam_comp.vp,
-                                opengl::White, 0.0f, 0.02f);
-          }
+      opengl::draw_wire_spheres(joint_positions, cam_comp.vp,
+                                0.08f * avg_bone_length, bone_color);
+    }
+    if (draw_names) {
+      for (int i = 0; i < actor_ptr->ordered_entities.size(); i++) {
+        if (actor_ptr->joint_active[i]) {
+          auto &joint_trans =
+              registry->get<transform>(actor_ptr->ordered_entities[i]);
+          opengl::draw_text3d(joint_trans.name, joint_trans.world_pos(),
+                              math::quat::Identity(), cam_comp.vp,
+                              opengl::White, 0.0f, 0.02f);
         }
       }
     }
-  });
+  }
 }
 
 void vis_skeleton::draw_gui(iapp *app) {

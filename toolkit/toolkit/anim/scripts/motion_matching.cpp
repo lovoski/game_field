@@ -79,12 +79,14 @@ void motion_matching::start() {
 
 void motion_matching::update(iapp *app, float dt) {
   // // update camera settings
-  // auto &cam_trans = registry->get<transform>(opengl::g_instance.active_camera);
-  // math::vector3 cam_fixed_pos =
+  // auto &cam_trans =
+  // registry->get<transform>(opengl::g_instance.active_camera); math::vector3
+  // cam_fixed_pos =
   //     root_pos + 3 * math::world_forward + 2 * math::world_up;
   // math::vector3 cam_focus_target = root_pos + 0.5 * math::world_up;
   // cam_trans.set_world_transform(
-  //     math::lookat(cam_fixed_pos, cam_focus_target, math::world_up).inverse());
+  //     math::lookat(cam_fixed_pos, cam_focus_target,
+  //     math::world_up).inverse());
 }
 
 void motion_matching::fixedupdate(iapp *app, float dt) {
@@ -235,38 +237,35 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
   }
 }
 
-void motion_matching::draw_to_scene(iapp *app) {
-  opengl::script_draw_to_scene_proxy(app, [&](opengl::editor *editor,
-                                              transform &cam_trans,
-                                              opengl::camera &cam_comp) {
-    opengl::draw_wire_spheres(t_pos, cam_comp.vp, 0.1f);
-    opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
-                       opengl::Purple);
-    for (int i = 0; i < 3; i++)
-      opengl::draw_arrow(t_pos[i], t_pos[i] + t_dir[i], cam_comp.vp,
-                         opengl::Green);
-    opengl::draw_wire_sphere(root_pos, cam_comp.vp, 0.1f, opengl::Red);
+void motion_matching::draw_to_scene(iapp *app, transform &cam_trans,
+                                    camera &cam_comp) {
+  opengl::draw_wire_spheres(t_pos, cam_comp.vp, 0.1f);
+  opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
+                     opengl::Purple);
+  for (int i = 0; i < 3; i++)
+    opengl::draw_arrow(t_pos[i], t_pos[i] + t_dir[i], cam_comp.vp,
+                       opengl::Green);
+  opengl::draw_wire_sphere(root_pos, cam_comp.vp, 0.1f, opengl::Red);
 
-    // opengl::draw_wire_spheres(data_joints_world_pos, cam_comp.vp, 0.1f,
-    //                           opengl::Purple);
-    if (db_loaded && data_joints_world_pos.size() > 0) {
-      std::vector<std::pair<math::vector3, math::vector3>> bone_pairs;
-      for (int i = 0; i < parents.size(); i++) {
-        if (parents[i] == -1 || parents[i] == 0)
-          continue;
-        bone_pairs.emplace_back(std::make_pair(
-            data_joints_world_pos[parents[i]], data_joints_world_pos[i]));
-      }
-      opengl::draw_bones(bone_pairs, cam_comp.vp, opengl::Purple);
+  // opengl::draw_wire_spheres(data_joints_world_pos, cam_comp.vp, 0.1f,
+  //                           opengl::Purple);
+  if (db_loaded && data_joints_world_pos.size() > 0) {
+    std::vector<std::pair<math::vector3, math::vector3>> bone_pairs;
+    for (int i = 0; i < parents.size(); i++) {
+      if (parents[i] == -1 || parents[i] == 0)
+        continue;
+      bone_pairs.emplace_back(std::make_pair(data_joints_world_pos[parents[i]],
+                                             data_joints_world_pos[i]));
     }
+    opengl::draw_bones(bone_pairs, cam_comp.vp, opengl::Purple);
+  }
 
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_forward,
-                       cam_comp.vp, opengl::Blue);
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_up,
-                       cam_comp.vp, opengl::Green);
-    opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_right,
-                       cam_comp.vp, opengl::Red);
-  });
+  opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_forward,
+                     cam_comp.vp, opengl::Blue);
+  opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_up,
+                     cam_comp.vp, opengl::Green);
+  opengl::draw_arrow(math::vector3::Zero(), root_rot * math::world_right,
+                     cam_comp.vp, opengl::Red);
 }
 
 void motion_matching::draw_gui(iapp *app) {

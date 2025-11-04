@@ -10,7 +10,8 @@ namespace toolkit::opengl {
 class mesh_modifier : public scriptable {
 public:
   void draw_gui(toolkit::iapp *app) override;
-  void draw_to_scene(toolkit::iapp *app) override;
+  void draw_to_scene(toolkit::iapp *app, transform &cam_trans,
+                     camera &cam_comp) override;
 
 private:
   bool _convex_created = false;

@@ -61,7 +61,7 @@ std::string capsule_gs = R"(
 #define S1 4
 #define PI 3.14159265
 layout(lines) in;
-layout(triangle_strip, max_vertices=144) out;
+layout(%s, max_vertices=144) out;
 
 uniform mat4 vp;
 uniform float column_radius;
@@ -106,16 +106,17 @@ void main() {
 }
 )";
 void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
-                   math::matrix4 vp, math::vector3 color, float column_radius,
-                   float cap_height) {
+                   math::matrix4 vp, math::vector3 color, bool wireframe,
+                   float column_radius, float cap_height) {
   static bool initialized = false;
-  static shader shader;
+  static shader solid_shader, wireframe_shader;
   static vao vao;
   static buffer vbo;
   if (!initialized) {
     vao.create();
     vbo.create();
-    shader.compile_shader_from_source(capsule_vs, line_fs, capsule_gs);
+    solid_shader.compile_shader_from_source(capsule_vs, line_fs, str_format(capsule_gs.c_str(), "triangle_strip"));
+    wireframe_shader.compile_shader_from_source(capsule_vs, line_fs, str_format(capsule_gs.c_str(), "line_strip"));
     initialized = true;
   }
   vao.bind();
@@ -126,11 +127,19 @@ void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
   }
   vbo.set_data_as(GL_ARRAY_BUFFER, points);
   vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
-  shader.use();
-  shader.set_mat4("vp", vp);
-  shader.set_vec3("color", color);
-  shader.set_float("column_radius", column_radius);
-  shader.set_float("cap_height", cap_height);
+  if (wireframe) {
+    wireframe_shader.use();
+    wireframe_shader.set_mat4("vp", vp);
+    wireframe_shader.set_vec3("color", color);
+    wireframe_shader.set_float("column_radius", column_radius);
+    wireframe_shader.set_float("cap_height", cap_height);
+  } else {
+    solid_shader.use();
+    solid_shader.set_mat4("vp", vp);
+    solid_shader.set_vec3("color", color);
+    solid_shader.set_float("column_radius", column_radius);
+    solid_shader.set_float("cap_height", cap_height);
+  }
   glDrawArrays(GL_LINES, 0, points.size());
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
@@ -1021,7 +1030,7 @@ std::string solid_sphere_gs = R"(
 #define S1 4
 #define PI 3.14159265
 layout(points) in;
-layout(triangle_strip, max_vertices=144) out;
+layout(%s, max_vertices=144) out;
 
 uniform mat4 vp;
 uniform float radius;
@@ -1062,25 +1071,36 @@ void main() {
 }
 )";
 void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
-                  float radius, math::vector3 color) {
+                  float radius, math::vector3 color, bool wireframe) {
   static bool initialized = false;
-  static shader shader;
+  static shader solid_shader, wireframe_shader;
   static vao vao;
   static buffer vbo;
   if (!initialized) {
     vao.create();
     vbo.create();
-    shader.compile_shader_from_source(solid_sphere_vs, line_fs,
-                                      solid_sphere_gs);
+    solid_shader.compile_shader_from_source(
+        solid_sphere_vs, line_fs,
+        str_format(solid_sphere_gs.c_str(), "triangle_strip"));
+    wireframe_shader.compile_shader_from_source(
+        solid_sphere_vs, line_fs,
+        str_format(solid_sphere_gs.c_str(), "line_strip"));
     initialized = true;
   }
   vao.bind();
   vbo.set_data_as(GL_ARRAY_BUFFER, positions);
   vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
-  shader.use();
-  shader.set_mat4("vp", vp);
-  shader.set_vec3("color", color);
-  shader.set_float("radius", radius);
+  if (wireframe) {
+    wireframe_shader.use();
+    wireframe_shader.set_mat4("vp", vp);
+    wireframe_shader.set_vec3("color", color);
+    wireframe_shader.set_float("radius", radius);
+  } else {
+    solid_shader.use();
+    solid_shader.set_mat4("vp", vp);
+    solid_shader.set_vec3("color", color);
+    solid_shader.set_float("radius", radius);
+  }
   glDrawArrays(GL_POINTS, 0, positions.size());
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
@@ -1140,9 +1160,9 @@ void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
 
   // Enable wireframe mode
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  
+
   glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-  
+
   // Restore default fill mode
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 

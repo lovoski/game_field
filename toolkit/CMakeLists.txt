@@ -16,7 +16,7 @@ add_subdirectory("toolkit/deps/sun_sky")
 add_subdirectory("toolkit/deps/assimp-5.4.3")
 add_subdirectory("toolkit/deps/quickhull")
 
-set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/sim" "toolkit/assets")
+set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/sim" "toolkit/assets" "toolkit/common")
 set(LIB_LIST )
 file(GLOB SRC_FILES "toolkit/*.cpp")
 foreach(DIR ${SRC_DIR_LIST})

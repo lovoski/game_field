@@ -8,7 +8,7 @@
 #include "toolkit/transform.hpp"
 
 #include "toolkit/anim/anim_system.hpp"
-#include "toolkit/opengl/components/camera.hpp"
+#include "toolkit/common/camera.hpp"
 #include "toolkit/opengl/rasterize/system.hpp"
 #include "toolkit/sim/systems.hpp"
 
@@ -79,7 +79,7 @@ public:
   transform_system *transform_sys = nullptr;
   script_system *script_sys = nullptr;
   anim::anim_system *anim_sys = nullptr;
-  sim::xpbd_system *phy_sys = nullptr;
+  sim::phy_system *phy_sys = nullptr;
 
   float click_selection_max_sin = 2e-2f;
   std::vector<ray_query_data> selection_candidates;
@@ -121,18 +121,5 @@ private:
 
   active_camera_manipulate_data cam_manip_data;
 };
-
-inline void script_draw_to_scene_proxy(
-    iapp *app, std::function<void(editor *, transform &, camera &)> &&f) {
-  if (auto eptr = dynamic_cast<editor *>(app)) {
-    auto cam_trans =
-        eptr->registry.try_get<transform>(g_instance.active_camera);
-    auto cam_comp =
-        eptr->registry.try_get<opengl::camera>(g_instance.active_camera);
-    if (cam_trans != nullptr && cam_comp != nullptr) {
-      f(eptr, *cam_trans, *cam_comp);
-    }
-  }
-}
 
 }; // namespace toolkit::opengl

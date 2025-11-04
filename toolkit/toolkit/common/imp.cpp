@@ -1,8 +1,6 @@
-#include "toolkit/opengl/components/camera.hpp"
-#include "toolkit/opengl/components/lights.hpp"
-#include "toolkit/opengl/editor.hpp"
+#include "toolkit/common/camera.hpp"
 
-namespace toolkit::opengl {
+namespace toolkit {
 
 void compute_vp_matrix(entt::registry &registry, entt::entity entity,
                        float width, float height) {
@@ -23,13 +21,6 @@ void compute_vp_matrix(entt::registry &registry, entt::entity entity,
   cam.vp = cam.proj * cam.view;
 
   update_bounding_planes(cam.planes, cam.vp);
-}
-
-void point_light::draw_to_scene(iapp *app) {
-  script_draw_to_scene_proxy(
-      app, [&](editor *editor, transform &cam_trans, camera &cam_comp) {
-
-      });
 }
 
 math::vector3 get_positive_vertex(const math::vector3 &box_min,

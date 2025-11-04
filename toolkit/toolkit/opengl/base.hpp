@@ -2,6 +2,7 @@
 
 #include "toolkit/assets/icons_lucide.h"
 #include "toolkit/opengl/imp.hpp"
+#include "toolkit/common/camera.hpp"
 #include "toolkit/system.hpp"
 
 namespace toolkit::opengl {

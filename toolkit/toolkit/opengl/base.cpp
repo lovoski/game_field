@@ -212,20 +212,20 @@ bool context::cursor_in_scene_window() {
 
 bool context::loop_cursor_in_window() {
   bool loop = false;
-  while (mouse_x < 0) {
-    mouse_x += wnd_width;
+  while (mouse_x < 10) {
+    mouse_x += (wnd_width - 20);
     loop = true;
   }
-  while (mouse_x > wnd_width) {
-    mouse_x -= wnd_width;
+  while (mouse_x > wnd_width - 10) {
+    mouse_x -= (wnd_width - 20);
     loop = true;
   }
-  while (mouse_y < 0) {
-    mouse_y += wnd_height;
+  while (mouse_y < 10) {
+    mouse_y += (wnd_height - 20);
     loop = true;
   }
-  while (mouse_y > wnd_height) {
-    mouse_y -= wnd_height;
+  while (mouse_y > wnd_height - 10) {
+    mouse_y -= (wnd_height - 20);
     loop = true;
   }
   glfwSetCursorPos(window, mouse_x, mouse_y);

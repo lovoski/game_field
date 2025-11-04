@@ -18,7 +18,8 @@ public:
   void destroy() override;
 
   void draw_gui(iapp *app) override;
-  void draw_to_scene(iapp *app) override;
+  void draw_to_scene(iapp *app, transform &cam_trans,
+                     camera &cam_comp) override;
 
   // Modify the weights of shape0-9 blendshapes, change the offset matrices and
   // transforms of joint entity transforms

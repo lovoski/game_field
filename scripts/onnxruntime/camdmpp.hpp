@@ -13,7 +13,8 @@ namespace toolkit {
 class camdmpp : public scriptable {
 public:
   void draw_gui(iapp *app) override;
-  void draw_to_scene(iapp *app) override;
+  void draw_to_scene(iapp *app, transform &cam_trans,
+                     camera &cam_comp) override;
 
   void fixedupdate(iapp *app, float dt) override;
 };

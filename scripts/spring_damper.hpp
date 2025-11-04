@@ -52,7 +52,8 @@ public:
     auto qt = target_trans.world_rot();
     if (q0.dot(qt) < 0.0f)
       qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
-    toolkit::math::vector3 q = toolkit::math::quat_to_rot_vec(q0 * qt.inverse());
+    toolkit::math::vector3 q =
+        toolkit::math::quat_to_rot_vec(q0 * qt.inverse());
     auto q_prev = q;
     q = (q_prev + (angular_velocity + lambda * q_prev) * dt) *
         exp(-lambda * dt);
@@ -61,14 +62,11 @@ public:
     self_trans.set_world_rot(toolkit::math::rot_vec_to_quat(q) * qt);
   }
 
-  void draw_to_scene(toolkit::iapp *app) override {
-    toolkit::opengl::script_draw_to_scene_proxy(
-        app, [&](toolkit::opengl::editor *editor, toolkit::transform &trans,
-                 toolkit::opengl::camera &cam_comp) {
-          toolkit::opengl::draw_wire_sphere(
-              registry->get<toolkit::transform>(target).world_pos(), cam_comp.vp,
-              0.1f);
-        });
+  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+                     toolkit::camera &cam_comp) override {
+    toolkit::opengl::draw_wire_sphere(
+        registry->get<toolkit::transform>(target).world_pos(), cam_comp.vp,
+        0.1f);
   }
   void draw_gui(toolkit::iapp *app) override {
     ImGui::Text("Velocity x=%.2f,y=%.2f,z=%.2f", velocity.x(), velocity.y(),
@@ -78,7 +76,7 @@ public:
     ImGui::DragFloat("Half Life", &damper_half_life, 0.01f, 0.0f, 10.0f);
     if (ImGui::Button("Random target transform", {-1, 30})) {
       auto &target_trans = registry->get<toolkit::transform>(target);
-      target_trans.set_world_pos(toolkit::math::vector3::Random()*10.0f);
+      target_trans.set_world_pos(toolkit::math::vector3::Random() * 10.0f);
       target_trans.set_world_rot(toolkit::math::quat::UnitRandom());
     }
   }

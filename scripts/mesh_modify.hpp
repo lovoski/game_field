@@ -8,6 +8,7 @@
 class mesh_modify : public toolkit::scriptable {
 public:
   void draw_gui(toolkit::iapp *app) override;
-  void draw_to_scene(toolkit::iapp *app) override;
+  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+                     toolkit::camera &cam_comp) override;
 };
 DECLARE_SCRIPT(mesh_modify, modify)

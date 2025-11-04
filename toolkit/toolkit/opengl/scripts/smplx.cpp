@@ -443,9 +443,6 @@ void smplx::draw_gui(iapp *app) {
       apply_smpl_betas(beta_cache);
 }
 
-void smplx::draw_to_scene(iapp *app) {
-  script_draw_to_scene_proxy(
-      app, [&](editor *editor, transform &cam_trans, camera &cam_comp) {});
-}
+void smplx::draw_to_scene(iapp *app, transform &cam_trans, camera &cam_comp) {}
 
 }; // namespace toolkit::opengl

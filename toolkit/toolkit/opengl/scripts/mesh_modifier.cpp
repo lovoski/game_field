@@ -13,20 +13,18 @@ void mesh_modifier::draw_gui(toolkit::iapp *app) {
   }
 }
 
-void mesh_modifier::draw_to_scene(toolkit::iapp *app) {
-  script_draw_to_scene_proxy(
-      app, [&](editor *editor, transform &cam_trans, camera &cam_comp) {
-        auto mesh_ptr = registry->try_get<opengl::mesh_data>(entity);
-        auto &mesh_trans = registry->get<transform>(entity);
-        if (_convex_created && (mesh_ptr != nullptr)) {
-          auto _render_vertices = _convex_vertices;
-          for (int i = 0; i < _convex_vertices.size(); i++) {
-            _render_vertices[i].position =
-                mesh_trans.matrix() * _convex_vertices[i].position;
-          }
-          draw_mesh(_render_vertices, _convex_indices, cam_comp.vp);
-        }
-      });
+void mesh_modifier::draw_to_scene(toolkit::iapp *app, transform &cam_trans,
+                                  camera &cam_comp) {
+  auto mesh_ptr = registry->try_get<opengl::mesh_data>(entity);
+  auto &mesh_trans = registry->get<transform>(entity);
+  if (_convex_created && (mesh_ptr != nullptr)) {
+    auto _render_vertices = _convex_vertices;
+    for (int i = 0; i < _convex_vertices.size(); i++) {
+      _render_vertices[i].position =
+          mesh_trans.matrix() * _convex_vertices[i].position;
+    }
+    draw_mesh(_render_vertices, _convex_indices, cam_comp.vp);
+  }
 }
 
 }; // namespace toolkit::opengl

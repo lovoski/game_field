@@ -6,7 +6,7 @@
 
 #include <array>
 
-namespace toolkit::opengl {
+namespace toolkit {
 
 struct camera : public icomponent {
   std::array<math::vector4, 6> planes;

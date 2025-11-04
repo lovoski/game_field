@@ -49,15 +49,12 @@ public:
     }
   }
 
-  void draw_to_scene(toolkit::iapp *app) override {
-    toolkit::opengl::script_draw_to_scene_proxy(
-        app, [&](toolkit::opengl::editor *editor, toolkit::transform &cam_trans,
-                 toolkit::opengl::camera &cam_comp) {
-          toolkit::opengl::draw_wire_spheres(record_points, cam_comp.vp, 0.005f,
-                                             toolkit::opengl::Red);
-          toolkit::opengl::draw_linestrip(record_points, cam_comp.vp,
-                                          toolkit::opengl::Red);
-        });
+  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+                     toolkit::camera &cam_comp) override {
+    toolkit::opengl::draw_wire_spheres(record_points, cam_comp.vp, 0.005f,
+                                       toolkit::opengl::Red);
+    toolkit::opengl::draw_linestrip(record_points, cam_comp.vp,
+                                    toolkit::opengl::Red);
   }
 
 private:

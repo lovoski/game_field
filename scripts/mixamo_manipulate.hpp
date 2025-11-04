@@ -58,29 +58,24 @@ public:
 
   toolkit::math::vector3 tp0, tp1, tp2;
   std::vector<toolkit::math::vector3> vis_pos;
-  void draw_to_scene(toolkit::iapp *app) override {
-    toolkit::opengl::script_draw_to_scene_proxy(
-        app, [&](toolkit::opengl::editor *editor, toolkit::transform &trans,
-                 toolkit::opengl::camera &cam_comp) {
-          if (auto actor_comp =
-                  registry->try_get<toolkit::anim::actor>(entity)) {
-            vis_pos.clear();
-            if (left_foot_target != entt::null) {
-              vis_pos.push_back(
-                  registry->get<toolkit::transform>(left_foot_target)
-                      .world_pos());
-            }
-            if (left_foot_pole != entt::null) {
-              vis_pos.push_back(
-                  registry->get<toolkit::transform>(left_foot_pole).world_pos());
-            }
-            vis_pos.push_back(tp0);
-            vis_pos.push_back(tp1);
-            vis_pos.push_back(tp2);
-            toolkit::opengl::draw_spheres(vis_pos, cam_comp.vp, 0.06f,
-                                          toolkit::opengl::Purple);
-          }
-        });
+  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+                     toolkit::camera &cam_comp) override {
+    if (auto actor_comp = registry->try_get<toolkit::anim::actor>(entity)) {
+      vis_pos.clear();
+      if (left_foot_target != entt::null) {
+        vis_pos.push_back(
+            registry->get<toolkit::transform>(left_foot_target).world_pos());
+      }
+      if (left_foot_pole != entt::null) {
+        vis_pos.push_back(
+            registry->get<toolkit::transform>(left_foot_pole).world_pos());
+      }
+      vis_pos.push_back(tp0);
+      vis_pos.push_back(tp1);
+      vis_pos.push_back(tp2);
+      toolkit::opengl::draw_spheres(vis_pos, cam_comp.vp, 0.06f,
+                                    toolkit::opengl::Purple);
+    }
   }
 
   void lateupdate(toolkit::iapp *app, float dt) override {
@@ -116,8 +111,8 @@ public:
               cos_theta * l01 * ((tp2 - tp0).normalized());
       }
 
-      auto dq0 =
-          toolkit::math::from_to_rot(t1.world_pos() - t0.world_pos(), tp1 - tp0);
+      auto dq0 = toolkit::math::from_to_rot(t1.world_pos() - t0.world_pos(),
+                                            tp1 - tp0);
       auto rp2 = dq0 * (t2.world_pos() - t0.world_pos()) + t0.world_pos();
       auto dq1 = toolkit::math::from_to_rot(rp2 - tp1, tp2 - tp1);
       t0.set_world_rot(dq0 * t0.world_rot());

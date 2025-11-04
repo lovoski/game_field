@@ -4,6 +4,9 @@
 
 namespace toolkit {
 
+struct camera;
+class transform;
+
 /**
  * This should be the base class of all custom scripts.
  *
@@ -29,7 +32,8 @@ public:
   virtual void start() {}
   virtual void destroy() {}
 
-  virtual void draw_to_scene(iapp *app) {}
+  virtual void draw_to_scene(iapp *app, transform &cam_trans,
+                             camera &cam_comp) {}
 
   virtual void preupdate(iapp *app, float dt) {}
   virtual void update(iapp *app, float dt) {}
@@ -103,11 +107,11 @@ public:
       });
     }
   }
-  void draw_to_scene(iapp *app) {
+  void draw_to_scene(iapp *app, transform &cam_trans, camera &cam_comp) {
     for (auto &sv : script_views) {
       sv.second(app->registry, [&](entt::entity it_entity, scriptable *script) {
         if (script->enabled)
-          script->draw_to_scene(app);
+          script->draw_to_scene(app, cam_trans, cam_comp);
       });
     }
   }

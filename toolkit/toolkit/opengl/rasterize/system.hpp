@@ -4,7 +4,7 @@
 #include "toolkit/opengl/draw.hpp"
 #include "toolkit/system.hpp"
 
-#include "toolkit/opengl/components/camera.hpp"
+#include "toolkit/common/camera.hpp"
 #include "toolkit/opengl/components/lights.hpp"
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/compute/tools.hpp"
@@ -21,7 +21,7 @@ public:
   void resize(int width, int height);
 
   void preupdate(entt::registry &registry, float dt) override;
-  void render(entt::registry &registry);
+  void render(entt::registry &registry, transform &cam_trans, camera &cam_comp);
 
   void update_scene_buffers(entt::registry &registry);
   void update_scene_lights(entt::registry &registry);
@@ -32,6 +32,8 @@ public:
   void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   void draw_menu_gui() override;
+
+  math::vector2 get_render_size() {}
 
   bool should_draw_grid = true;
   int grid_spacing = 1;
@@ -54,6 +56,8 @@ public:
   preetham_sun_sky ss_model;
 
 protected:
+  unsigned int canvas_width = 1920, canvas_height = 1080;
+
   shader gbuffer_geometry_pass, defered_default_pass;
   // gbuffer
   framebuffer gbuffer;
@@ -110,6 +114,6 @@ DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
                sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
                csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_min_bias,
                csm_max_bias, shadowmap_max_bias, shadowmap_min_bias,
-               enable_fxaa)
+               enable_fxaa, canvas_width, canvas_height)
 
 }; // namespace toolkit::opengl

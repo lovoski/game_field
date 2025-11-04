@@ -40,8 +40,9 @@ struct vis_point_sequence : public toolkit::scriptable {
   }
 
   void start() override {
-    parents = {-1, 0, 0, 0,  1,  2,  3,  4,  5,  6,  7,  8,
-               9,  9, 9, 12, 13, 14, 16, 17, 18, 19, 20, 21};
+    // parents = {-1, 0, 0, 0,  1,  2,  3,  4,  5,  6,  7,  8,
+    //            9,  9, 9, 12, 13, 14, 16, 17, 18, 19, 20, 21};
+    parents = {-1, 0, 1, 2, 0, 4, 5};
   }
 
   void draw_gui(toolkit::iapp *app) override {
@@ -67,62 +68,53 @@ struct vis_point_sequence : public toolkit::scriptable {
     toolkit::gui::color_edit_3("Motion Color", motion_color);
   }
 
-  void draw_to_scene(toolkit::iapp *app) override {
-    toolkit::opengl::script_draw_to_scene_proxy(
-        app, [&](toolkit::opengl::editor *editor, toolkit::transform &cam_trans,
-                 toolkit::opengl::camera &cam_comp) {
-          if (positions.size() > 0) {
-            if (current_frame >= positions.size() || current_frame < 0)
-              spdlog::error("Current frame out of range");
-            else {
-              auto tmp_pos = positions[current_frame];
-              toolkit::math::vector4 tmp_vec;
-              for (int i = 0; i < tmp_pos.size(); i++) {
-                tmp_vec << tmp_pos[i], 1.0;
-                tmp_pos[i] =
-                    (registry->get<toolkit::transform>(entity).matrix() *
-                     tmp_vec)
-                        .head<3>();
-              }
-              std::vector<
-                  std::pair<toolkit::math::vector3, toolkit::math::vector3>>
-                  bones;
-              for (int i = 0; i < parents.size(); i++)
-                if (parents[i] != -1)
-                  bones.push_back(
-                      std::make_pair(tmp_pos[parents[i]], tmp_pos[i]));
-              toolkit::opengl::draw_bones(bones, cam_comp.vp, positions_color);
-              if (motion_data.skel.get_num_joints() != 0) {
-                auto frame_data = motion_data.at(current_frame);
-                auto motion_pos = frame_data.fk();
-                bones.clear();
-                toolkit::math::vector4 tmp_vec0, tmp_vec1;
-                for (int i = 0; i < motion_data.skel.joint_parent.size(); i++) {
-                  if (motion_data.skel.joint_parent[i] != -1) {
-                    tmp_vec0 << motion_pos[motion_data.skel.joint_parent[i]],
-                        1.0f;
-                    tmp_vec1 << motion_pos[i], 1.0f;
-                    tmp_vec0 =
-                        registry->get<toolkit::transform>(entity).matrix() *
-                        tmp_vec0;
-                    tmp_vec1 =
-                        registry->get<toolkit::transform>(entity).matrix() *
-                        tmp_vec1;
-                    bones.push_back(
-                        std::make_pair(tmp_vec0.head<3>(), tmp_vec1.head<3>()));
-                  }
-                }
-                toolkit::opengl::draw_bones(bones, cam_comp.vp, motion_color);
-              }
-              // toolkit::opengl::draw_wire_spheres(tmp_pos, cam_comp.vp, 0.05f,
-              //                                    color);
-              for (int i = 0; i < tmp_pos.size(); i++) {
-                auto &trans = registry->get<toolkit::transform>(entities[i]);
-                trans.set_world_pos(tmp_pos[i]);
-              }
+  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+                     toolkit::camera &cam_comp) override {
+    if (positions.size() > 0) {
+      if (current_frame >= positions.size() || current_frame < 0)
+        spdlog::error("Current frame out of range");
+      else {
+        auto tmp_pos = positions[current_frame];
+        toolkit::math::vector4 tmp_vec;
+        for (int i = 0; i < tmp_pos.size(); i++) {
+          tmp_vec << tmp_pos[i], 1.0;
+          tmp_pos[i] =
+              (registry->get<toolkit::transform>(entity).matrix() * tmp_vec)
+                  .head<3>();
+        }
+        std::vector<std::pair<toolkit::math::vector3, toolkit::math::vector3>>
+            bones;
+        for (int i = 0; i < parents.size(); i++)
+          if (parents[i] != -1)
+            bones.push_back(std::make_pair(tmp_pos[parents[i]], tmp_pos[i]));
+        toolkit::opengl::draw_bones(bones, cam_comp.vp, positions_color);
+        if (motion_data.skel.get_num_joints() != 0) {
+          auto frame_data = motion_data.at(current_frame);
+          auto motion_pos = frame_data.fk();
+          bones.clear();
+          toolkit::math::vector4 tmp_vec0, tmp_vec1;
+          for (int i = 0; i < motion_data.skel.joint_parent.size(); i++) {
+            if (motion_data.skel.joint_parent[i] != -1) {
+              tmp_vec0 << motion_pos[motion_data.skel.joint_parent[i]], 1.0f;
+              tmp_vec1 << motion_pos[i], 1.0f;
+              tmp_vec0 =
+                  registry->get<toolkit::transform>(entity).matrix() * tmp_vec0;
+              tmp_vec1 =
+                  registry->get<toolkit::transform>(entity).matrix() * tmp_vec1;
+              bones.push_back(
+                  std::make_pair(tmp_vec0.head<3>(), tmp_vec1.head<3>()));
             }
           }
-        });
+          toolkit::opengl::draw_bones(bones, cam_comp.vp, motion_color);
+        }
+        // toolkit::opengl::draw_wire_spheres(tmp_pos, cam_comp.vp, 0.05f,
+        //                                    color);
+        for (int i = 0; i < tmp_pos.size(); i++) {
+          auto &trans = registry->get<toolkit::transform>(entities[i]);
+          trans.set_world_pos(tmp_pos[i]);
+        }
+      }
+    }
   }
 
   void update(toolkit::iapp *app, float dt) override {

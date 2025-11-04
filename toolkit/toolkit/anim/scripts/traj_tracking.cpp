@@ -294,54 +294,49 @@ void traj_tracking::animate_character_with_context(float dt) {
   }
 }
 
-void traj_tracking::draw_to_scene(iapp *app) {
-  opengl::script_draw_to_scene_proxy(app, [&](opengl::editor *editor,
-                                              transform &cam_trans,
-                                              opengl::camera &cam_comp) {
-    // opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
-    //                    opengl::Purple);
-    for (int i = 0; i < 3; i++) {
-      opengl::draw_wire_sphere(cur_context.traj_world_pos[i], cam_comp.vp, 0.1f,
-                               opengl::Green);
-      opengl::draw_arrow(cur_context.traj_world_pos[i],
-                         cur_context.traj_world_pos[i] +
-                             cur_context.traj_world_dir[i],
-                         cam_comp.vp, opengl::Green);
+void traj_tracking::draw_to_scene(iapp *app, transform &cam_trans,
+                                  camera &cam_comp) {
+  for (int i = 0; i < 3; i++) {
+    opengl::draw_wire_sphere(cur_context.traj_world_pos[i], cam_comp.vp, 0.1f,
+                             opengl::Green);
+    opengl::draw_arrow(cur_context.traj_world_pos[i],
+                       cur_context.traj_world_pos[i] +
+                           cur_context.traj_world_dir[i],
+                       cam_comp.vp, opengl::Green);
+  }
+
+  if (trajectory_loaded && applied_traj_frame >= 0 &&
+      applied_traj_frame < traj_points.size())
+    opengl::draw_wire_sphere(traj_points[applied_traj_frame], cam_comp.vp, 0.1f,
+                             opengl::Purple);
+
+  if (db_loaded && data_joints_world_pos.size() > 0) {
+    std::vector<std::pair<math::vector3, math::vector3>> bone_pairs;
+    for (int i = 0; i < parents.size(); i++) {
+      if (parents[i] == -1 || parents[i] == 0)
+        continue;
+      bone_pairs.emplace_back(std::make_pair(data_joints_world_pos[parents[i]],
+                                             data_joints_world_pos[i]));
     }
+    opengl::draw_bones(bone_pairs, cam_comp.vp, opengl::Purple);
+  }
 
-    if (trajectory_loaded && applied_traj_frame >= 0 &&
-        applied_traj_frame < traj_points.size())
-      opengl::draw_wire_sphere(traj_points[applied_traj_frame], cam_comp.vp,
-                               0.1f, opengl::Purple);
+  if (trajectory_loaded) {
+    opengl::draw_wire_spheres(traj_points, cam_comp.vp, 0.005f, opengl::Red);
+    opengl::draw_linestrip(traj_points, cam_comp.vp, opengl::Red);
+    opengl::draw_wire_spheres(root_pos_history, cam_comp.vp, 0.005,
+                              opengl::Purple);
+  }
 
-    if (db_loaded && data_joints_world_pos.size() > 0) {
-      std::vector<std::pair<math::vector3, math::vector3>> bone_pairs;
-      for (int i = 0; i < parents.size(); i++) {
-        if (parents[i] == -1 || parents[i] == 0)
-          continue;
-        bone_pairs.emplace_back(std::make_pair(
-            data_joints_world_pos[parents[i]], data_joints_world_pos[i]));
-      }
-      opengl::draw_bones(bone_pairs, cam_comp.vp, opengl::Purple);
-    }
-
-    if (trajectory_loaded) {
-      opengl::draw_wire_spheres(traj_points, cam_comp.vp, 0.005f, opengl::Red);
-      opengl::draw_linestrip(traj_points, cam_comp.vp, opengl::Red);
-      opengl::draw_wire_spheres(root_pos_history, cam_comp.vp, 0.005,
-                                opengl::Purple);
-    }
-
-    opengl::draw_arrow(math::vector3::Zero(),
-                       cur_context.root_world_rot * math::world_forward,
-                       cam_comp.vp, opengl::Blue);
-    opengl::draw_arrow(math::vector3::Zero(),
-                       cur_context.root_world_rot * math::world_up, cam_comp.vp,
-                       opengl::Green);
-    opengl::draw_arrow(math::vector3::Zero(),
-                       cur_context.root_world_rot * math::world_right,
-                       cam_comp.vp, opengl::Red);
-  });
+  opengl::draw_arrow(math::vector3::Zero(),
+                     cur_context.root_world_rot * math::world_forward,
+                     cam_comp.vp, opengl::Blue);
+  opengl::draw_arrow(math::vector3::Zero(),
+                     cur_context.root_world_rot * math::world_up, cam_comp.vp,
+                     opengl::Green);
+  opengl::draw_arrow(math::vector3::Zero(),
+                     cur_context.root_world_rot * math::world_right,
+                     cam_comp.vp, opengl::Red);
 }
 
 void traj_tracking::draw_gui(iapp *app) {
