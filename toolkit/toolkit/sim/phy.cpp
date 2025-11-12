@@ -43,31 +43,33 @@ void phy_system::fixedupdate(entt::registry &registry, float dt) {
     auto broad_collision_pairs =
         get_broadphase_collision_pairs(registry, obj_data);
 
-    float step_dt = dt / num_sub_steps;
-    for (int i = 0; i < num_sub_steps; i++) {
-      // compute contact constraints in each sub step
-      for (int j = 0; j < obj_data.size(); j++) {
-        auto sim_obj = obj_data[j].sim_obj;
-        // store previous position and rotation
-        sim_obj->prev_world_position = obj_data[j].sim_obj->world_position;
-        sim_obj->prev_world_rotation = obj_data[j].sim_obj->world_rotation;
-        if (sim_obj->fixed || !(sim_obj->active))
-          continue;
-        // compute external force and torque
-        math::vector3 ext_force = math::vector3::Zero();
-        math::vector3 ext_torque = math::vector3::Zero();
-        for (int k = 0; k < sim_obj->forces.size(); k++) {
-          ext_force += sim_obj->forces[k].force;
-          ext_torque +=
-              (sim_obj->forces[k].position - sim_obj->mass_center_world_space)
-                  .cross(sim_obj->forces[k].force);
-        }
-        // update object position and linear velocity given external force
-        sim_obj->linear_velocity += step_dt * sim_obj->inverse_mass * ext_force;
-        sim_obj->world_position += step_dt * sim_obj->linear_velocity;
-        // update object rotation and angular velocity given external torque
-      }
-    }
+    // float step_dt = dt / num_sub_steps;
+    // for (int i = 0; i < num_sub_steps; i++) {
+    //   // compute contact constraints in each sub step
+    //   for (int j = 0; j < obj_data.size(); j++) {
+    //     auto sim_obj = obj_data[j].sim_obj;
+    //     // store previous position and rotation
+    //     sim_obj->prev_world_position = obj_data[j].sim_obj->world_position;
+    //     sim_obj->prev_world_rotation = obj_data[j].sim_obj->world_rotation;
+    //     if (sim_obj->fixed || !(sim_obj->active))
+    //       continue;
+    //     // compute external force and torque
+    //     math::vector3 ext_force = math::vector3::Zero();
+    //     math::vector3 ext_torque = math::vector3::Zero();
+    //     for (int k = 0; k < sim_obj->forces.size(); k++) {
+    //       ext_force += sim_obj->forces[k].force;
+    //       ext_torque +=
+    //           (sim_obj->forces[k].position -
+    //           sim_obj->mass_center_world_space)
+    //               .cross(sim_obj->forces[k].force);
+    //     }
+    //     // update object position and linear velocity given external force
+    //     sim_obj->linear_velocity += step_dt * sim_obj->inverse_mass *
+    //     ext_force; sim_obj->world_position += step_dt *
+    //     sim_obj->linear_velocity;
+    //     // update object rotation and angular velocity given external torque
+    //   }
+    // }
   }
   // ------------- end PBD based simulation -------------
 
@@ -91,10 +93,13 @@ void phy_system::update_collider_properties(
       collider_ptr->world_pos =
           data.sim_obj->world_rotation * collider_ptr->local_pos +
           data.sim_obj->world_position;
-      collider_ptr->world_rot =
-          data.sim_obj->world_rotation * collider_ptr->local_rot;
+      collider_ptr->world_rot = data.sim_obj->world_rotation *
+                                math::euler_to_quat(collider_ptr->local_angle);
+      collider_ptr->world_dir = data.sim_obj->world_rotation * math::world_up;
     } else if (auto collider_ptr = dynamic_cast<convex_hull_collider *>(
                    data.sim_obj->collider.get())) {
+      collider_ptr->transformed_bounding_sphere_center =
+          collider_ptr->bounding_sphere_center + data.sim_obj->world_position;
       for (int i = 0; i < collider_ptr->transformed_vertices.size(); i++) {
         collider_ptr->transformed_vertices[i] =
             data.sim_obj->world_rotation * collider_ptr->vertices[i] +
@@ -158,6 +163,15 @@ void phy_system::draw_to_scene(entt::registry &registry, transform &cam_trans,
             opengl::draw_sphere(collider_ptr->world_pos, cam_comp.vp,
                                 collider_ptr->radius, opengl::White, true);
           } else if (sim_obj.collider->type == collider_type::CAPSULE) {
+            auto collider_ptr =
+                dynamic_cast<capsule_collider *>(sim_obj.collider.get());
+            opengl::draw_capsule(
+                collider_ptr->world_pos -
+                    collider_ptr->world_dir * collider_ptr->cap_distance * 0.5f,
+                collider_ptr->world_pos +
+                    collider_ptr->world_dir * collider_ptr->cap_distance * 0.5f,
+                cam_comp.vp, opengl::White, true, collider_ptr->cap_radius,
+                collider_ptr->cap_radius);
           } else if (sim_obj.collider->type == collider_type::CONVEX_HULL) {
             auto collider_ptr =
                 dynamic_cast<convex_hull_collider *>(sim_obj.collider.get());

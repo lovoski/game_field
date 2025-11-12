@@ -42,7 +42,7 @@ void convex_hull_collider::create_from_data(
   transformed_faces = faces;
 }
 
-void rigid_sim_object::setup_mass(float mass_value, bool is_fixed) {
+void rigid_sim_object::setup_mass_inertia(float mass_value, bool is_fixed) {
   if (is_fixed) {
     inverse_mass = 0;
     fixed = is_fixed;
@@ -70,18 +70,14 @@ void rigid_sim_object::update_bounding_volumn_given_colliders() {
       bounding_sphere_radius = c->radius;
       bounding_sphere_center = c->world_pos;
     } else if (collider->type == collider_type::CAPSULE) {
-      // TODO:
+      auto c = dynamic_cast<capsule_collider *>(collider.get());
+      auto capsule_dir = c->world_rot * math::world_up;
+      bounding_sphere_radius = c->cap_distance * 0.5f + c->cap_radius;
+      bounding_sphere_center = c->world_pos;
     } else if (collider->type == collider_type::CONVEX_HULL) {
       auto c = dynamic_cast<convex_hull_collider *>(collider.get());
-      bounding_sphere_center = math::vector3::Zero();
-      for (int i = 0; i < c->transformed_vertices.size(); i++)
-        bounding_sphere_center += c->transformed_vertices[i];
-      bounding_sphere_center /= c->transformed_vertices.size();
-      bounding_sphere_radius = 0.0f;
-      for (int i = 0; i < c->transformed_vertices.size(); i++)
-        bounding_sphere_radius = std::max(
-            bounding_sphere_radius,
-            (bounding_sphere_center - c->transformed_vertices[i]).norm());
+      bounding_sphere_center = c->transformed_bounding_sphere_center;
+      bounding_sphere_radius = c->bounding_sphere_radius;
     }
   }
 }
@@ -105,6 +101,9 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
         spdlog::info("Create convex hull collider for mesh");
         convex_hull_collider c;
         c.create_from_data(mesh_ptr->vertices);
+        auto bs = welzl_bounding_sphere(c.vertices, true);
+        c.bounding_sphere_center = bs.first;
+        c.bounding_sphere_radius = bs.second;
         collider = std::make_shared<convex_hull_collider>(c);
       }
     }
@@ -121,6 +120,13 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
                         c->local_pos.data(), 0.001f, -1e38f, 1e38f);
     } else if (collider->type == collider_type::CAPSULE) {
       ImGui::SeparatorText("Capsule Collider");
+      capsule_collider *c = dynamic_cast<capsule_collider *>(collider.get());
+      ImGui::DragFloat("Cap Radius", &c->cap_radius, 0.001f, 0.0f, 10.0f);
+      ImGui::DragFloat("Cap Length", &c->cap_distance, 0.001f, 0.0f, 20.0f);
+      ImGui::DragFloat3(("Local Pos##" + std::to_string(0)).c_str(),
+                        c->local_pos.data(), 0.001f, -1e38f, 1e38f);
+      ImGui::DragFloat3(("Local Rot##" + std::to_string(0)).c_str(),
+                        c->local_angle.data(), 0.001f, -180.0f, 180.0f);
     } else if (collider->type == collider_type::CONVEX_HULL) {
       ImGui::SeparatorText("Convex Hull Collider");
       if (ImGui::BeginTable("##convex_hull_collider", 2,

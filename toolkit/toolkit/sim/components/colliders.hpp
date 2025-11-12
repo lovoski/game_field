@@ -6,6 +6,10 @@
 
 namespace toolkit::sim {
 
+std::pair<math::vector3, float>
+welzl_bounding_sphere(const std::vector<math::vector3> &points,
+                      bool shuffle = false);
+
 enum collider_type {
   SPHERE,
   CAPSULE,
@@ -27,15 +31,18 @@ struct sphere_collider : public base_collider {
 };
 REFLECT(sphere_collider, radius, local_pos)
 
+/**
+ * By default the capsule points to math::world_up
+ */
 struct capsule_collider : public base_collider {
   capsule_collider() { type = collider_type::CAPSULE; }
   float cap_radius = 1.0f, cap_distance = 2.0f;
   math::vector3 local_pos = math::vector3::Zero(),
-                world_pos = math::vector3::Zero();
-  math::quat local_rot = math::quat::Identity(),
-             world_rot = math::quat::Identity();
+                local_angle = math::vector3::Zero(),
+                world_pos = math::vector3::Zero(), world_dir = math::world_up;
+  math::quat world_rot = math::quat::Identity();
 };
-REFLECT(capsule_collider, cap_radius, cap_distance, local_pos, local_rot)
+REFLECT(capsule_collider, cap_radius, cap_distance, local_pos, local_angle)
 
 struct convex_hull_collider_face {
   math::vector3 normal;
@@ -56,6 +63,10 @@ struct convex_hull_collider : public base_collider {
   std::vector<std::uint32_t> indices;
   std::vector<convex_hull_collider_face> faces, transformed_faces;
 
+  float bounding_sphere_radius = 0.0f;
+  math::vector3 bounding_sphere_center = math::vector3::Zero(),
+                transformed_bounding_sphere_center = math::vector3::Zero();
+
   std::vector<std::vector<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
       face_to_neighbors;
 };
@@ -69,7 +80,7 @@ struct physics_force {
 };
 
 struct rigid_sim_object : public icomponent {
-  rigid_sim_object() { setup_mass(1.0f, false); }
+  rigid_sim_object() { setup_mass_inertia(1.0f, false); }
   float inverse_mass = 1.0f;
   math::vector3 mass_center_offset = math::vector3::Zero(),
                 mass_center_world_space = math::vector3::Zero();
@@ -81,7 +92,7 @@ struct rigid_sim_object : public icomponent {
   float bounding_sphere_radius = 0.0f;
   math::vector3 bounding_sphere_center = math::vector3::Zero();
 
-  void setup_mass(float mass_value, bool is_fixed = false);
+  void setup_mass_inertia(float mass_value, bool is_fixed = false);
 
   void update_bounding_volumn_given_colliders();
 
