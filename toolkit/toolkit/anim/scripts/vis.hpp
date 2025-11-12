@@ -7,11 +7,11 @@
 
 namespace toolkit::anim {
 
-class vis_skeleton : public scriptable {
+class vis_skeleton : public sub_system {
 public:
-  void draw_to_scene(iapp *app, transform &cam_trans,
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;
-  void draw_gui(iapp *app) override;
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   void start() override;
   void destroy() override;
@@ -28,7 +28,7 @@ private:
   std::vector<std::pair<math::vector3, math::vector3>> draw_queue, x_dir, y_dir,
       z_dir;
 };
-DECLARE_SCRIPT(vis_skeleton, animation, draw_axes, draw_spheres, draw_names,
+DECLARE_SUB_SYSTEM(vis_skeleton, animation, draw_axes, draw_spheres, draw_names,
                axes_length, bone_color)
 
 }; // namespace toolkit::anim

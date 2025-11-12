@@ -16,7 +16,7 @@ struct camera : public icomponent {
   float h_size = 10.0f, v_size = 10.0f;
   float fovy_degree = 45.0f, z_near = 0.1f, z_far = 200.0f;
 
-  void draw_gui(iapp *app) override {
+  void draw_gui(entt::registry &registry, entt::entity) override {
     ImGui::Checkbox("Perspective", &perspective);
     if (perspective) {
       ImGui::Text("Perspective Camera");
@@ -48,4 +48,4 @@ std::tuple<math::vector3, float>
 frustom_bounding_sphere(float znear, float zfar, float fovy_deg, float width,
                         float height);
 
-}; // namespace toolkit::opengl
+}; // namespace toolkit

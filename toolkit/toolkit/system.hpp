@@ -117,7 +117,7 @@ protected:
 class icomponent {
 public:
   virtual void init1() {}
-  virtual void draw_gui(iapp *app) {}
+  virtual void draw_gui(entt::registry &registry, entt::entity entity) {}
   virtual std::string get_name() { return typeid(*this).name(); }
 
   virtual nlohmann::json late_serialize() { return nlohmann::json(); }
@@ -156,7 +156,7 @@ public:
       toolkit::iapp *app, entt::registry &registry, entt::entity entity) {     \
     if (auto ptr = registry.try_get<class_name>(entity)) {                     \
       if (ImGui::CollapsingHeader(ptr->get_name().c_str()))                    \
-        ptr->draw_gui(app);                                                    \
+        ptr->draw_gui(registry, entity);                                       \
     }                                                                          \
   }                                                                            \
   inline void __comp_init1_##class_name(entt::registry &registry,              \

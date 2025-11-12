@@ -18,16 +18,16 @@ struct mm_context {
   std::array<math::vector3, 3> traj_world_pos, traj_world_dir;
 };
 
-class traj_tracking : public scriptable {
+class traj_tracking : public sub_system {
 public:
   void start() override;
   void destroy() override;
 
-  void draw_to_scene(iapp *app, transform &cam_trans, camera &cam_comp) override;
-  void draw_gui(iapp *app) override;
+  void draw_to_scene(entt::registry &registry, transform &cam_trans, camera &cam_comp) override;
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
-  void update(iapp *app, float dt) override;
-  void fixedupdate(iapp *app, float dt);
+  void update(entt::registry &registry, float dt) override;
+  void fixedupdate(entt::registry &registry, float dt);
 
 private:
   // if trajectory loaded, then follow the trajectory instead of user input
@@ -80,6 +80,6 @@ private:
   float feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                      std::array<float, MM_FEATURE_DIM> &feat1);
 };
-DECLARE_SCRIPT(traj_tracking, animation)
+DECLARE_SUB_SYSTEM(traj_tracking, animation)
 
 }; // namespace toolkit::anim

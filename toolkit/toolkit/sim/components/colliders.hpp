@@ -37,6 +37,11 @@ struct capsule_collider : public base_collider {
 };
 REFLECT(capsule_collider, cap_radius, cap_distance, local_pos, local_rot)
 
+struct convex_hull_collider_face {
+  math::vector3 normal;
+  std::vector<std::uint32_t> elements;
+};
+
 /**
  * This collider should only work when the entity with rigid_sim_object has a
  * static mesh (no skinning or morph targets) component.
@@ -44,6 +49,14 @@ REFLECT(capsule_collider, cap_radius, cap_distance, local_pos, local_rot)
  */
 struct convex_hull_collider : public base_collider {
   convex_hull_collider() { type = collider_type::CONVEX_HULL; }
+
+  void create_from_data(std::vector<assets::mesh_vertex> &vertices_data);
+
+  std::vector<math::vector3> vertices, transformed_vertices;
+  std::vector<convex_hull_collider_face> faces, transformed_faces;
+
+  std::vector<std::vector<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
+      face_to_neighbors;
 };
 
 struct collider_contacts {
@@ -55,7 +68,7 @@ struct physics_force {
 };
 
 struct rigid_sim_object : public icomponent {
-  rigid_sim_object() {}
+  rigid_sim_object() { setup_mass(1.0f, false); }
   float inverse_mass = 1.0f;
   math::vector3 mass_center_offset = math::vector3::Zero(),
                 mass_center_world_space = math::vector3::Zero();
@@ -67,28 +80,29 @@ struct rigid_sim_object : public icomponent {
   float bounding_sphere_radius = 0.0f;
   math::vector3 bounding_sphere_center = math::vector3::Zero();
 
+  void setup_mass(float mass_value, bool is_fixed = false);
+
   void update_bounding_volumn_given_colliders();
 
   std::vector<physics_force> forces;
   // the union of colliders form as an intergrity for this sim_obj
   std::vector<std::shared_ptr<base_collider>> colliders;
 
-  math::vector3 angular_velocity = math::vector3::Zero(),
-                linear_velocity = math::vector3::Zero();
   math::matrix3 inertia_tensor, inverse_inertia_tensor;
-  math::vector3 world_position = math::vector3::Zero();
-  math::quat world_rotation = math::quat::Identity();
 
-  // auxilar
-  math::vector3 prev_world_position = math::vector3::Zero();
-  math::quat prev_world_rotation = math::quat::Identity();
+  math::vector3 prev_world_position = math::vector3::Zero(),
+                world_position = math::vector3::Zero();
+  math::quat prev_world_rotation = math::quat::Identity(),
+             world_rotation = math::quat::Identity();
   math::vector3 prev_angular_velocity = math::vector3::Zero(),
-                prev_linear_velocity = math::vector3::Zero();
+                prev_linear_velocity = math::vector3::Zero(),
+                angular_velocity = math::vector3::Zero(),
+                linear_velocity = math::vector3::Zero();
 
   nlohmann::json late_serialize() override;
   void late_deserialize(nlohmann::json &data) override;
 
-  void draw_gui(iapp *app) override;
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 };
 DECLARE_COMPONENT(rigid_sim_object, simulation)
 

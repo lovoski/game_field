@@ -146,7 +146,7 @@ void smplx::start() { model_path = "D:\\0tasks\\smplx_archive\\models"; }
 void smplx::init1() {}
 void smplx::destroy() {}
 
-void smplx::setup_smplx_model(cnpy::npz_t &data) {}
+void smplx::setup_smplx_model(entt::registry &registry, cnpy::npz_t &data) {}
 
 template <typename T>
 void fill_positions(const std::vector<T> &arr, std::vector<math::vector3> &dst,
@@ -270,18 +270,18 @@ void setup_posedirs(mesh_data &mesh_comp, const std::vector<T> data,
   }
 }
 
-void smplx::setup_smpl_model(cnpy::npz_t &data) {
+void smplx::setup_smpl_model(entt::registry &registry, cnpy::npz_t &data) {
   num_betas = 10;
   beta_cache.resize(num_betas, 0.0f);
 
-  auto &entity_trans = registry->get<transform>(entity);
+  auto &entity_trans = registry.get<transform>(entity);
   entity_trans.set_world_pos(math::vector3::Zero());
   entity_trans.force_update_hierarchy();
 
-  auto &mesh_comp = registry->emplace_or_replace<mesh_data>(entity);
+  auto &mesh_comp = registry.emplace_or_replace<mesh_data>(entity);
   mesh_comp.model_name = model_type;
   mesh_comp.mesh_name = gender_type;
-  auto &bundle_data = registry->emplace_or_replace<skinned_mesh_bundle>(entity);
+  auto &bundle_data = registry.emplace_or_replace<skinned_mesh_bundle>(entity);
   bundle_data.mesh_entities.push_back(entity);
 
   // fill data
@@ -320,20 +320,20 @@ void smplx::setup_smpl_model(cnpy::npz_t &data) {
                    posedirs.shape[2]);
 
   // skinned mesh related
-  auto &actor_comp = registry->emplace_or_replace<anim::actor>(entity);
+  auto &actor_comp = registry.emplace_or_replace<anim::actor>(entity);
   // TODO: can't use emplace_or_replace on a script, could be a problem with
   // script life-cycle
-  auto vis_skel_script = registry->try_get<anim::vis_skeleton>(entity);
+  auto vis_skel_script = registry.try_get<anim::vis_skeleton>(entity);
   if (vis_skel_script == nullptr)
-    registry->emplace<anim::vis_skeleton>(entity);
+    registry.emplace<anim::vis_skeleton>(entity);
   actor_comp.joint_active.resize(SMPL_JOINT_NAMES.size(), true);
   for (int i = 0; i < bone_entities.size(); i++)
-    registry->destroy(bone_entities[i]);
+    registry.destroy(bone_entities[i]);
   bone_entities.clear();
   for (int i = 0; i < SMPL_JOINT_NAMES.size(); i++) {
-    bone_entities.push_back(registry->create());
-    auto &bone_trans = registry->emplace<transform>(bone_entities[i]);
-    auto &bone_node = registry->emplace<anim::bone_node>(bone_entities[i]);
+    bone_entities.push_back(registry.create());
+    auto &bone_trans = registry.emplace<transform>(bone_entities[i]);
+    auto &bone_node = registry.emplace<anim::bone_node>(bone_entities[i]);
     bone_trans.name = SMPL_JOINT_NAMES[i];
     actor_comp.ordered_entities.push_back(bone_entities[i]);
     actor_comp.name_to_entity[SMPL_JOINT_NAMES[i]] = bone_entities[i];
@@ -344,11 +344,11 @@ void smplx::setup_smpl_model(cnpy::npz_t &data) {
     }
   }
   bundle_data.bone_entities = bone_entities;
-  apply_smpl_betas(beta_cache);
+  apply_smpl_betas(registry, beta_cache);
   mesh_comp.update_buffers();
 }
 
-void smplx::apply_smpl_betas(std::vector<float> betas) {
+void smplx::apply_smpl_betas(entt::registry &registry, std::vector<float> betas) {
   if (betas.size() != 10) {
     spdlog::error("SMPL betas must be 10");
     return;
@@ -358,9 +358,9 @@ void smplx::apply_smpl_betas(std::vector<float> betas) {
                   bone_entities.size());
     return;
   }
-  auto &root_trans = registry->get<transform>(bone_entities[0]);
-  auto &ent_trans = registry->get<transform>(entity);
-  auto &mesh_comp = registry->get<opengl::mesh_data>(entity);
+  auto &root_trans = registry.get<transform>(bone_entities[0]);
+  auto &ent_trans = registry.get<transform>(entity);
+  auto &mesh_comp = registry.get<opengl::mesh_data>(entity);
   joint_rest_world_pos.resize(SMPL_JOINT_NAMES.size());
   for (int i = 0; i < SMPL_JOINT_NAMES.size(); i++) {
     joint_rest_world_pos[i] = math::vector3::Zero();
@@ -377,12 +377,12 @@ void smplx::apply_smpl_betas(std::vector<float> betas) {
   }
   ent_trans.set_world_transform(math::matrix4::Identity());
   for (int i = 0; i < SMPL_JOINT_NAMES.size(); i++) {
-    auto &bone_trans = registry->get<transform>(bone_entities[i]);
+    auto &bone_trans = registry.get<transform>(bone_entities[i]);
     bone_trans.set_local_transform(math::matrix4::Identity());
   }
   ent_trans.force_update_hierarchy();
   for (int i = 0; i < SMPL_JOINT_NAMES.size(); i++) {
-    auto &bone_trans = registry->get<transform>(bone_entities[i]);
+    auto &bone_trans = registry.get<transform>(bone_entities[i]);
     if (SMPL_JOINT_PARENTS[i] != -1) {
       bone_trans.set_local_pos(joint_rest_world_pos[i] -
                                joint_rest_world_pos[SMPL_JOINT_PARENTS[i]]);
@@ -392,8 +392,8 @@ void smplx::apply_smpl_betas(std::vector<float> betas) {
   }
   ent_trans.force_update_hierarchy();
   for (int i = 0; i < bone_entities.size(); i++) {
-    auto &bone_trans = registry->get<transform>(bone_entities[i]);
-    auto &bone_node = registry->get<anim::bone_node>(bone_entities[i]);
+    auto &bone_trans = registry.get<transform>(bone_entities[i]);
+    auto &bone_node = registry.get<anim::bone_node>(bone_entities[i]);
     bone_node.name = bone_trans.name;
     bone_node.offset_matrix = bone_trans.matrix().inverse();
   }
@@ -404,11 +404,11 @@ void smplx::apply_smpl_betas(std::vector<float> betas) {
     }
   }
 }
-void smplx::apply_smplx_betas(std::vector<float> betas) {}
+void smplx::apply_smplx_betas(entt::registry &registry, std::vector<float> betas) {}
 
-void smplx::preupdate(iapp *app, float dt) {}
+void smplx::preupdate(entt::registry &registry, float dt) {}
 
-void smplx::draw_gui(iapp *app) {
+void smplx::draw_gui(entt::registry &registry, entt::entity entity) {
   ImGui::Text(str_format("model_path: %s", model_path.c_str()).c_str());
   if (ImGui::Button("Setup Model Dir", {-1, 30}))
     open_folder_dialog("Select model directory", model_path);
@@ -425,9 +425,9 @@ void smplx::draw_gui(iapp *app) {
       spdlog::info("Load file from {0}", model_filepath);
       smpl_data = cnpy::npz_load(model_filepath);
       if (model_type == "smplx")
-        setup_smplx_model(smpl_data);
+        setup_smplx_model(registry, smpl_data);
       else if (model_type == "smpl")
-        setup_smpl_model(smpl_data);
+        setup_smpl_model(registry, smpl_data);
     } else {
       spdlog::error("File {0} doesn't exist", model_filepath);
     }
@@ -440,9 +440,10 @@ void smplx::draw_gui(iapp *app) {
   }
   if (ImGui::Button("Apply Betas", {-1, 30}))
     if (num_betas == 10)
-      apply_smpl_betas(beta_cache);
+      apply_smpl_betas(registry, beta_cache);
 }
 
-void smplx::draw_to_scene(iapp *app, transform &cam_trans, camera &cam_comp) {}
+void smplx::draw_to_scene(entt::registry &registry, transform &cam_trans,
+                          camera &cam_comp) {}
 
 }; // namespace toolkit::opengl

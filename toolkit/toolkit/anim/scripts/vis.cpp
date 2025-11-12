@@ -10,9 +10,9 @@ void vis_skeleton::start() { spdlog::info("Start vis_skeleton script"); }
 
 void vis_skeleton::destroy() { spdlog::info("Destroy vis_skeleton script"); }
 
-void vis_skeleton::draw_to_scene(iapp *app, transform &cam_trans,
+void vis_skeleton::draw_to_scene(entt::registry &registry, transform &cam_trans,
                                  camera &cam_comp) {
-  if (auto actor_ptr = app->registry.try_get<actor>(entity)) {
+  if (auto actor_ptr = registry.try_get<actor>(entity)) {
     collect_skeleton_draw_queue(*actor_ptr);
     opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
     // get the average length of bone
@@ -29,7 +29,7 @@ void vis_skeleton::draw_to_scene(iapp *app, transform &cam_trans,
       y_dir.reserve(active_joint_entities.size());
       z_dir.reserve(active_joint_entities.size());
       for (auto joint_entity : active_joint_entities) {
-        auto &joint_trans = app->registry.get<transform>(joint_entity);
+        auto &joint_trans = registry.get<transform>(joint_entity);
         x_dir.emplace_back(std::make_pair(joint_trans.world_pos(),
                                           joint_trans.world_pos() +
                                               axes_length * avg_bone_length *
@@ -55,7 +55,7 @@ void vis_skeleton::draw_to_scene(iapp *app, transform &cam_trans,
       joint_positions.reserve(active_joint_entities.size());
       for (auto joint_entity : active_joint_entities) {
         joint_positions.push_back(
-            app->registry.get<transform>(joint_entity).world_pos());
+            registry.get<transform>(joint_entity).world_pos());
       }
       opengl::draw_wire_spheres(joint_positions, cam_comp.vp,
                                 0.08f * avg_bone_length, bone_color);
@@ -64,7 +64,7 @@ void vis_skeleton::draw_to_scene(iapp *app, transform &cam_trans,
       for (int i = 0; i < actor_ptr->ordered_entities.size(); i++) {
         if (actor_ptr->joint_active[i]) {
           auto &joint_trans =
-              registry->get<transform>(actor_ptr->ordered_entities[i]);
+              registry.get<transform>(actor_ptr->ordered_entities[i]);
           opengl::draw_text3d(joint_trans.name, joint_trans.world_pos(),
                               math::quat::Identity(), cam_comp.vp,
                               opengl::White, 0.0f, 0.02f);
@@ -74,7 +74,7 @@ void vis_skeleton::draw_to_scene(iapp *app, transform &cam_trans,
   }
 }
 
-void vis_skeleton::draw_gui(iapp *app) {
+void vis_skeleton::draw_gui(entt::registry &registry, entt::entity entity) {
   ImGui::Checkbox("Draw Axes", &draw_axes);
   ImGui::Checkbox("Draw Names", &draw_names);
   ImGui::DragFloat("Axes Size", &axes_length, 0.05f, 0.0f, 1.0f);
@@ -89,18 +89,18 @@ void vis_skeleton::collect_skeleton_draw_queue(actor &actor_comp) {
     if (actor_comp.joint_active[i])
       active_joint_entities.insert(actor_comp.ordered_entities[i]);
   auto [parent, children, roots] =
-      estimate_actor_bone_hierarchy(*registry, actor_comp, true);
+      estimate_actor_bone_hierarchy(*registry_ptr, actor_comp, true);
   for (auto root : roots) {
     std::queue<int> q;
     q.push(root);
     while (!q.empty()) {
       auto current = q.front();
       auto &current_trans =
-          registry->get<transform>(actor_comp.ordered_entities[current]);
+          registry_ptr->get<transform>(actor_comp.ordered_entities[current]);
       q.pop();
       for (auto c : children[current]) {
         auto &child_trans =
-            registry->get<transform>(actor_comp.ordered_entities[c]);
+            registry_ptr->get<transform>(actor_comp.ordered_entities[c]);
         draw_queue.emplace_back(
             std::make_pair(current_trans.world_pos(), child_trans.world_pos()));
         q.push(c);

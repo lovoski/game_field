@@ -5,10 +5,10 @@
 #include "toolkit/scriptable.hpp"
 #include "toolkit/system.hpp"
 
-class mixamo_manipulate : public toolkit::scriptable {
+class mixamo_manipulate : public toolkit::sub_system {
 public:
   void start() override {
-    if (auto actor_comp = registry->try_get<toolkit::anim::actor>(entity)) {
+    if (auto actor_comp = registry_ptr->try_get<toolkit::anim::actor>(entity)) {
       if (target == entt::null || pole == entt::null || root == entt::null) {
         for (auto &p : actor_comp->name_to_entity) {
           if (toolkit::has_substr(p.first, "LeftFoot") &&
@@ -23,27 +23,28 @@ public:
         }
       }
       if (left_foot_target == entt::null) {
-        left_foot_target = registry->create();
+        left_foot_target = registry_ptr->create();
         auto &lft_trans =
-            registry->emplace<toolkit::transform>(left_foot_target);
+            registry_ptr->emplace<toolkit::transform>(left_foot_target);
         lft_trans.name = "left foot ik target";
         lft_trans.set_parent(entity);
         if (target != entt::null) {
           lft_trans.set_world_pos(
-              registry->get<toolkit::transform>(target).world_pos());
+              registry_ptr->get<toolkit::transform>(target).world_pos());
           lft_trans.set_world_rot(
-              registry->get<toolkit::transform>(target).world_rot());
+              registry_ptr->get<toolkit::transform>(target).world_rot());
         }
       }
       if (left_foot_pole == entt::null) {
-        left_foot_pole = registry->create();
-        auto &lfp_trans = registry->emplace<toolkit::transform>(left_foot_pole);
+        left_foot_pole = registry_ptr->create();
+        auto &lfp_trans =
+            registry_ptr->emplace<toolkit::transform>(left_foot_pole);
         lfp_trans.name = "left foot ik pole";
         lfp_trans.set_parent(entity);
         if (pole != entt::null) {
-          auto p0 = registry->get<toolkit::transform>(root).world_pos();
-          auto p1 = registry->get<toolkit::transform>(pole).world_pos();
-          auto p2 = registry->get<toolkit::transform>(target).world_pos();
+          auto p0 = registry_ptr->get<toolkit::transform>(root).world_pos();
+          auto p1 = registry_ptr->get<toolkit::transform>(pole).world_pos();
+          auto p2 = registry_ptr->get<toolkit::transform>(target).world_pos();
           toolkit::math::vector3 h02 =
               ((p1 - p0) -
                (p1 - p0).dot((p2 - p0).normalized()) * (p2 - p0).normalized())
@@ -54,21 +55,21 @@ public:
     }
   }
 
-  void draw_gui(toolkit::iapp *app) override {}
+  void draw_gui(entt::registry &registry, entt::entity entity) override {}
 
   toolkit::math::vector3 tp0, tp1, tp2;
   std::vector<toolkit::math::vector3> vis_pos;
-  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+  void draw_to_scene(entt::registry &registry, toolkit::transform &cam_trans,
                      toolkit::camera &cam_comp) override {
-    if (auto actor_comp = registry->try_get<toolkit::anim::actor>(entity)) {
+    if (auto actor_comp = registry.try_get<toolkit::anim::actor>(entity)) {
       vis_pos.clear();
       if (left_foot_target != entt::null) {
         vis_pos.push_back(
-            registry->get<toolkit::transform>(left_foot_target).world_pos());
+            registry.get<toolkit::transform>(left_foot_target).world_pos());
       }
       if (left_foot_pole != entt::null) {
         vis_pos.push_back(
-            registry->get<toolkit::transform>(left_foot_pole).world_pos());
+            registry.get<toolkit::transform>(left_foot_pole).world_pos());
       }
       vis_pos.push_back(tp0);
       vis_pos.push_back(tp1);
@@ -78,13 +79,13 @@ public:
     }
   }
 
-  void lateupdate(toolkit::iapp *app, float dt) override {
-    if (auto actor_comp = registry->try_get<toolkit::anim::actor>(entity)) {
-      auto &t0 = registry->get<toolkit::transform>(root);
-      auto &t1 = registry->get<toolkit::transform>(pole);
-      auto &t2 = registry->get<toolkit::transform>(target);
-      auto &pole = registry->get<toolkit::transform>(left_foot_pole);
-      auto &target = registry->get<toolkit::transform>(left_foot_target);
+  void lateupdate(entt::registry &registry, float dt) override {
+    if (auto actor_comp = registry.try_get<toolkit::anim::actor>(entity)) {
+      auto &t0 = registry.get<toolkit::transform>(root);
+      auto &t1 = registry.get<toolkit::transform>(pole);
+      auto &t2 = registry.get<toolkit::transform>(target);
+      auto &pole = registry.get<toolkit::transform>(left_foot_pole);
+      auto &target = registry.get<toolkit::transform>(left_foot_target);
 
       float l01 = (t1.world_pos() - t0.world_pos()).norm();
       float l12 = (t2.world_pos() - t1.world_pos()).norm();
@@ -124,5 +125,5 @@ public:
   entt::entity target = entt::null, pole = entt::null, root = entt::null;
   entt::entity left_foot_target = entt::null, left_foot_pole = entt::null;
 };
-DECLARE_SCRIPT(mixamo_manipulate, animation, left_foot_target, left_foot_pole,
-               target, pole, root)
+DECLARE_SUB_SYSTEM(mixamo_manipulate, animation, left_foot_target,
+                   left_foot_pole, target, pole, root)

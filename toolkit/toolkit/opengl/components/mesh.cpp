@@ -116,7 +116,7 @@ void init_opengl_buffers_internal(mesh_data &data,
                                   std::vector<_render_vertex> &vertices,
                                   std::vector<_blendshape_data> &blendshapes);
 
-void mesh_data::draw_gui(iapp *app) {
+void mesh_data::draw_gui(entt::registry &registry, entt::entity entity) {
   if (ImGui::BeginTable(("##mesh" + mesh_name).c_str(), 2,
                         ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders)) {
     ImGui::TableSetupColumn("Property");
@@ -165,6 +165,12 @@ void mesh_data::draw_gui(iapp *app) {
     }
   }
   if (ImGui::TreeNode("Material Settings")) {
+    int material_type_index = static_cast<int>(material.type);
+    gui::combo("type", material_type_index,
+               {"OPAQUE_LIT", "OPAQUE_UNLIT", "TRANSPARENT"}, [&](int index) {
+                 material.type = static_cast<material_type>(index);
+               });
+
     gui::color_edit_3("albedo", material.albedo);
     ImGui::Checkbox("wireframe", &material.wireframe);
     ImGui::DragFloat("wireframe width", &material.wireframe_width, 0.01f, 0.0f,

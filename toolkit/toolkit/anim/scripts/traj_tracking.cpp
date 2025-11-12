@@ -9,7 +9,7 @@ const float const_e = 2.71828f;
 void traj_tracking::destroy() {}
 
 void traj_tracking::start() {
-  auto actor_comp = registry->try_get<anim::actor>(entity);
+  auto actor_comp = registry_ptr->try_get<anim::actor>(entity);
   if (actor_comp != nullptr) {
     actor_bind_rot.resize(actor_comp->ordered_entities.size(),
                           math::quat::Identity());
@@ -17,11 +17,11 @@ void traj_tracking::start() {
                           math::vector3::Zero());
     actor_bind_mat.resize(actor_comp->ordered_entities.size(),
                           math::matrix4::Identity());
-    registry->get<transform>(actor_comp->ordered_entities[0])
+    registry_ptr->get<transform>(actor_comp->ordered_entities[0])
         .force_update_hierarchy();
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto &joint_trans =
-          registry->get<transform>(actor_comp->ordered_entities[i]);
+          registry_ptr->get<transform>(actor_comp->ordered_entities[i]);
       actor_bind_rot[i] = joint_trans.world_rot();
       actor_bind_pos[i] = joint_trans.local_pos();
       actor_bind_mat[i] = joint_trans.matrix();
@@ -33,7 +33,7 @@ void traj_tracking::start() {
   //     ->editor_manipulate_camera = false;
 }
 
-void traj_tracking::update(iapp *app, float dt) {
+void traj_tracking::update(entt::registry &registry, float dt) {
   // // update camera settings
   // auto &cam_trans =
   // registry->get<transform>(opengl::g_instance.active_camera); math::vector3
@@ -139,8 +139,8 @@ std::tuple<float, int, int> traj_tracking::lhmm(mm_context context,
   }
 }
 
-void traj_tracking::fixedupdate(iapp *app, float dt) {
-  auto actor_comp = registry->try_get<anim::actor>(entity);
+void traj_tracking::fixedupdate(entt::registry &registry, float dt) {
+  auto actor_comp = registry.try_get<anim::actor>(entity);
   if (db_loaded && mapping_loaded && trajectory_loaded &&
       (actor_comp != nullptr)) {
     if (search_timer <= 0.0f) {
@@ -277,10 +277,10 @@ void traj_tracking::animate_character_with_context(float dt) {
     }
   }
 
-  auto &actor_comp = registry->get<actor>(entity);
+  auto &actor_comp = registry_ptr->get<actor>(entity);
   for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
     auto joint_entity = actor_comp.ordered_entities[i];
-    auto &joint_trans = registry->get<transform>(joint_entity);
+    auto &joint_trans = registry_ptr->get<transform>(joint_entity);
     if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
       int joint_data_idx = joint_name_to_idx[joint_trans.name];
       if (i == 0) {
@@ -294,8 +294,8 @@ void traj_tracking::animate_character_with_context(float dt) {
   }
 }
 
-void traj_tracking::draw_to_scene(iapp *app, transform &cam_trans,
-                                  camera &cam_comp) {
+void traj_tracking::draw_to_scene(entt::registry &registry,
+                                  transform &cam_trans, camera &cam_comp) {
   for (int i = 0; i < 3; i++) {
     opengl::draw_wire_sphere(cur_context.traj_world_pos[i], cam_comp.vp, 0.1f,
                              opengl::Green);
@@ -339,7 +339,7 @@ void traj_tracking::draw_to_scene(iapp *app, transform &cam_trans,
                      cam_comp.vp, opengl::Red);
 }
 
-void traj_tracking::draw_gui(iapp *app) {
+void traj_tracking::draw_gui(entt::registry &registry, entt::entity entity) {
   ImGui::Checkbox("Inertialize", &inertialize);
   ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());

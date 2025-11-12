@@ -49,17 +49,17 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
                             math::quat in_rot, math::vector3 in_ang,
                             float halflife, float dt);
 
-class motion_matching : public scriptable {
+class motion_matching : public sub_system {
 public:
   void start() override;
   void destroy() override;
 
-  void draw_to_scene(iapp *app, transform &cam_trans,
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;
-  void draw_gui(iapp *app) override;
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
-  void update(iapp *app, float dt) override;
-  void fixedupdate(iapp *app, float dt) override;
+  void update(entt::registry &registry, float dt) override;
+  void fixedupdate(entt::registry &registry, float dt) override;
 
 private:
   bool db_loaded, mapping_loaded = false;
@@ -114,6 +114,6 @@ private:
   float feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                      std::array<float, MM_FEATURE_DIM> &feat1);
 };
-DECLARE_SCRIPT(motion_matching, animation)
+DECLARE_SUB_SYSTEM(motion_matching, animation)
 
 }; // namespace toolkit::anim

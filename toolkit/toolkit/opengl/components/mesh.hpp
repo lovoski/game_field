@@ -54,7 +54,7 @@ struct mesh_data : public icomponent {
 
   bool skinned = false;
 
-  void draw_gui(iapp *app) override;
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   void draw(GLenum mode = GL_TRIANGLES);
 

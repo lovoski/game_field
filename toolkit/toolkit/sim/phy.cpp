@@ -43,8 +43,8 @@ void phy_system::fixedupdate(entt::registry &registry, float dt) {
     auto broad_collision_pairs =
         get_broadphase_collision_pairs(registry, obj_data);
 
-    float step_dt = dt / num_pbd_steps;
-    for (int i = 0; i < num_pbd_steps; i++) {
+    float step_dt = dt / num_sub_steps;
+    for (int i = 0; i < num_sub_steps; i++) {
       // compute contact constraints in each sub step
       for (int j = 0; j < obj_data.size(); j++) {
         auto sim_obj = obj_data[j].sim_obj;
@@ -124,23 +124,23 @@ phy_system::get_broadphase_collision_pairs(
 void phy_system::draw_gui(entt::registry &registry, entt::entity entity) {
   if (auto ptr = registry.try_get<rigid_sim_object>(entity)) {
     if (ImGui::CollapsingHeader("PBD Physics Object"))
-      ptr->draw_gui(nullptr);
+      ptr->draw_gui(registry, entity);
   }
 }
 
 void phy_system::draw_menu_gui() {
   ImGui::MenuItem("Settings", nullptr, nullptr, false);
-  if (ImGui::InputInt("Num Steps", &num_pbd_steps)) {
-    num_pbd_steps = num_pbd_steps >= 0 ? num_pbd_steps : 0;
+  if (ImGui::InputInt("Num Steps", &num_sub_steps)) {
+    num_sub_steps = num_sub_steps >= 0 ? num_sub_steps : 0;
   }
   if (ImGui::InputInt("Simulate FPS", &sim_fps)) {
     sim_fps = sim_fps >= 0 ? sim_fps : 0;
   }
 }
 
-void phy_system::draw_to_scene(iapp *app, transform &cam_trans,
+void phy_system::draw_to_scene(entt::registry &registry, transform &cam_trans,
                                camera &cam_comp) {
-  app->registry.view<transform, rigid_sim_object>().each(
+  registry.view<transform, rigid_sim_object>().each(
       [&](entt::entity entity, transform &trans, rigid_sim_object &sim_obj) {
         std::vector<math::vector3> positions;
         for (auto &collider : sim_obj.colliders) {

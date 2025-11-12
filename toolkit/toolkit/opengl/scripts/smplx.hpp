@@ -11,23 +11,23 @@
 
 namespace toolkit::opengl {
 
-class smplx : public scriptable {
+class smplx : public sub_system {
 public:
   void start() override;
   void init1() override;
   void destroy() override;
 
-  void draw_gui(iapp *app) override;
-  void draw_to_scene(iapp *app, transform &cam_trans,
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;
 
   // Modify the weights of shape0-9 blendshapes, change the offset matrices and
   // transforms of joint entity transforms
-  void apply_smpl_betas(std::vector<float> betas);
+  void apply_smpl_betas(entt::registry &registry, std::vector<float> betas);
   // Change the body shape and skeleton of SMPLX
-  void apply_smplx_betas(std::vector<float> betas);
+  void apply_smplx_betas(entt::registry &registry, std::vector<float> betas);
   // Tune pose based blend shape weights
-  void preupdate(iapp *app, float dt) override;
+  void preupdate(entt::registry &registry, float dt) override;
 
 private:
   int model_index = 0, gender_index = 0, num_betas = 10;
@@ -37,12 +37,12 @@ private:
   std::vector<math::vector3> joint_rest_world_pos;
   cnpy::npz_t smpl_data;
 
-  void setup_smplx_model(cnpy::npz_t &data);
-  void setup_smpl_model(cnpy::npz_t &data);
+  void setup_smplx_model(entt::registry &registry, cnpy::npz_t &data);
+  void setup_smpl_model(entt::registry &registry, cnpy::npz_t &data);
 
   REFLECT_PRIVATE(smplx)
 };
-DECLARE_SCRIPT(smplx, utils, model_index, gender_index, model_type, gender_type,
+DECLARE_SUB_SYSTEM(smplx, utils, model_index, gender_index, model_type, gender_type,
                num_betas, beta_cache, bone_entities)
 
 }; // namespace toolkit::opengl

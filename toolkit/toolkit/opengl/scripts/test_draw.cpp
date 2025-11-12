@@ -2,7 +2,7 @@
 
 namespace toolkit::opengl {
 
-void test_draw::draw_gui(iapp *app) {
+void test_draw::draw_gui(entt::registry &registry, entt::entity entity) {
   ImGui::SeparatorText("Text");
   ImGui::DragFloat("Text Thickness", &text_thickness, 0.001f);
   ImGui::SliderFloat("Text Scale", &text_scale, 0.0f, 10.0f);
@@ -12,26 +12,18 @@ void test_draw::draw_gui(iapp *app) {
   ImGui::SliderFloat("Text Line Height", &text_line_height, 0.0f, 10.0f);
 }
 
-void test_draw::draw_to_scene(iapp *app, transform &cam_trans,
+void test_draw::draw_to_scene(entt::registry &registry, transform &cam_trans,
                               camera &cam_comp) {
-  if (auto editor_ptr = dynamic_cast<editor *>(app)) {
-    auto &trans = editor_ptr->registry.get<transform>(entity);
-    if (auto cam_trans =
-            editor_ptr->registry.try_get<transform>(g_instance.active_camera)) {
-      auto &cam_comp =
-          editor_ptr->registry.get<camera>(g_instance.active_camera);
-      draw_text3d(
-          "This is the test for debug text draw\nThere can be multiple lines.",
-          trans.world_pos(), trans.world_rot(), cam_comp.vp, Purple,
-          text_thickness, text_scale, text_width, text_height, text_spacing,
-          text_line_height);
+  auto &trans = registry.get<transform>(entity);
+  draw_text3d(
+      "This is the test for debug text draw\nThere can be multiple lines.",
+      trans.world_pos(), trans.world_rot(), cam_comp.vp, Purple, text_thickness,
+      text_scale, text_width, text_height, text_spacing, text_line_height);
 
-      std::vector<std::pair<math::vector3, math::vector3>> capsule_start_ends;
-      capsule_start_ends.push_back(
-          std::make_pair(math::vector3(-1, -1, -1), math::vector3(1, 1, 1)));
-      draw_capsules(capsule_start_ends, cam_comp.vp, Yellow);
-    }
-  }
+  std::vector<std::pair<math::vector3, math::vector3>> capsule_start_ends;
+  capsule_start_ends.push_back(
+      std::make_pair(math::vector3(-1, -1, -1), math::vector3(1, 1, 1)));
+  draw_capsules(capsule_start_ends, cam_comp.vp, Yellow);
 }
 
 }; // namespace toolkit::opengl

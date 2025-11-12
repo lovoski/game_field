@@ -2,7 +2,7 @@
 
 namespace toolkit {
 
-void camdmpp::draw_gui(iapp *app) {
+void camdmpp::draw_gui(entt::registry &registry, entt::entity entity) {
   if (ImGui::Button("Select .onnx model", {-1, 30})) {
     // std::string filepath;
     // if (open_file_dialog("Select .onnx model", {"*.onnx"}, filepath))
@@ -10,8 +10,8 @@ void camdmpp::draw_gui(iapp *app) {
   }
 }
 
-void camdmpp::draw_to_scene(iapp *app, transform &cam_trans, camera &cam_comp) {}
+void camdmpp::draw_to_scene(entt::registry &registry, transform &cam_trans, camera &cam_comp) {}
 
-void camdmpp::fixedupdate(iapp *app, float dt) {}
+void camdmpp::fixedupdate(entt::registry &registry, float dt) {}
 
 }; // namespace toolkit

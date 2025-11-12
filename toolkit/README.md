@@ -75,10 +75,10 @@ public:
     // use ImGui here to provide gui support to modify member variables
   }
 };
-// The first parameter to "DECLARE_SCRIPT" is the name for your custom script
+// The first parameter to "DECLARE_SUB_SYSTEM" is the name for your custom script
 // The second parameter is the category of your own script, this makes it possible
 // to add an instance of this script with editor gui automatically.
-DECLARE_SCRIPT(test_script, utils)
+DECLARE_SUB_SYSTEM(test_script, utils)
 ```
 
 ## system 的说明

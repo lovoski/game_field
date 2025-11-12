@@ -10,14 +10,14 @@
 
 namespace toolkit {
 
-class camdmpp : public scriptable {
+class camdmpp : public sub_system {
 public:
-  void draw_gui(iapp *app) override;
-  void draw_to_scene(iapp *app, transform &cam_trans,
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;
 
-  void fixedupdate(iapp *app, float dt) override;
+  void fixedupdate(entt::registry &registry, float dt) override;
 };
-DECLARE_SCRIPT(camdmpp, animation)
+DECLARE_SUB_SYSTEM(camdmpp, animation)
 
 }; // namespace toolkit

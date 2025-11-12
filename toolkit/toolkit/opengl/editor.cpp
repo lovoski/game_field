@@ -56,7 +56,7 @@ void editor::late_deserialize(nlohmann::json &j) {
 
   transform_sys = get_sys<transform_system>();
   render_sys = get_sys<defered_render_system>();
-  script_sys = get_sys<script_system>();
+  ss_handler = get_sys<sub_system_handler>();
   anim_sys = get_sys<anim::anim_system>();
 }
 
@@ -74,18 +74,12 @@ void editor::game_mode_main_loop() {
   for (auto sys : systems)
     if (sys->active)
       sys->preupdate(registry, dt);
-  if (script_sys->active)
-    script_sys->preupdate(this, dt);
   for (auto sys : systems)
     if (sys->active)
       sys->update(registry, dt);
-  if (script_sys->active)
-    script_sys->update(this, dt);
   for (auto sys : systems)
     if (sys->active)
       sys->lateupdate(registry, dt);
-  if (script_sys->active)
-    script_sys->lateupdate(this, dt);
 
   if (g_instance.wnd_resized) {
     g_instance.scene_width = g_instance.wnd_width;
@@ -118,18 +112,12 @@ void editor::editor_mode_main_loop() {
   for (auto sys : systems)
     if (sys->active)
       sys->preupdate(registry, dt);
-  if (script_sys->active)
-    script_sys->preupdate(this, dt);
   for (auto sys : systems)
     if (sys->active)
       sys->update(registry, dt);
-  if (script_sys->active)
-    script_sys->update(this, dt);
   for (auto sys : systems)
     if (sys->active)
       sys->lateupdate(registry, dt);
-  if (script_sys->active)
-    script_sys->lateupdate(this, dt);
 
   render_sys->render(registry, active_cam_trans, active_cam_comp);
 
@@ -194,7 +182,7 @@ void editor::reset() {
 
   transform_sys = add_sys<transform_system>();
   render_sys = add_sys<defered_render_system>();
-  script_sys = add_sys<script_system>();
+  ss_handler = add_sys<sub_system_handler>();
   anim_sys = add_sys<anim::anim_system>();
   phy_sys = add_sys<sim::phy_system>();
 }

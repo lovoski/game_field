@@ -7,10 +7,10 @@
 
 namespace toolkit::opengl {
 
-class mesh_modifier : public scriptable {
+class mesh_modifier : public sub_system {
 public:
-  void draw_gui(toolkit::iapp *app) override;
-  void draw_to_scene(toolkit::iapp *app, transform &cam_trans,
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;
 
 private:
@@ -18,6 +18,6 @@ private:
   std::vector<assets::mesh_vertex> _convex_vertices;
   std::vector<std::uint32_t> _convex_indices;
 };
-DECLARE_SCRIPT(mesh_modifier, utils)
+DECLARE_SUB_SYSTEM(mesh_modifier, utils)
 
 }; // namespace toolkit::opengl

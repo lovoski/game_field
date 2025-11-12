@@ -9,14 +9,14 @@
 
 namespace toolkit::anim {
 
-class bvh_motion_player : public scriptable {
+class bvh_motion_player : public sub_system {
 public:
   void start() override {}
   void destroy() override {}
 
-  void update(iapp *app, float dt) override;
-  void lateupdate(iapp *app, float dt) override;
-  void draw_gui(iapp *app) override;
+  void update(entt::registry &registry, float dt) override;
+  void lateupdate(entt::registry &registry, float dt) override;
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   entt::entity load_motion(std::string filepath);
 
@@ -30,7 +30,7 @@ private:
   bool motion_loaded = false;
   assets::bvh_data motion;
 };
-DECLARE_SCRIPT(bvh_motion_player, animation)
+DECLARE_SUB_SYSTEM(bvh_motion_player, animation)
 
 void import_all_bvh_motion(entt::registry &registry, std::string dirpath,
                            float scale = 1.0f);

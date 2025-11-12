@@ -77,7 +77,7 @@ public:
 
   defered_render_system *render_sys = nullptr;
   transform_system *transform_sys = nullptr;
-  script_system *script_sys = nullptr;
+  sub_system_handler *ss_handler = nullptr;
   anim::anim_system *anim_sys = nullptr;
   sim::phy_system *phy_sys = nullptr;
 

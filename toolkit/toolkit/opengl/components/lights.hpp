@@ -9,10 +9,10 @@
 
 namespace toolkit::opengl {
 
-struct point_light : public scriptable {
+struct point_light : public sub_system {
   math::vector3 color = White;
 
-  void draw_gui(iapp *app) override {
+  void draw_gui(entt::registry &registry, entt::entity entity) override {
     ImGui::Checkbox("Enable", &enabled);
     if (!enabled)
       ImGui::BeginDisabled();
@@ -21,10 +21,10 @@ struct point_light : public scriptable {
       ImGui::EndDisabled();
   }
 
-  void draw_to_scene(iapp *app, transform &cam_trans,
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override {}
   bool enabled = true;
 };
-DECLARE_SCRIPT(point_light, graphics, color, enabled)
+DECLARE_SUB_SYSTEM(point_light, graphics, color, enabled)
 
 }; // namespace toolkit::opengl

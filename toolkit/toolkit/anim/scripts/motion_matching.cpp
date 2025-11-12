@@ -53,7 +53,7 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
 void motion_matching::destroy() {}
 
 void motion_matching::start() {
-  auto actor_comp = registry->try_get<anim::actor>(entity);
+  auto actor_comp = registry_ptr->try_get<anim::actor>(entity);
   if (actor_comp != nullptr) {
     actor_bind_rot.resize(actor_comp->ordered_entities.size(),
                           math::quat::Identity());
@@ -61,11 +61,11 @@ void motion_matching::start() {
                           math::vector3::Zero());
     actor_bind_mat.resize(actor_comp->ordered_entities.size(),
                           math::matrix4::Identity());
-    registry->get<transform>(actor_comp->ordered_entities[0])
+    registry_ptr->get<transform>(actor_comp->ordered_entities[0])
         .force_update_hierarchy();
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto &joint_trans =
-          registry->get<transform>(actor_comp->ordered_entities[i]);
+          registry_ptr->get<transform>(actor_comp->ordered_entities[i]);
       actor_bind_rot[i] = joint_trans.world_rot();
       actor_bind_pos[i] = joint_trans.local_pos();
       actor_bind_mat[i] = joint_trans.matrix();
@@ -77,7 +77,7 @@ void motion_matching::start() {
   //     ->editor_manipulate_camera = false;
 }
 
-void motion_matching::update(iapp *app, float dt) {
+void motion_matching::update(entt::registry &registry, float dt) {
   // // update camera settings
   // auto &cam_trans =
   // registry->get<transform>(opengl::g_instance.active_camera); math::vector3
@@ -89,8 +89,8 @@ void motion_matching::update(iapp *app, float dt) {
   //     math::world_up).inverse());
 }
 
-void motion_matching::fixedupdate(iapp *app, float dt) {
-  auto actor_comp = registry->try_get<anim::actor>(entity);
+void motion_matching::fixedupdate(entt::registry &registry, float dt) {
+  auto actor_comp = registry.try_get<anim::actor>(entity);
   if (db_loaded && mapping_loaded && (actor_comp != nullptr)) {
     // input and trajectory
     auto [left_stick, right_stick] =
@@ -221,7 +221,7 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
 
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto joint_entity = actor_comp->ordered_entities[i];
-      auto &joint_trans = registry->get<transform>(joint_entity);
+      auto &joint_trans = registry.get<transform>(joint_entity);
       if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
         int joint_data_idx = joint_name_to_idx[joint_trans.name];
         if (i == 0) {
@@ -237,7 +237,7 @@ void motion_matching::fixedupdate(iapp *app, float dt) {
   }
 }
 
-void motion_matching::draw_to_scene(iapp *app, transform &cam_trans,
+void motion_matching::draw_to_scene(entt::registry &registry, transform &cam_trans,
                                     camera &cam_comp) {
   opengl::draw_wire_spheres(t_pos, cam_comp.vp, 0.1f);
   opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
@@ -268,7 +268,7 @@ void motion_matching::draw_to_scene(iapp *app, transform &cam_trans,
                      cam_comp.vp, opengl::Red);
 }
 
-void motion_matching::draw_gui(iapp *app) {
+void motion_matching::draw_gui(entt::registry &registry, entt::entity entity) {
   ImGui::Text(str_format("Database: %s", db_filepath.c_str()).c_str());
   ImGui::Text(str_format("Joint Map: %s", mapping_filepath.c_str()).c_str());
   if (ImGui::Button("Select Database", {-1, 30}))

@@ -3,14 +3,14 @@
 
 namespace toolkit::anim {
 
-void bvh_motion_player::update(iapp *app, float dt) {
-  int active_script_count = registry->view<bvh_motion_player>().size();
+void bvh_motion_player::update(entt::registry &registry, float dt) {
+  int active_script_count = registry.view<bvh_motion_player>().size();
   if (auto_play)
     current_time += dt * play_speed / active_script_count;
 }
 
-void bvh_motion_player::lateupdate(iapp *app, float dt) {
-  auto actor_comp = registry->try_get<anim::actor>(entity);
+void bvh_motion_player::lateupdate(entt::registry &registry, float dt) {
+  auto actor_comp = registry.try_get<anim::actor>(entity);
   if ((actor_comp != nullptr) && motion_loaded && apply_motion) {
     int start_frame = current_time / motion.frametime;
     int end_frame = start_frame + 1;
@@ -19,7 +19,7 @@ void bvh_motion_player::lateupdate(iapp *app, float dt) {
     for (int i = 0; i < motion.names.size(); i++) {
       auto bvh_joint_name = motion.names[i];
       if (actor_comp->name_to_entity.count(bvh_joint_name) != 0) {
-        auto &joint_trans = registry->get<transform>(
+        auto &joint_trans = registry.get<transform>(
             actor_comp->name_to_entity[bvh_joint_name]);
         if (current_time < 0) {
           joint_trans.set_local_pos(motion.local_pos[0][i]);
@@ -45,9 +45,9 @@ void bvh_motion_player::lateupdate(iapp *app, float dt) {
 
 entt::entity bvh_motion_player::load_motion(std::string filepath) {
   motion = assets::load_bvh(filepath);
-  create_bvh_actor(*registry, motion, entity);
-  auto &container_trans = registry->get<transform>(entity);
-  auto &vis_script = registry->get<vis_skeleton>(entity);
+  create_bvh_actor(*registry_ptr, motion, entity);
+  auto &container_trans = registry_ptr->get<transform>(entity);
+  auto &vis_script = registry_ptr->get<vis_skeleton>(entity);
   vis_script.bone_color =
       math::vector3(math::rand(0, 1), math::rand(0, 1), math::rand(0, 1));
   container_trans.name =
@@ -57,7 +57,7 @@ entt::entity bvh_motion_player::load_motion(std::string filepath) {
   return entity;
 }
 
-void bvh_motion_player::draw_gui(iapp *app) {
+void bvh_motion_player::draw_gui(entt::registry &registry, entt::entity entity) {
   ImGui::SeparatorText("Shared Variables");
   ImGui::Checkbox("Auto Play", &auto_play);
   ImGui::DragFloat("Play Speed", &play_speed, 0.001f, -100.0f, 100.0f);

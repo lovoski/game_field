@@ -21,22 +21,22 @@ float critical_spring_damper(float x0, float v0, float xt, float t,
   return xt - x;
 }
 
-class spring_damper : public toolkit::scriptable {
+class spring_damper : public toolkit::sub_system {
 public:
   void start() override {
     if (target == entt::null) {
-      target = registry->create();
-      auto &trans = registry->emplace<toolkit::transform>(target);
-      auto &self_trans = registry->get<toolkit::transform>(entity);
+      target = registry_ptr->create();
+      auto &trans = registry_ptr->emplace<toolkit::transform>(target);
+      auto &self_trans = registry_ptr->get<toolkit::transform>(entity);
       trans.name = self_trans.name + " spring damper target";
       trans.set_world_pos(self_trans.world_pos());
       trans.set_world_rot(self_trans.world_rot());
     }
   }
-  void lateupdate(toolkit::iapp *app, float dt) override {
+  void lateupdate(entt::registry &registry, float dt) override {
     // update the transform of attached entity given target position and dt
-    auto &self_trans = registry->get<toolkit::transform>(entity);
-    auto &target_trans = registry->get<toolkit::transform>(target);
+    auto &self_trans = registry.get<toolkit::transform>(entity);
+    auto &target_trans = registry.get<toolkit::transform>(target);
     const float e = 2.71828f;
     float lambda = log(2) / (damper_half_life * log(e));
     toolkit::math::vector3 x0 = self_trans.world_pos(),
@@ -62,20 +62,20 @@ public:
     self_trans.set_world_rot(toolkit::math::rot_vec_to_quat(q) * qt);
   }
 
-  void draw_to_scene(toolkit::iapp *app, toolkit::transform &cam_trans,
+  void draw_to_scene(entt::registry &registry, toolkit::transform &cam_trans,
                      toolkit::camera &cam_comp) override {
     toolkit::opengl::draw_wire_sphere(
-        registry->get<toolkit::transform>(target).world_pos(), cam_comp.vp,
+        registry.get<toolkit::transform>(target).world_pos(), cam_comp.vp,
         0.1f);
   }
-  void draw_gui(toolkit::iapp *app) override {
+  void draw_gui(entt::registry &registry, entt::entity entity) override {
     ImGui::Text("Velocity x=%.2f,y=%.2f,z=%.2f", velocity.x(), velocity.y(),
                 velocity.z());
     ImGui::Text("Angular Velocity x=%.2f,y=%.2f,z=%.2f", angular_velocity.x(),
                 angular_velocity.y(), angular_velocity.z());
     ImGui::DragFloat("Half Life", &damper_half_life, 0.01f, 0.0f, 10.0f);
     if (ImGui::Button("Random target transform", {-1, 30})) {
-      auto &target_trans = registry->get<toolkit::transform>(target);
+      auto &target_trans = registry.get<toolkit::transform>(target);
       target_trans.set_world_pos(toolkit::math::vector3::Random() * 10.0f);
       target_trans.set_world_rot(toolkit::math::quat::UnitRandom());
     }
@@ -86,4 +86,4 @@ public:
   float damper_half_life = 0.5f;
   entt::entity target = entt::null;
 };
-DECLARE_SCRIPT(spring_damper, animation, target, damper_half_life)
+DECLARE_SUB_SYSTEM(spring_damper, animation, target, damper_half_life)

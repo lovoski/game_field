@@ -102,12 +102,12 @@ void defered_render_system::draw_gui(entt::registry &registry,
                                      entt::entity entity) {
   if (auto ptr = registry.try_get<camera>(entity)) {
     if (ImGui::CollapsingHeader("Camera"))
-      ptr->draw_gui(nullptr);
+      ptr->draw_gui(registry, entity);
   }
   if (auto ptr = registry.try_get<mesh_data>(entity)) {
     if (ImGui::CollapsingHeader("Mesh Data"))
-      ptr->draw_gui(nullptr); // TODO: no need for mesh data component to access
-                              // app settings
+      ptr->draw_gui(registry, entity); // TODO: no need for mesh data component
+                                       // to access app settings
   }
 
   if (show_textures_wnd)
@@ -776,11 +776,11 @@ void defered_render_system::render(entt::registry &registry,
       glDisable(GL_DEPTH_TEST);
       // debug rendering
       if (auto app_ptr = registry.ctx().get<iapp *>()) {
-        auto script_sys = app_ptr->get_sys<script_system>();
-        script_sys->draw_to_scene(app_ptr, cam_trans, cam_comp);
+        auto ss_handler = app_ptr->get_sys<sub_system_handler>();
+        ss_handler->draw_to_scene(registry, cam_trans, cam_comp);
 
         auto sim_sys = app_ptr->get_sys<sim::phy_system>();
-        sim_sys->draw_to_scene(app_ptr, cam_trans, cam_comp);
+        sim_sys->draw_to_scene(registry, cam_trans, cam_comp);
       }
       glEnable(GL_DEPTH_TEST);
     }

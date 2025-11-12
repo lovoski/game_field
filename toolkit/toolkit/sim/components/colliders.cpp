@@ -1,6 +1,50 @@
 #include "toolkit/sim/components/colliders.hpp"
+#include "QuickHull.hpp"
 
 namespace toolkit::sim {
+
+void convex_hull_collider::create_from_data(
+    std::vector<assets::mesh_vertex> &vertices_data) {
+  quickhull::QuickHull<float> qh;
+  std::vector<quickhull::Vector3<float>> points(vertices_data.size());
+  for (int i = 0; i < vertices_data.size(); i++) {
+    points[i].x = vertices_data[i].position.x();
+    points[i].y = vertices_data[i].position.y();
+    points[i].z = vertices_data[i].position.z();
+  }
+  auto hull = qh.getConvexHull(points, true, false);
+  auto &index_buffer = hull.getIndexBuffer();
+  auto &vertex_buffer = hull.getVertexBuffer();
+
+  vertices.resize(vertex_buffer.size());
+  faces.resize(index_buffer.size() / 3);
+
+  for (int i = 0; i < vertices.size(); i++) {
+    vertices[i].x() = vertex_buffer[i].x;
+    vertices[i].y() = vertex_buffer[i].y;
+    vertices[i].z() = vertex_buffer[i].z;
+  }
+  for (int i = 0; i < faces.size(); i++) {
+    faces[i].elements.push_back(index_buffer[3 * i + 0]);
+    faces[i].elements.push_back(index_buffer[3 * i + 1]);
+    faces[i].elements.push_back(index_buffer[3 * i + 2]);
+    auto v0 = vertices[index_buffer[3 * i + 0]],
+         v1 = vertices[index_buffer[3 * i + 1]],
+         v2 = vertices[index_buffer[3 * i + 2]];
+    faces[i].normal = ((v1 - v0).cross(v2 - v1)).normalized();
+  }
+}
+
+void rigid_sim_object::setup_mass(float mass_value, bool is_fixed) {
+  if (is_fixed) {
+    inverse_mass = 0;
+    fixed = is_fixed;
+    inertia_tensor = math::matrix3::Zero();
+    inverse_inertia_tensor = math::matrix3::Zero();
+  } else {
+    inverse_mass = 1.0 / mass_value;
+  }
+}
 
 nlohmann::json rigid_sim_object::late_serialize() {
   nlohmann::json extra_data;
@@ -50,7 +94,7 @@ void rigid_sim_object::update_bounding_volumn_given_colliders() {
   }
 }
 
-void rigid_sim_object::draw_gui(iapp *app) {
+void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
   if (ImGui::TreeNode("Colliders")) {
     if (ImGui::BeginMenu("Add Collider")) {
       if (ImGui::MenuItem("Sphere Collider")) {

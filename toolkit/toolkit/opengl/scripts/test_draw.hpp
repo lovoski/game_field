@@ -7,7 +7,7 @@
 
 namespace toolkit::opengl {
 
-struct test_draw : public scriptable {
+struct test_draw : public sub_system {
   float text_width = 1.0, text_height = 1.0, text_scale = 1.0,
         text_spacing = 0.0, text_line_height = 1.0, text_thickness = 0.0f;
 
@@ -24,11 +24,11 @@ struct test_draw : public scriptable {
                  entt::to_integral(entity));
   }
 
-  void draw_gui(iapp *app) override;
-  void draw_to_scene(iapp *app, transform &cam_trans,
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;
 };
-DECLARE_SCRIPT(test_draw, debug, text_width, text_height, text_scale,
-               text_spacing, text_line_height, text_thickness)
+DECLARE_SUB_SYSTEM(test_draw, debug, text_width, text_height, text_scale,
+                   text_spacing, text_line_height, text_thickness)
 
 }; // namespace toolkit::opengl
