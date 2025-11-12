@@ -10,8 +10,8 @@ namespace toolkit::anim {
 
 class tps_cam_controller : public sub_system {
 public:
-  void start() override {}
-  void destroy() override {}
+  void start(entt::registry &registry) override {}
+  void destroy(entt::registry &registry) override {}
   void draw_gui(entt::registry &registry, entt::entity entity) override {}
   void lateupdate(entt::registry &registry, float dt) override {}
 

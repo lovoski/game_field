@@ -20,10 +20,11 @@ struct mm_context {
 
 class traj_tracking : public sub_system {
 public:
-  void start() override;
-  void destroy() override;
+  void start(entt::registry &registry) override;
+  void destroy(entt::registry &registry) override;
 
-  void draw_to_scene(entt::registry &registry, transform &cam_trans, camera &cam_comp) override;
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
+                     camera &cam_comp) override;
   void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   void update(entt::registry &registry, float dt) override;
@@ -46,7 +47,7 @@ private:
   std::tuple<float, int, int> lhmm(mm_context context, int cur_frame,
                                    int cur_range, int k, int l);
 
-  void animate_character_with_context(float dt);
+  void animate_character_with_context(entt::registry &registry, float dt);
 
   float joystick_deadzone = 0.2f;
   float current_bias = 0.01, approx_bias = 0.01;

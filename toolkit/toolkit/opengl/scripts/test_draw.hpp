@@ -11,11 +11,11 @@ struct test_draw : public sub_system {
   float text_width = 1.0, text_height = 1.0, text_scale = 1.0,
         text_spacing = 0.0, text_line_height = 1.0, text_thickness = 0.0f;
 
-  void start() override {
+  void start(entt::registry &registry) override {
     spdlog::info("test_draw start called, entity={0}",
                  entt::to_integral(entity));
   }
-  void destroy() override {
+  void destroy(entt::registry &registry) override {
     spdlog::info("test_draw destroy called, entity={0}",
                  entt::to_integral(entity));
   }

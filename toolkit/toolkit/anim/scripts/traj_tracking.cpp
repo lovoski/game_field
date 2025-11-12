@@ -6,10 +6,10 @@ namespace toolkit::anim {
 
 const float const_e = 2.71828f;
 
-void traj_tracking::destroy() {}
+void traj_tracking::destroy(entt::registry &registry) {}
 
-void traj_tracking::start() {
-  auto actor_comp = registry_ptr->try_get<anim::actor>(entity);
+void traj_tracking::start(entt::registry &registry) {
+  auto actor_comp = registry.try_get<anim::actor>(entity);
   if (actor_comp != nullptr) {
     actor_bind_rot.resize(actor_comp->ordered_entities.size(),
                           math::quat::Identity());
@@ -17,11 +17,11 @@ void traj_tracking::start() {
                           math::vector3::Zero());
     actor_bind_mat.resize(actor_comp->ordered_entities.size(),
                           math::matrix4::Identity());
-    registry_ptr->get<transform>(actor_comp->ordered_entities[0])
+    registry.get<transform>(actor_comp->ordered_entities[0])
         .force_update_hierarchy();
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto &joint_trans =
-          registry_ptr->get<transform>(actor_comp->ordered_entities[i]);
+          registry.get<transform>(actor_comp->ordered_entities[i]);
       actor_bind_rot[i] = joint_trans.world_rot();
       actor_bind_pos[i] = joint_trans.local_pos();
       actor_bind_mat[i] = joint_trans.matrix();
@@ -224,7 +224,7 @@ void traj_tracking::fixedupdate(entt::registry &registry, float dt) {
 
     // return;
     // update the rest of the pose
-    animate_character_with_context(dt);
+    animate_character_with_context(registry, dt);
   }
 }
 
@@ -232,7 +232,8 @@ void traj_tracking::fixedupdate(entt::registry &registry, float dt) {
  * root position and rotation from "cur_context"
  * the rest joint position and rotation from animation database
  */
-void traj_tracking::animate_character_with_context(float dt) {
+void traj_tracking::animate_character_with_context(entt::registry &registry,
+                                                   float dt) {
   data_joints_world_pos.resize(parents.size());
   // Ypos -> local position
   // Yrot -> local rotation
@@ -277,10 +278,10 @@ void traj_tracking::animate_character_with_context(float dt) {
     }
   }
 
-  auto &actor_comp = registry_ptr->get<actor>(entity);
+  auto &actor_comp = registry.get<actor>(entity);
   for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
     auto joint_entity = actor_comp.ordered_entities[i];
-    auto &joint_trans = registry_ptr->get<transform>(joint_entity);
+    auto &joint_trans = registry.get<transform>(joint_entity);
     if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
       int joint_data_idx = joint_name_to_idx[joint_trans.name];
       if (i == 0) {

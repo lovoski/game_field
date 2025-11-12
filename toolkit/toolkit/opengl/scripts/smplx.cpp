@@ -142,9 +142,9 @@ static const std::vector<std::vector<float>> SMPL_J_REGRESSOR_WEIGHTS = {
      0.0009372223285026848, 0.04159576818346977, 0.005636296700686216,
      0.027275199070572853}};
 
-void smplx::start() { model_path = "D:\\0tasks\\smplx_archive\\models"; }
+void smplx::start(entt::registry &registry) { model_path = "D:\\0tasks\\smplx_archive\\models"; }
 void smplx::init1() {}
-void smplx::destroy() {}
+void smplx::destroy(entt::registry &registry) {}
 
 void smplx::setup_smplx_model(entt::registry &registry, cnpy::npz_t &data) {}
 

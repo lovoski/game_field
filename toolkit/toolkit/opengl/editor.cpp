@@ -590,7 +590,7 @@ void editor::draw_main_menubar() {
               std::filesystem::path(filepath).filename().string();
           auto &motion_player =
               registry.emplace<anim::bvh_motion_player>(container);
-          motion_player.load_motion(filepath);
+          motion_player.load_motion(registry, filepath);
         }
       }
       if (ImGui::MenuItem("Import All BVH")) {

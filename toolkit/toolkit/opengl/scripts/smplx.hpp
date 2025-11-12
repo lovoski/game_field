@@ -13,9 +13,9 @@ namespace toolkit::opengl {
 
 class smplx : public sub_system {
 public:
-  void start() override;
+  void start(entt::registry &registry) override;
   void init1() override;
-  void destroy() override;
+  void destroy(entt::registry &registry) override;
 
   void draw_gui(entt::registry &registry, entt::entity entity) override;
   void draw_to_scene(entt::registry &registry, transform &cam_trans,

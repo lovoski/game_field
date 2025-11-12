@@ -6,14 +6,18 @@
 
 namespace toolkit::anim {
 
-void vis_skeleton::start() { spdlog::info("Start vis_skeleton script"); }
+void vis_skeleton::start(entt::registry &registry) {
+  spdlog::info("Start vis_skeleton sub_system");
+}
 
-void vis_skeleton::destroy() { spdlog::info("Destroy vis_skeleton script"); }
+void vis_skeleton::destroy(entt::registry &registry) {
+  spdlog::info("Destroy vis_skeleton sub_system");
+}
 
 void vis_skeleton::draw_to_scene(entt::registry &registry, transform &cam_trans,
                                  camera &cam_comp) {
   if (auto actor_ptr = registry.try_get<actor>(entity)) {
-    collect_skeleton_draw_queue(*actor_ptr);
+    collect_skeleton_draw_queue(registry, *actor_ptr);
     opengl::draw_bones(draw_queue, cam_comp.vp, bone_color);
     // get the average length of bone
     float avg_bone_length = 0.0f;
@@ -82,25 +86,26 @@ void vis_skeleton::draw_gui(entt::registry &registry, entt::entity entity) {
   gui::color_edit_3("Bone Color", bone_color);
 }
 
-void vis_skeleton::collect_skeleton_draw_queue(actor &actor_comp) {
+void vis_skeleton::collect_skeleton_draw_queue(entt::registry &registry,
+                                               actor &actor_comp) {
   draw_queue.clear();
   active_joint_entities.clear();
   for (int i = 0; i < actor_comp.joint_active.size(); i++)
     if (actor_comp.joint_active[i])
       active_joint_entities.insert(actor_comp.ordered_entities[i]);
   auto [parent, children, roots] =
-      estimate_actor_bone_hierarchy(*registry_ptr, actor_comp, true);
+      estimate_actor_bone_hierarchy(registry, actor_comp, true);
   for (auto root : roots) {
     std::queue<int> q;
     q.push(root);
     while (!q.empty()) {
       auto current = q.front();
       auto &current_trans =
-          registry_ptr->get<transform>(actor_comp.ordered_entities[current]);
+          registry.get<transform>(actor_comp.ordered_entities[current]);
       q.pop();
       for (auto c : children[current]) {
         auto &child_trans =
-            registry_ptr->get<transform>(actor_comp.ordered_entities[c]);
+            registry.get<transform>(actor_comp.ordered_entities[c]);
         draw_queue.emplace_back(
             std::make_pair(current_trans.world_pos(), child_trans.world_pos()));
         q.push(c);

@@ -50,10 +50,10 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
   return {ofr, oa, ofr * in_rot, in_ang + oa};
 }
 
-void motion_matching::destroy() {}
+void motion_matching::destroy(entt::registry &registry) {}
 
-void motion_matching::start() {
-  auto actor_comp = registry_ptr->try_get<anim::actor>(entity);
+void motion_matching::start(entt::registry &registry) {
+  auto actor_comp = registry.try_get<anim::actor>(entity);
   if (actor_comp != nullptr) {
     actor_bind_rot.resize(actor_comp->ordered_entities.size(),
                           math::quat::Identity());
@@ -61,11 +61,11 @@ void motion_matching::start() {
                           math::vector3::Zero());
     actor_bind_mat.resize(actor_comp->ordered_entities.size(),
                           math::matrix4::Identity());
-    registry_ptr->get<transform>(actor_comp->ordered_entities[0])
+    registry.get<transform>(actor_comp->ordered_entities[0])
         .force_update_hierarchy();
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto &joint_trans =
-          registry_ptr->get<transform>(actor_comp->ordered_entities[i]);
+          registry.get<transform>(actor_comp->ordered_entities[i]);
       actor_bind_rot[i] = joint_trans.world_rot();
       actor_bind_pos[i] = joint_trans.local_pos();
       actor_bind_mat[i] = joint_trans.matrix();
@@ -237,8 +237,8 @@ void motion_matching::fixedupdate(entt::registry &registry, float dt) {
   }
 }
 
-void motion_matching::draw_to_scene(entt::registry &registry, transform &cam_trans,
-                                    camera &cam_comp) {
+void motion_matching::draw_to_scene(entt::registry &registry,
+                                    transform &cam_trans, camera &cam_comp) {
   opengl::draw_wire_spheres(t_pos, cam_comp.vp, 0.1f);
   opengl::draw_arrow(root_pos, root_pos + desired_dir, cam_comp.vp,
                      opengl::Purple);

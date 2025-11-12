@@ -7,8 +7,8 @@
 
 class mixamo_manipulate : public toolkit::sub_system {
 public:
-  void start() override {
-    if (auto actor_comp = registry_ptr->try_get<toolkit::anim::actor>(entity)) {
+  void start(entt::registry &registry) override {
+    if (auto actor_comp = registry.try_get<toolkit::anim::actor>(entity)) {
       if (target == entt::null || pole == entt::null || root == entt::null) {
         for (auto &p : actor_comp->name_to_entity) {
           if (toolkit::has_substr(p.first, "LeftFoot") &&
@@ -23,28 +23,28 @@ public:
         }
       }
       if (left_foot_target == entt::null) {
-        left_foot_target = registry_ptr->create();
+        left_foot_target = registry.create();
         auto &lft_trans =
-            registry_ptr->emplace<toolkit::transform>(left_foot_target);
+            registry.emplace<toolkit::transform>(left_foot_target);
         lft_trans.name = "left foot ik target";
         lft_trans.set_parent(entity);
         if (target != entt::null) {
           lft_trans.set_world_pos(
-              registry_ptr->get<toolkit::transform>(target).world_pos());
+              registry.get<toolkit::transform>(target).world_pos());
           lft_trans.set_world_rot(
-              registry_ptr->get<toolkit::transform>(target).world_rot());
+              registry.get<toolkit::transform>(target).world_rot());
         }
       }
       if (left_foot_pole == entt::null) {
-        left_foot_pole = registry_ptr->create();
+        left_foot_pole = registry.create();
         auto &lfp_trans =
-            registry_ptr->emplace<toolkit::transform>(left_foot_pole);
+            registry.emplace<toolkit::transform>(left_foot_pole);
         lfp_trans.name = "left foot ik pole";
         lfp_trans.set_parent(entity);
         if (pole != entt::null) {
-          auto p0 = registry_ptr->get<toolkit::transform>(root).world_pos();
-          auto p1 = registry_ptr->get<toolkit::transform>(pole).world_pos();
-          auto p2 = registry_ptr->get<toolkit::transform>(target).world_pos();
+          auto p0 = registry.get<toolkit::transform>(root).world_pos();
+          auto p1 = registry.get<toolkit::transform>(pole).world_pos();
+          auto p2 = registry.get<toolkit::transform>(target).world_pos();
           toolkit::math::vector3 h02 =
               ((p1 - p0) -
                (p1 - p0).dot((p2 - p0).normalized()) * (p2 - p0).normalized())

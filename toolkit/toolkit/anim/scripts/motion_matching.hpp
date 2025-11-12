@@ -51,8 +51,8 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
 
 class motion_matching : public sub_system {
 public:
-  void start() override;
-  void destroy() override;
+  void start(entt::registry &registry) override;
+  void destroy(entt::registry &registry) override;
 
   void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      camera &cam_comp) override;

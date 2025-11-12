@@ -23,11 +23,11 @@ float critical_spring_damper(float x0, float v0, float xt, float t,
 
 class spring_damper : public toolkit::sub_system {
 public:
-  void start() override {
+  void start(entt::registry &registry) override {
     if (target == entt::null) {
-      target = registry_ptr->create();
-      auto &trans = registry_ptr->emplace<toolkit::transform>(target);
-      auto &self_trans = registry_ptr->get<toolkit::transform>(entity);
+      target = registry.create();
+      auto &trans = registry.emplace<toolkit::transform>(target);
+      auto &self_trans = registry.get<toolkit::transform>(entity);
       trans.name = self_trans.name + " spring damper target";
       trans.set_world_pos(self_trans.world_pos());
       trans.set_world_rot(self_trans.world_rot());

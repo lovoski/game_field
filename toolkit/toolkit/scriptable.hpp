@@ -24,8 +24,8 @@ class sub_system : public icomponent {
 public:
   sub_system() {}
 
-  virtual void start() {}
-  virtual void destroy() {}
+  virtual void start(entt::registry &registry) {}
+  virtual void destroy(entt::registry &registry) {}
 
   virtual void draw_to_scene(entt::registry &registry, transform &cam_trans,
                              camera &cam_comp) {}
@@ -47,8 +47,6 @@ public:
   }
 
   bool enabled = true;
-
-  entt::registry *registry_ptr = nullptr;
   entt::entity entity = entt::null;
 
 protected:
@@ -107,7 +105,7 @@ public:
   void preupdate(entt::registry &registry, float dt) override {
     if (sub_system_wait_to_start.size() > 0) {
       for (auto ss : sub_system_wait_to_start)
-        ss->start();
+        ss->start(registry);
       sub_system_wait_to_start.clear();
     }
     for (auto &sv : sub_system_views) {
@@ -144,7 +142,6 @@ DECLARE_SYSTEM(sub_system_handler)
                                           entt::entity entity) {               \
     auto &ss = registry.get<class_name>(entity);                               \
     ss.entity = entity;                                                        \
-    ss.registry_ptr = &registry;                                               \
     registry.ctx()                                                             \
         .get<toolkit::iapp *>()                                                \
         ->get_sys<toolkit::sub_system_handler>()                               \
@@ -153,7 +150,7 @@ DECLARE_SYSTEM(sub_system_handler)
   inline void __on_destroy_##class_name(entt::registry &registry,              \
                                         entt::entity entity) {                 \
     auto &ss = registry.get<class_name>(entity);                               \
-    ss.destroy();                                                              \
+    ss.destroy(registry);                                                      \
   }                                                                            \
   struct __register_##class_name {                                             \
     __register_##class_name() {                                                \

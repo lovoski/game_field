@@ -43,11 +43,11 @@ void bvh_motion_player::lateupdate(entt::registry &registry, float dt) {
   }
 }
 
-entt::entity bvh_motion_player::load_motion(std::string filepath) {
+entt::entity bvh_motion_player::load_motion(entt::registry &registry, std::string filepath) {
   motion = assets::load_bvh(filepath);
-  create_bvh_actor(*registry_ptr, motion, entity);
-  auto &container_trans = registry_ptr->get<transform>(entity);
-  auto &vis_script = registry_ptr->get<vis_skeleton>(entity);
+  create_bvh_actor(registry, motion, entity);
+  auto &container_trans = registry.get<transform>(entity);
+  auto &vis_script = registry.get<vis_skeleton>(entity);
   vis_script.bone_color =
       math::vector3(math::rand(0, 1), math::rand(0, 1), math::rand(0, 1));
   container_trans.name =
@@ -76,7 +76,7 @@ void bvh_motion_player::draw_gui(entt::registry &registry, entt::entity entity) 
   if (ImGui::Button("Import Motion", {-1, 30})) {
     std::string filepath;
     if (open_file_dialog("Slect Motion File", {"*.bvh"}, filepath)) {
-      load_motion(filepath);
+      load_motion(registry, filepath);
     }
   }
 }
@@ -91,7 +91,7 @@ void import_all_bvh_motion(entt::registry &registry, std::string dirpath,
     auto &container_trans = registry.emplace<transform>(container);
     container_trans.name = std::filesystem::path(filepath).string();
     auto &motion_player = registry.emplace<bvh_motion_player>(container);
-    motion_player.load_motion(filepath);
+    motion_player.load_motion(registry, filepath);
     container_trans.set_world_scale(math::vector3(scale, scale, scale));
   });
 }
