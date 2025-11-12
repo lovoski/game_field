@@ -19,6 +19,9 @@ void convex_hull_collider::create_from_data(
   vertices.resize(vertex_buffer.size());
   indices.resize(index_buffer.size());
   faces.resize(index_buffer.size() / 3);
+  vertex_to_faces.resize(vertices.size(), std::set<std::uint32_t>());
+  vertex_to_neighbors.resize(vertices.size(), std::set<std::uint32_t>());
+  face_to_neighbors.resize(faces.size(), std::set<std::uint32_t>());
 
   for (int i = 0; i < vertices.size(); i++) {
     vertices[i].x() = vertex_buffer[i].x;
@@ -29,6 +32,21 @@ void convex_hull_collider::create_from_data(
     indices[3 * i + 0] = index_buffer[3 * i + 0];
     indices[3 * i + 1] = index_buffer[3 * i + 1];
     indices[3 * i + 2] = index_buffer[3 * i + 2];
+    vertex_to_faces[index_buffer[3 * i + 0]].insert(i);
+    vertex_to_faces[index_buffer[3 * i + 1]].insert(i);
+    vertex_to_faces[index_buffer[3 * i + 2]].insert(i);
+    vertex_to_neighbors[index_buffer[3 * i + 0]].insert(
+        index_buffer[3 * i + 1]);
+    vertex_to_neighbors[index_buffer[3 * i + 1]].insert(
+        index_buffer[3 * i + 0]);
+    vertex_to_neighbors[index_buffer[3 * i + 2]].insert(
+        index_buffer[3 * i + 1]);
+    vertex_to_neighbors[index_buffer[3 * i + 0]].insert(
+        index_buffer[3 * i + 2]);
+    vertex_to_neighbors[index_buffer[3 * i + 1]].insert(
+        index_buffer[3 * i + 2]);
+    vertex_to_neighbors[index_buffer[3 * i + 2]].insert(
+        index_buffer[3 * i + 0]);
     faces[i].elements.push_back(index_buffer[3 * i + 0]);
     faces[i].elements.push_back(index_buffer[3 * i + 1]);
     faces[i].elements.push_back(index_buffer[3 * i + 2]);
@@ -37,19 +55,113 @@ void convex_hull_collider::create_from_data(
          v2 = vertices[index_buffer[3 * i + 2]];
     faces[i].normal = ((v1 - v0).cross(v2 - v1)).normalized();
   }
+  for (int i = 0; i < faces.size(); i++) {
+    auto n0 = vertex_to_faces[faces[i].elements[0]];
+    auto n1 = vertex_to_faces[faces[i].elements[1]];
+    auto n2 = vertex_to_faces[faces[i].elements[2]];
+    std::set<int> face_count;
+    for (auto n : n0)
+      face_count.insert(n);
+    for (auto n : n1)
+      if (face_count.count(n))
+        face_to_neighbors[i].insert(n);
+      else
+        face_count.insert(n);
+    for (auto n : n2)
+      if (face_count.count(n))
+        face_to_neighbors[i].insert(n);
+      else
+        face_count.insert(n);
+    face_to_neighbors[i].erase(i);
+  }
 
   transformed_vertices = vertices;
   transformed_faces = faces;
 }
 
-void rigid_sim_object::setup_mass_inertia(float mass_value, bool is_fixed) {
+void rigid_sim_object::setup_mass_inertia(float imass, bool is_fixed) {
   if (is_fixed) {
     inverse_mass = 0;
     fixed = is_fixed;
     inertia_tensor = math::matrix3::Zero();
     inverse_inertia_tensor = math::matrix3::Zero();
   } else {
-    inverse_mass = 1.0 / mass_value;
+    inverse_mass = imass;
+    if (collider != nullptr) {
+      if (collider->type == collider_type::SPHERE) {
+        mass_center_offset = math::vector3::Zero();
+        auto c = dynamic_cast<sphere_collider *>(collider.get());
+        inertia_tensor =
+            (2.0f / (5.0f * inverse_mass) * c->radius * c->radius) *
+            math::matrix3::Identity();
+      } else if (collider->type == collider_type::CAPSULE) {
+        auto c = dynamic_cast<capsule_collider *>(collider.get());
+        float r = c->cap_radius;
+        float h = c->cap_distance;
+        float m = 1.0f / inverse_mass;
+        if (m <= 0.0f) {
+          inertia_tensor = math::matrix3::Zero();
+        } else {
+          if (r < 0.0f)
+            r = 0.0f;
+          if (h < 0.0f)
+            h = 0.0f;
+          float v_cyl = 3.1415926f * r * r * h;
+          float v_sphere = (4.0f / 3.0f) * 3.1415926f * r * r * r;
+          float total_volume = v_cyl + v_sphere;
+          float m_cyl = 0.0f;
+          float m_sphere = 0.0f;
+          if (total_volume > 1e-9f) {
+            m_cyl = m * (v_cyl / total_volume);
+            m_sphere = m * (v_sphere / total_volume);
+          } else if (m > 0.0f) {
+            if (h == 0.0f && r > 0.0f) {
+              m_sphere = m;
+            }
+          }
+          float I_yy = (0.5f * m_cyl + 0.4f * m_sphere) * r * r;
+          float I_cyl_xx = (1.0f / 12.0f) * m_cyl * (3.0f * r * r + h * h);
+          float I_xx_zz = (1.0f / 4.0f) * (m_cyl + m_sphere) * r * r +
+                          (1.0f / 12.0f) * m_cyl * h * h +
+                          (1.0f / 4.0f) * m_sphere * h * r +
+                          (2.0f / 5.0f) * m_sphere * r * r;
+          float I_xx_zz_term_r = (0.25f * m_cyl + 0.4f * m_sphere) * r * r;
+          float I_xx_zz_term_h =
+              (1.0f / 12.0f * m_cyl + 0.25f * m_sphere) * h * h;
+          I_xx_zz = I_xx_zz_term_r + I_xx_zz_term_h;
+          inertia_tensor = math::matrix3::Zero();
+          inertia_tensor(0, 0) = I_xx_zz; // I_xx
+          inertia_tensor(1, 1) = I_yy;    // I_yy
+          inertia_tensor(2, 2) = I_xx_zz; // I_zz
+        }
+        mass_center_offset = math::vector3::Zero();
+      } else if (collider->type == collider_type::CONVEX_HULL) {
+        auto c = dynamic_cast<convex_hull_collider *>(collider.get());
+        int num_vertices = c->vertices.size();
+        float mass_per_vertex = 1.0f / inverse_mass / num_vertices;
+        inertia_tensor = math::matrix3::Zero();
+        mass_center_offset = math::vector3::Zero();
+        for (int i = 0; i < num_vertices; i++)
+          mass_center_offset += c->vertices[i];
+        mass_center_offset /= num_vertices;
+        for (int i = 0; i < num_vertices; i++) {
+          auto v = c->vertices[i] - mass_center_offset;
+          inertia_tensor(0, 0) +=
+              mass_per_vertex * (v.y() * v.y() + v.z() * v.z());
+          inertia_tensor(0, 1) += mass_per_vertex * v.x() * v.y();
+          inertia_tensor(0, 2) += mass_per_vertex * v.x() * v.z();
+          inertia_tensor(1, 0) += mass_per_vertex * v.x() * v.y();
+          inertia_tensor(1, 1) +=
+              mass_per_vertex * (v.x() * v.x() + v.z() * v.z());
+          inertia_tensor(1, 2) += mass_per_vertex * v.y() * v.z();
+          inertia_tensor(2, 0) += mass_per_vertex * v.x() * v.z();
+          inertia_tensor(2, 1) += mass_per_vertex * v.y() * v.z();
+          inertia_tensor(2, 2) +=
+              mass_per_vertex * (v.x() * v.x() + v.y() * v.y());
+        }
+      }
+      inverse_inertia_tensor = inertia_tensor.inverse();
+    }
   }
 }
 
@@ -59,6 +171,35 @@ nlohmann::json rigid_sim_object::late_serialize() {
 }
 
 void rigid_sim_object::late_deserialize(nlohmann::json &data) {}
+
+void rigid_sim_object::update_collider_properties() {
+  if (auto collider_ptr = dynamic_cast<sphere_collider *>(collider.get())) {
+    collider_ptr->world_pos =
+        world_rotation * collider_ptr->local_pos + world_position;
+  } else if (auto collider_ptr =
+                 dynamic_cast<capsule_collider *>(collider.get())) {
+    collider_ptr->world_pos =
+        world_rotation * collider_ptr->local_pos + world_position;
+    collider_ptr->world_rot =
+        world_rotation * math::euler_to_quat(collider_ptr->local_angle);
+    collider_ptr->world_dir = world_rotation * math::world_up;
+  } else if (auto collider_ptr =
+                 dynamic_cast<convex_hull_collider *>(collider.get())) {
+    collider_ptr->transformed_bounding_sphere_center =
+        collider_ptr->bounding_sphere_center + world_position;
+    for (int i = 0; i < collider_ptr->transformed_vertices.size(); i++) {
+      collider_ptr->transformed_vertices[i] =
+          world_rotation * collider_ptr->vertices[i] + world_position;
+    }
+    for (int i = 0; i < collider_ptr->transformed_faces.size(); i++) {
+      collider_ptr->transformed_faces[i].normal =
+          (world_rotation * collider_ptr->faces[i].normal).normalized();
+    }
+  }
+  update_bounding_volumn_given_colliders();
+  mass_center_world_space =
+      world_rotation * mass_center_offset + world_position;
+}
 
 void rigid_sim_object::update_bounding_volumn_given_colliders() {
   if (collider == nullptr) {
@@ -87,10 +228,12 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
     if (ImGui::MenuItem("Sphere Collider")) {
       sphere_collider c;
       collider = std::make_shared<sphere_collider>(c);
+      setup_mass_inertia(fixed ? 0.0f : inverse_mass, fixed);
     }
     if (ImGui::MenuItem("Capsule Collider")) {
       capsule_collider c;
       collider = std::make_shared<capsule_collider>(c);
+      setup_mass_inertia(fixed ? 0.0f : inverse_mass, fixed);
     }
     if (ImGui::MenuItem("Convex Hull Collider")) {
       auto mesh_ptr = registry.try_get<opengl::mesh_data>(entity);
@@ -105,10 +248,16 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
         c.bounding_sphere_center = bs.first;
         c.bounding_sphere_radius = bs.second;
         collider = std::make_shared<convex_hull_collider>(c);
+        setup_mass_inertia(fixed ? 0.0f : inverse_mass, fixed);
       }
     }
     ImGui::EndMenu();
   }
+
+  ImGui::Checkbox("Active", &active);
+  ImGui::DragFloat("Inv Mass", &inverse_mass, 0.0001f, 0.0f, 1e8f);
+  if (ImGui::Button("Setup Mass Inertia", {-1, 30}))
+    setup_mass_inertia(inverse_mass, inverse_mass == 0);
 
   if (collider != nullptr) {
     if (collider->type == collider_type::SPHERE) {

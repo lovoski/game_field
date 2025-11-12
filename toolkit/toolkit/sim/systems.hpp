@@ -23,13 +23,17 @@ public:
   void draw_gui(entt::registry &registry, entt::entity entity) override;
   void draw_menu_gui() override;
 
-  void draw_to_scene(entt::registry &registry, transform &cam_trans, camera &cam_comp);
+  void draw_to_scene(entt::registry &registry, transform &cam_trans,
+                     camera &cam_comp);
 
   void update_collider_properties(entt::registry &registry,
                                   std::vector<sim_obj_data> &obj_data);
   std::vector<std::pair<entt::entity, entt::entity>>
   get_broadphase_collision_pairs(entt::registry &registry,
                                  std::vector<sim_obj_data> &obj_data);
+
+  std::vector<collider_contact> narrow_collision_pairs;
+  std::vector<std::pair<entt::entity, entt::entity>> broad_collision_pairs;
 
 private:
   int cur_exec_fixed = 0;

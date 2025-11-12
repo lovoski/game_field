@@ -67,17 +67,20 @@ struct convex_hull_collider : public base_collider {
   math::vector3 bounding_sphere_center = math::vector3::Zero(),
                 transformed_bounding_sphere_center = math::vector3::Zero();
 
-  std::vector<std::vector<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
+  std::vector<std::set<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
       face_to_neighbors;
 };
 
-struct collider_contacts {
+struct collider_contact {
   math::vector3 contact_point1, contact_point2, normal;
 };
 
 struct physics_force {
   math::vector3 position = math::vector3::Zero(), force = math::vector3::Zero();
 };
+
+std::vector<collider_contact> colliders_get_contacts(base_collider *c1,
+                                                      base_collider *c2);
 
 struct rigid_sim_object : public icomponent {
   rigid_sim_object() { setup_mass_inertia(1.0f, false); }
@@ -92,8 +95,9 @@ struct rigid_sim_object : public icomponent {
   float bounding_sphere_radius = 0.0f;
   math::vector3 bounding_sphere_center = math::vector3::Zero();
 
-  void setup_mass_inertia(float mass_value, bool is_fixed = false);
+  void setup_mass_inertia(float imass, bool is_fixed = false);
 
+  void update_collider_properties();
   void update_bounding_volumn_given_colliders();
 
   std::vector<physics_force> forces;

@@ -9,9 +9,13 @@ namespace toolkit::sim {
 void phy_system::fixedupdate(entt::registry &registry, float dt) {
   auto sim_obj = registry.view<transform, rigid_sim_object>();
   std::vector<sim_obj_data> obj_data;
+  std::map<entt::entity, int> entity_to_obj_data;
   sim_obj.each(
       [&](entt::entity entity, transform &trans, rigid_sim_object &sim_obj) {
+        if (sim_obj.collider == nullptr)
+          return;
         sim_obj_data entity_sim_data;
+        entity_to_obj_data[entity] = obj_data.size();
         entity_sim_data.entity = entity;
         entity_sim_data.trans = &trans;
         entity_sim_data.sim_obj = &sim_obj;
@@ -37,41 +41,100 @@ void phy_system::fixedupdate(entt::registry &registry, float dt) {
         });
   }
 
-  // ------------- start PBD based simulation -------------
-  {
-    // broad phase collision detection
-    auto broad_collision_pairs =
-        get_broadphase_collision_pairs(registry, obj_data);
+  // broad phase collision detection
+  broad_collision_pairs = get_broadphase_collision_pairs(registry, obj_data);
 
-    // float step_dt = dt / num_sub_steps;
-    // for (int i = 0; i < num_sub_steps; i++) {
-    //   // compute contact constraints in each sub step
-    //   for (int j = 0; j < obj_data.size(); j++) {
-    //     auto sim_obj = obj_data[j].sim_obj;
-    //     // store previous position and rotation
-    //     sim_obj->prev_world_position = obj_data[j].sim_obj->world_position;
-    //     sim_obj->prev_world_rotation = obj_data[j].sim_obj->world_rotation;
-    //     if (sim_obj->fixed || !(sim_obj->active))
-    //       continue;
-    //     // compute external force and torque
-    //     math::vector3 ext_force = math::vector3::Zero();
-    //     math::vector3 ext_torque = math::vector3::Zero();
-    //     for (int k = 0; k < sim_obj->forces.size(); k++) {
-    //       ext_force += sim_obj->forces[k].force;
-    //       ext_torque +=
-    //           (sim_obj->forces[k].position -
-    //           sim_obj->mass_center_world_space)
-    //               .cross(sim_obj->forces[k].force);
-    //     }
-    //     // update object position and linear velocity given external force
-    //     sim_obj->linear_velocity += step_dt * sim_obj->inverse_mass *
-    //     ext_force; sim_obj->world_position += step_dt *
-    //     sim_obj->linear_velocity;
-    //     // update object rotation and angular velocity given external torque
-    //   }
-    // }
+  narrow_collision_pairs.clear();
+  for (int i = 0; i < broad_collision_pairs.size(); i++) {
+    auto ep = broad_collision_pairs[i];
+    auto sim_entity1 = obj_data[entity_to_obj_data[ep.first]];
+    auto sim_entity2 = obj_data[entity_to_obj_data[ep.second]];
+    if ((sim_entity1.sim_obj->fixed || !sim_entity1.sim_obj->active) &&
+        (sim_entity2.sim_obj->fixed || !sim_entity2.sim_obj->active))
+      continue;
+    sim_entity1.sim_obj->update_collider_properties();
+    sim_entity2.sim_obj->update_collider_properties();
+    auto pair_contacts =
+        colliders_get_contacts(sim_entity1.sim_obj->collider.get(),
+                               sim_entity2.sim_obj->collider.get());
+    for (int k = 0; k < pair_contacts.size(); k++)
+      narrow_collision_pairs.push_back(pair_contacts[k]);
   }
-  // ------------- end PBD based simulation -------------
+
+  for (int i = 0; i < obj_data.size(); i++) {
+    obj_data[i].sim_obj->world_position = obj_data[i].trans->world_pos();
+    obj_data[i].sim_obj->world_rotation = obj_data[i].trans->world_rot();
+  }
+
+  // // ------------- start PBD based simulation -------------
+  // {
+  //   float step_dt = dt / num_sub_steps;
+  //   for (int i = 0; i < num_sub_steps; i++) {
+  //     // compute contact constraints in each sub step
+  //     for (int j = 0; j < obj_data.size(); j++) {
+  //       auto sim_obj = obj_data[j].sim_obj;
+  //       // store previous position and rotation
+  //       sim_obj->prev_world_position = obj_data[j].sim_obj->world_position;
+  //       sim_obj->prev_world_rotation = obj_data[j].sim_obj->world_rotation;
+  //       if (sim_obj->fixed || !(sim_obj->active))
+  //         continue;
+  //       // compute external force and torque
+  //       math::vector3 ext_force = math::vector3::Zero();
+  //       math::vector3 ext_torque = math::vector3::Zero();
+  //       for (int k = 0; k < sim_obj->forces.size(); k++) {
+  //         ext_force += sim_obj->forces[k].force;
+  //         ext_torque +=
+  //             (sim_obj->forces[k].position -
+  //             sim_obj->mass_center_world_space)
+  //                 .cross(sim_obj->forces[k].force);
+  //       }
+  //       // update object position and linear velocity given external force
+  //       sim_obj->linear_velocity += step_dt * sim_obj->inverse_mass *
+  //       ext_force; sim_obj->world_position += step_dt *
+  //       sim_obj->linear_velocity;
+  //       // update object rotation and angular velocity given external torque
+  //       auto world_rot_matrix = sim_obj->world_rotation.toRotationMatrix();
+  //       math::matrix3 inv_inertia_tensor =
+  //           (world_rot_matrix * sim_obj->inverse_inertia_tensor) *
+  //           (world_rot_matrix.transpose());
+  //       math::matrix3 inertia_tensor =
+  //           (world_rot_matrix * sim_obj->inertia_tensor) *
+  //           (world_rot_matrix.transpose());
+  //       sim_obj->angular_velocity =
+  //           sim_obj->angular_velocity +
+  //           step_dt * (inv_inertia_tensor *
+  //                      (ext_torque -
+  //                       sim_obj->angular_velocity.cross(
+  //                           inertia_tensor * sim_obj->angular_velocity)));
+  //       math::quat aux = math::quat(0.0f, sim_obj->angular_velocity.x(),
+  //                                   sim_obj->angular_velocity.y(),
+  //                                   sim_obj->angular_velocity.z());
+  //       math::quat q = aux * sim_obj->world_rotation;
+  //       sim_obj->world_rotation.x() =
+  //           sim_obj->world_rotation.x() + step_dt * 0.5f * q.x();
+  //       sim_obj->world_rotation.y() =
+  //           sim_obj->world_rotation.y() + step_dt * 0.5f * q.y();
+  //       sim_obj->world_rotation.z() =
+  //           sim_obj->world_rotation.z() + step_dt * 0.5f * q.z();
+  //       sim_obj->world_rotation.w() =
+  //           sim_obj->world_rotation.w() + step_dt * 0.5f * q.w();
+  //       sim_obj->world_rotation.normalize();
+  //     }
+
+  //     // check collision in each substep
+  //     for (int k = 0; k < broad_collision_pairs.size(); k++) {
+  //       auto ep = broad_collision_pairs[k];
+  //       auto sim_entity1 = obj_data[entity_to_obj_data[ep.first]];
+  //       auto sim_entity2 = obj_data[entity_to_obj_data[ep.second]];
+  //       if ((sim_entity1.sim_obj->fixed || !sim_entity1.sim_obj->active) &&
+  //           (sim_entity2.sim_obj->fixed || !sim_entity2.sim_obj->active))
+  //         continue;
+  //       sim_entity1.sim_obj->update_collider_properties();
+  //       sim_entity2.sim_obj->update_collider_properties();
+
+  //     }
+  //   }
+  // } // ------------- end PBD based simulation -------------
 
   // remove froces from all objects
   {
@@ -82,37 +145,8 @@ void phy_system::fixedupdate(entt::registry &registry, float dt) {
 
 void phy_system::update_collider_properties(
     entt::registry &registry, std::vector<sim_obj_data> &obj_data) {
-  for (auto &data : obj_data) {
-    if (auto collider_ptr =
-            dynamic_cast<sphere_collider *>(data.sim_obj->collider.get())) {
-      collider_ptr->world_pos =
-          data.sim_obj->world_rotation * collider_ptr->local_pos +
-          data.sim_obj->world_position;
-    } else if (auto collider_ptr = dynamic_cast<capsule_collider *>(
-                   data.sim_obj->collider.get())) {
-      collider_ptr->world_pos =
-          data.sim_obj->world_rotation * collider_ptr->local_pos +
-          data.sim_obj->world_position;
-      collider_ptr->world_rot = data.sim_obj->world_rotation *
-                                math::euler_to_quat(collider_ptr->local_angle);
-      collider_ptr->world_dir = data.sim_obj->world_rotation * math::world_up;
-    } else if (auto collider_ptr = dynamic_cast<convex_hull_collider *>(
-                   data.sim_obj->collider.get())) {
-      collider_ptr->transformed_bounding_sphere_center =
-          collider_ptr->bounding_sphere_center + data.sim_obj->world_position;
-      for (int i = 0; i < collider_ptr->transformed_vertices.size(); i++) {
-        collider_ptr->transformed_vertices[i] =
-            data.sim_obj->world_rotation * collider_ptr->vertices[i] +
-            data.sim_obj->world_position;
-      }
-      for (int i = 0; i < collider_ptr->transformed_faces.size(); i++) {
-        collider_ptr->transformed_faces[i].normal =
-            (data.sim_obj->world_rotation * collider_ptr->faces[i].normal)
-                .normalized();
-      }
-    }
-    data.sim_obj->update_bounding_volumn_given_colliders();
-  }
+  for (auto &data : obj_data)
+    data.sim_obj->update_collider_properties();
 }
 
 std::vector<std::pair<entt::entity, entt::entity>>
@@ -192,6 +226,25 @@ void phy_system::draw_to_scene(entt::registry &registry, transform &cam_trans,
                               0.01f, opengl::Purple);
         }
       });
+
+  // render the collision pairs
+  std::vector<math::vector3> contact_points;
+  std::vector<std::pair<math::vector3, math::vector3>> contact_normals;
+  for (int i = 0; i < narrow_collision_pairs.size(); i++) {
+    contact_points.push_back(narrow_collision_pairs[i].contact_point1);
+    contact_points.push_back(narrow_collision_pairs[i].contact_point2);
+    contact_normals.push_back(
+        std::make_pair(narrow_collision_pairs[i].contact_point1,
+                       narrow_collision_pairs[i].contact_point1 +
+                           narrow_collision_pairs[i].normal * 0.2f));
+    contact_normals.push_back(
+        std::make_pair(narrow_collision_pairs[i].contact_point2,
+                       narrow_collision_pairs[i].contact_point2 -
+                           narrow_collision_pairs[i].normal * 0.2f));
+  }
+  opengl::draw_quads(contact_points, cam_trans.local_right(),
+                     cam_trans.local_up(), cam_comp.vp, 0.03f, opengl::Red);
+  opengl::draw_lines(contact_normals, cam_comp.vp, opengl::Red);
 }
 
 void phy_system::update(entt::registry &registry, float dt) {
