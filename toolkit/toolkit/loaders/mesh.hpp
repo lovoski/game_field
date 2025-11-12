@@ -42,4 +42,10 @@ struct mesh {
   std::vector<blend_shape> blendshapes;
 };
 
+// Load meshes from OBJ file using tinyobj loader (each shape becomes a separate mesh)
+bool load_obj_mesh(const std::string& filepath, std::vector<mesh>& out_meshes);
+
+// Save mesh to OBJ file
+bool save_obj_mesh(const std::string& filepath, const mesh& in_mesh);
+
 }; // namespace toolkit::assets

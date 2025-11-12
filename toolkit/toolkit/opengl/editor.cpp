@@ -564,12 +564,55 @@ void editor::draw_main_menubar() {
                               "*.PMX", "*.ply", "*.PLY", "*.stl", "*.STL"},
                              filepath)) {
           // assets::open_model_assimp(registry, filepath);
-          if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx") ||
-              endswith(filepath, ".OBJ") || endswith(filepath, ".obj")) {
+          if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx")) {
             auto root_entity = assets::open_model_ufbx(registry, filepath);
             if (root_entity != entt::null)
               spdlog::info("Load model file {0} with ufbx, mount at entity {1}",
                            filepath, registry.get<transform>(root_entity).name);
+          } else if (endswith(filepath, ".OBJ") || endswith(filepath, ".obj")) {
+            std::vector<assets::mesh> loaded_meshes;
+            if (assets::load_obj_mesh(filepath, loaded_meshes)) {
+#ifdef _WIN32
+              std::string filename = assets::wstring_to_string(
+                  std::filesystem::u8path(filepath).filename().wstring());
+#else
+              std::string filename =
+                  std::filesystem::path(filepath).filename().string();
+#endif
+              if (loaded_meshes.size() == 1) {
+                auto root_entity = registry.create();
+                auto &root_trans = registry.emplace<transform>(root_entity);
+                root_trans.name = filename;
+                auto &mesh_data =
+                    registry.emplace<opengl::mesh_data>(root_entity);
+                mesh_data.mesh_name = loaded_meshes[0].name;
+                mesh_data.vertices = loaded_meshes[0].vertices;
+                mesh_data.indices = loaded_meshes[0].indices;
+                opengl::init_opengl_buffers(mesh_data);
+              } else if (loaded_meshes.size() > 1) {
+                auto root_entity = registry.create();
+                auto &root_trans = registry.emplace<transform>(root_entity);
+                root_trans.name = filename;
+                for (int i = 0; i < loaded_meshes.size(); i++) {
+                  auto mesh_entity = registry.create();
+                  auto &mesh_trans = registry.emplace<transform>(mesh_entity);
+                  root_trans.add_child(mesh_entity);
+                  mesh_trans.name = loaded_meshes[i].name;
+                  auto &mesh_data =
+                      registry.emplace<opengl::mesh_data>(mesh_entity);
+                  mesh_data.mesh_name = loaded_meshes[i].name;
+                  mesh_data.vertices = loaded_meshes[i].vertices;
+                  mesh_data.indices = loaded_meshes[i].indices;
+                  opengl::init_opengl_buffers(mesh_data);
+                }
+              } else {
+                spdlog::error("Loaded model has zero meshes, filepath={0}",
+                              filepath);
+              }
+              spdlog::info("Load mesh from {0}", filepath);
+            } else {
+              spdlog::error("Failed to load mesh from {0}", filepath);
+            }
           } else {
             auto root_entity = assets::open_model_assimp(registry, filepath);
             if (root_entity != entt::null)

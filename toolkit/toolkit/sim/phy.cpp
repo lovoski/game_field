@@ -81,20 +81,29 @@ void phy_system::fixedupdate(entt::registry &registry, float dt) {
 void phy_system::update_collider_properties(
     entt::registry &registry, std::vector<sim_obj_data> &obj_data) {
   for (auto &data : obj_data) {
-    for (auto &collider : data.sim_obj->colliders) {
-      if (auto collider_ptr = dynamic_cast<sphere_collider *>(collider.get())) {
-        collider_ptr->world_pos =
-            data.sim_obj->world_rotation * collider_ptr->local_pos +
+    if (auto collider_ptr =
+            dynamic_cast<sphere_collider *>(data.sim_obj->collider.get())) {
+      collider_ptr->world_pos =
+          data.sim_obj->world_rotation * collider_ptr->local_pos +
+          data.sim_obj->world_position;
+    } else if (auto collider_ptr = dynamic_cast<capsule_collider *>(
+                   data.sim_obj->collider.get())) {
+      collider_ptr->world_pos =
+          data.sim_obj->world_rotation * collider_ptr->local_pos +
+          data.sim_obj->world_position;
+      collider_ptr->world_rot =
+          data.sim_obj->world_rotation * collider_ptr->local_rot;
+    } else if (auto collider_ptr = dynamic_cast<convex_hull_collider *>(
+                   data.sim_obj->collider.get())) {
+      for (int i = 0; i < collider_ptr->transformed_vertices.size(); i++) {
+        collider_ptr->transformed_vertices[i] =
+            data.sim_obj->world_rotation * collider_ptr->vertices[i] +
             data.sim_obj->world_position;
-      } else if (auto collider_ptr =
-                     dynamic_cast<capsule_collider *>(collider.get())) {
-        collider_ptr->world_pos =
-            data.sim_obj->world_rotation * collider_ptr->local_pos +
-            data.sim_obj->world_position;
-        collider_ptr->world_rot =
-            data.sim_obj->world_rotation * collider_ptr->local_rot;
-      } else if (auto collider_ptr =
-                     dynamic_cast<convex_hull_collider *>(collider.get())) {
+      }
+      for (int i = 0; i < collider_ptr->transformed_faces.size(); i++) {
+        collider_ptr->transformed_faces[i].normal =
+            (data.sim_obj->world_rotation * collider_ptr->faces[i].normal)
+                .normalized();
       }
     }
     data.sim_obj->update_bounding_volumn_given_colliders();
@@ -142,27 +151,32 @@ void phy_system::draw_to_scene(entt::registry &registry, transform &cam_trans,
                                camera &cam_comp) {
   registry.view<transform, rigid_sim_object>().each(
       [&](entt::entity entity, transform &trans, rigid_sim_object &sim_obj) {
-        std::vector<math::vector3> positions;
-        for (auto &collider : sim_obj.colliders) {
-          if (collider->type == collider_type::SPHERE) {
-            auto collider_ptr = dynamic_cast<sphere_collider *>(collider.get());
-            positions.clear();
-            positions.push_back(collider_ptr->world_pos);
-            opengl::draw_spheres(positions, cam_comp.vp, collider_ptr->radius,
-                                 opengl::White, true);
-          } else if (collider->type == collider_type::CAPSULE) {
-
-          } else if (collider->type == collider_type::CONVEX_HULL) {
+        if (sim_obj.collider != nullptr) {
+          if (sim_obj.collider->type == collider_type::SPHERE) {
+            auto collider_ptr =
+                dynamic_cast<sphere_collider *>(sim_obj.collider.get());
+            opengl::draw_sphere(collider_ptr->world_pos, cam_comp.vp,
+                                collider_ptr->radius, opengl::White, true);
+          } else if (sim_obj.collider->type == collider_type::CAPSULE) {
+          } else if (sim_obj.collider->type == collider_type::CONVEX_HULL) {
+            auto collider_ptr =
+                dynamic_cast<convex_hull_collider *>(sim_obj.collider.get());
+            std::vector<assets::mesh_vertex> vertices(
+                collider_ptr->vertices.size());
+            for (int i = 0; i < collider_ptr->vertices.size(); i++)
+              vertices[i].position << collider_ptr->transformed_vertices[i],
+                  1.0;
+            opengl::draw_mesh(vertices, collider_ptr->indices, cam_comp.vp,
+                              opengl::White);
           }
+          // draw bounding sphere of collider
+          opengl::draw_sphere(sim_obj.bounding_sphere_center, cam_comp.vp,
+                              sim_obj.bounding_sphere_radius, opengl::Green,
+                              true);
+          // draw mass center
+          opengl::draw_sphere(sim_obj.mass_center_world_space, cam_comp.vp,
+                              0.01f, opengl::Purple);
         }
-        positions.clear();
-        positions.push_back(sim_obj.bounding_sphere_center);
-        opengl::draw_spheres(positions, cam_comp.vp,
-                             sim_obj.bounding_sphere_radius, opengl::Green,
-                             true);
-        positions.clear();
-        positions.push_back(sim_obj.mass_center_world_space);
-        opengl::draw_spheres(positions, cam_comp.vp, 0.01f, opengl::Purple);
       });
 }
 

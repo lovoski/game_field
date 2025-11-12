@@ -53,6 +53,7 @@ struct convex_hull_collider : public base_collider {
   void create_from_data(std::vector<assets::mesh_vertex> &vertices_data);
 
   std::vector<math::vector3> vertices, transformed_vertices;
+  std::vector<std::uint32_t> indices;
   std::vector<convex_hull_collider_face> faces, transformed_faces;
 
   std::vector<std::vector<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
@@ -86,7 +87,7 @@ struct rigid_sim_object : public icomponent {
 
   std::vector<physics_force> forces;
   // the union of colliders form as an intergrity for this sim_obj
-  std::vector<std::shared_ptr<base_collider>> colliders;
+  std::shared_ptr<base_collider> collider = nullptr;
 
   math::matrix3 inertia_tensor, inverse_inertia_tensor;
 

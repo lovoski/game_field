@@ -17,6 +17,7 @@ void convex_hull_collider::create_from_data(
   auto &vertex_buffer = hull.getVertexBuffer();
 
   vertices.resize(vertex_buffer.size());
+  indices.resize(index_buffer.size());
   faces.resize(index_buffer.size() / 3);
 
   for (int i = 0; i < vertices.size(); i++) {
@@ -25,6 +26,9 @@ void convex_hull_collider::create_from_data(
     vertices[i].z() = vertex_buffer[i].z;
   }
   for (int i = 0; i < faces.size(); i++) {
+    indices[3 * i + 0] = index_buffer[3 * i + 0];
+    indices[3 * i + 1] = index_buffer[3 * i + 1];
+    indices[3 * i + 2] = index_buffer[3 * i + 2];
     faces[i].elements.push_back(index_buffer[3 * i + 0]);
     faces[i].elements.push_back(index_buffer[3 * i + 1]);
     faces[i].elements.push_back(index_buffer[3 * i + 2]);
@@ -33,6 +37,9 @@ void convex_hull_collider::create_from_data(
          v2 = vertices[index_buffer[3 * i + 2]];
     faces[i].normal = ((v1 - v0).cross(v2 - v1)).normalized();
   }
+
+  transformed_vertices = vertices;
+  transformed_faces = faces;
 }
 
 void rigid_sim_object::setup_mass(float mass_value, bool is_fixed) {
@@ -54,93 +61,93 @@ nlohmann::json rigid_sim_object::late_serialize() {
 void rigid_sim_object::late_deserialize(nlohmann::json &data) {}
 
 void rigid_sim_object::update_bounding_volumn_given_colliders() {
-  if (colliders.size() == 0) {
+  if (collider == nullptr) {
     bounding_sphere_radius = 0.0f;
     bounding_sphere_center = math::vector3::Zero();
   } else {
-    std::vector<std::pair<math::vector3, float>> spheres;
-    for (int i = 0; i < colliders.size(); i++) {
-      if (colliders[i]->type == collider_type::SPHERE) {
-        auto collider = dynamic_cast<sphere_collider *>(colliders[i].get());
-        spheres.emplace_back(
-            std::make_pair(collider->world_pos, collider->radius));
-      } else if (colliders[i]->type == collider_type::CAPSULE) {
-        // TODO:
-      } else if (colliders[i]->type == collider_type::CONVEX_HULL) {
-        // TODO:
-      }
-    }
-    bounding_sphere_center = spheres[0].first;
-    bounding_sphere_radius = spheres[0].second;
-    for (int i = 1; i < spheres.size(); i++) {
-      float center_dist = (bounding_sphere_center - spheres[i].first).norm();
-      if (center_dist + spheres[i].second <= bounding_sphere_radius)
-        continue;
-      else if (center_dist + bounding_sphere_radius <= spheres[i].second) {
-        bounding_sphere_center = spheres[i].first;
-        bounding_sphere_radius = spheres[i].second;
-      } else {
-        auto center_dir =
-            (spheres[i].first - bounding_sphere_center).normalized();
-        bounding_sphere_center =
-            bounding_sphere_center +
-            (-0.5f * bounding_sphere_radius + 0.5f * center_dist +
-             0.5f * spheres[i].second) *
-                center_dir;
-        bounding_sphere_radius =
-            0.5f * (center_dist + spheres[i].second + bounding_sphere_radius);
-      }
+    if (collider->type == collider_type::SPHERE) {
+      auto c = dynamic_cast<sphere_collider *>(collider.get());
+      bounding_sphere_radius = c->radius;
+      bounding_sphere_center = c->world_pos;
+    } else if (collider->type == collider_type::CAPSULE) {
+      // TODO:
+    } else if (collider->type == collider_type::CONVEX_HULL) {
+      auto c = dynamic_cast<convex_hull_collider *>(collider.get());
+      bounding_sphere_center = math::vector3::Zero();
+      for (int i = 0; i < c->transformed_vertices.size(); i++)
+        bounding_sphere_center += c->transformed_vertices[i];
+      bounding_sphere_center /= c->transformed_vertices.size();
+      bounding_sphere_radius = 0.0f;
+      for (int i = 0; i < c->transformed_vertices.size(); i++)
+        bounding_sphere_radius = std::max(
+            bounding_sphere_radius,
+            (bounding_sphere_center - c->transformed_vertices[i]).norm());
     }
   }
 }
 
 void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
-  if (ImGui::TreeNode("Colliders")) {
-    if (ImGui::BeginMenu("Add Collider")) {
-      if (ImGui::MenuItem("Sphere Collider")) {
-        sphere_collider collider;
-        colliders.emplace_back(std::make_shared<sphere_collider>(collider));
-      }
-      if (ImGui::MenuItem("Capsule Collider")) {
-        capsule_collider collider;
-        colliders.emplace_back(std::make_shared<capsule_collider>(collider));
-      }
-      if (ImGui::MenuItem("Convex Hull Collider")) {
-        convex_hull_collider collider;
-        colliders.emplace_back(
-            std::make_shared<convex_hull_collider>(collider));
-      }
-      ImGui::EndMenu();
+  if (ImGui::BeginMenu("Collider Type")) {
+    if (ImGui::MenuItem("Sphere Collider")) {
+      sphere_collider c;
+      collider = std::make_shared<sphere_collider>(c);
     }
-    ImGui::Separator();
+    if (ImGui::MenuItem("Capsule Collider")) {
+      capsule_collider c;
+      collider = std::make_shared<capsule_collider>(c);
+    }
+    if (ImGui::MenuItem("Convex Hull Collider")) {
+      auto mesh_ptr = registry.try_get<opengl::mesh_data>(entity);
+      if (mesh_ptr == nullptr) {
+        spdlog::error("Entity doesn't have mesh component, can't set to "
+                      "convex collider");
+      } else {
+        spdlog::info("Create convex hull collider for mesh");
+        convex_hull_collider c;
+        c.create_from_data(mesh_ptr->vertices);
+        collider = std::make_shared<convex_hull_collider>(c);
+      }
+    }
+    ImGui::EndMenu();
+  }
 
-    int index_to_remove = -1;
-    for (int i = 0; i < colliders.size(); i++) {
-      if (colliders[i]->type == collider_type::SPHERE) {
-        ImGui::SeparatorText("Sphere Collider");
-        sphere_collider *collider =
-            dynamic_cast<sphere_collider *>(colliders[i].get());
-        ImGui::DragFloat(("Radius##" + std::to_string(i)).c_str(),
-                         &(collider->radius), 0.001f, 0.0f, 1e10f);
-        ImGui::DragFloat3(("Local Pos##" + std::to_string(i)).c_str(),
-                          collider->local_pos.data(), 0.001f, -1e38f, 1e38f);
-        if (ImGui::Button(("Remove##sc" + std::to_string(i)).c_str(), {-1, 30}))
-          index_to_remove = i;
-      } else if (colliders[i]->type == collider_type::CAPSULE) {
-        ImGui::SeparatorText("Capsule Collider");
-        if (ImGui::Button(("Remove##cc" + std::to_string(i)).c_str(), {-1, 30}))
-          index_to_remove = i;
-      } else if (colliders[i]->type == collider_type::CONVEX_HULL) {
-        ImGui::SeparatorText("Convex Hull Collider");
-        if (ImGui::Button(("Remove##chc" + std::to_string(i)).c_str(),
-                          {-1, 30}))
-          index_to_remove = i;
+  if (collider != nullptr) {
+    if (collider->type == collider_type::SPHERE) {
+      ImGui::SeparatorText("Sphere Collider");
+      sphere_collider *c = dynamic_cast<sphere_collider *>(collider.get());
+      ImGui::DragFloat(("Radius##" + std::to_string(0)).c_str(), &(c->radius),
+                       0.001f, 0.0f, 1e10f);
+      ImGui::DragFloat3(("Local Pos##" + std::to_string(0)).c_str(),
+                        c->local_pos.data(), 0.001f, -1e38f, 1e38f);
+    } else if (collider->type == collider_type::CAPSULE) {
+      ImGui::SeparatorText("Capsule Collider");
+    } else if (collider->type == collider_type::CONVEX_HULL) {
+      ImGui::SeparatorText("Convex Hull Collider");
+      if (ImGui::BeginTable("##convex_hull_collider", 2,
+                            ImGuiTableFlags_Resizable |
+                                ImGuiTableFlags_Borders)) {
+        ImGui::TableSetupColumn("Property");
+        ImGui::TableSetupColumn("Value");
+        ImGui::TableHeadersRow();
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Num Vertex");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text("%d", dynamic_cast<convex_hull_collider *>(collider.get())
+                              ->vertices.size());
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Num Faces");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::Text(
+            "%d",
+            dynamic_cast<convex_hull_collider *>(collider.get())->faces.size());
+
+        ImGui::EndTable();
       }
     }
-    if (index_to_remove >= 0 && index_to_remove < colliders.size())
-      colliders.erase(colliders.begin() + index_to_remove);
-    ImGui::TreePop();
   }
 }
-
 }; // namespace toolkit::sim

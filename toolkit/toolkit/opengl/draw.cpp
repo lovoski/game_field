@@ -115,8 +115,10 @@ void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
   if (!initialized) {
     vao.create();
     vbo.create();
-    solid_shader.compile_shader_from_source(capsule_vs, line_fs, str_format(capsule_gs.c_str(), "triangle_strip"));
-    wireframe_shader.compile_shader_from_source(capsule_vs, line_fs, str_format(capsule_gs.c_str(), "line_strip"));
+    solid_shader.compile_shader_from_source(
+        capsule_vs, line_fs, str_format(capsule_gs.c_str(), "triangle_strip"));
+    wireframe_shader.compile_shader_from_source(
+        capsule_vs, line_fs, str_format(capsule_gs.c_str(), "line_strip"));
     initialized = true;
   }
   vao.bind();
@@ -1187,6 +1189,28 @@ void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale) {
              ydir.norm() * 0.2f);
   draw_arrow(trans.world_pos(), trans.world_pos() + zdir, vp, Blue,
              zdir.norm() * 0.2f);
+}
+
+void draw_line(math::vector3 start, math::vector3 end, math::matrix4 vp,
+               math::vector3 color) {
+  std::vector<std::pair<math::vector3, math::vector3>> lines;
+  lines.push_back(std::make_pair(start, end));
+  draw_lines(lines, vp, color);
+}
+
+void draw_capsule(math::vector3 start, math::vector3 end, math::matrix4 vp,
+                  math::vector3 color, bool wireframe, float column_radius,
+                  float cap_height) {
+  std::vector<std::pair<math::vector3, math::vector3>> lines;
+  lines.push_back(std::make_pair(start, end));
+  draw_capsules(lines, vp, color, wireframe, column_radius, cap_height);
+}
+
+void draw_sphere(math::vector3 center, math::matrix4 vp, float radius,
+                 math::vector3 color, bool wireframe) {
+  std::vector<math::vector3> positions;
+  positions.push_back(center);
+  draw_spheres(positions, vp, radius, color, wireframe);
 }
 
 }; // namespace toolkit::opengl

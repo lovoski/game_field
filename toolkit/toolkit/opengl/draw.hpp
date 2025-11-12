@@ -6,13 +6,23 @@
 
 namespace toolkit::opengl {
 
+void draw_line(math::vector3 start, math::vector3 end, math::matrix4 vp,
+               math::vector3 color = White);
+
 void draw_lines(std::vector<std::pair<math::vector3, math::vector3>> &lines,
                 math::matrix4 vp, math::vector3 color = White);
+
+void draw_capsule(math::vector3 start, math::vector3 end, math::matrix4 vp,
+                  math::vector3 color = White, bool wireframe = false,
+                  float column_radius = 0.1f, float cap_height = 0.1f);
 
 void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
                    math::matrix4 vp, math::vector3 color = White,
                    bool wireframe = false, float column_radius = 0.1f,
                    float cap_height = 0.1f);
+
+void draw_sphere(math::vector3 center, math::matrix4 vp, float radius = 1.0f,
+                 math::vector3 color = White, bool wireframe = false);
 
 void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
                   float radius = 1.0f, math::vector3 color = White,
