@@ -142,7 +142,8 @@ bool load_obj_mesh(const std::string &filepath, std::vector<mesh> &out_meshes) {
     // use smoothed normal if no normal specified in the file
     for (int i = 0; i < out_mesh.vertices.size(); i++) {
       if (out_mesh.vertices[i].normal.norm() == 0) {
-        out_mesh.vertices[i].normal << (normal_cache[i] / normal_count[i]), 0.0f;
+        out_mesh.vertices[i].normal << (normal_cache[i] / normal_count[i]),
+            0.0f;
       }
     }
 
@@ -161,19 +162,17 @@ bool save_obj_mesh(const std::string &filepath, const mesh &in_mesh) {
   }
 
   // Write header comment
-  file << "# Exported mesh: " << in_mesh.name << "\n";
-  file << "# Vertices: " << in_mesh.vertices.size() << "\n";
-  file << "# Faces: " << (in_mesh.indices.size() / 3) << "\n\n";
+  file << ("# Exported mesh: " + in_mesh.name + "\n");
+  file << ("# Vertices: " + std::to_string(in_mesh.vertices.size()) + "\n");
+  file << ("# Faces: " + std::to_string(in_mesh.indices.size() / 3) + "\n\n");
 
   // Write vertices
   for (size_t i = 0; i < in_mesh.vertices.size(); i++) {
     const auto &vertex = in_mesh.vertices[i];
-
     // Vertex position
-    file << "v " << vertex.position.x() << " " << vertex.position.y() << " "
-         << vertex.position.z() << "\n";
+    file << str_format("v %.6f %.6f %.6f\n", vertex.position.x(),
+                       vertex.position.y(), vertex.position.z());
   }
-
   file << "\n";
 
   // Write texture coordinates (if non-zero)
@@ -187,18 +186,17 @@ bool save_obj_mesh(const std::string &filepath, const mesh &in_mesh) {
 
   if (has_texcoords) {
     for (const auto &vertex : in_mesh.vertices) {
-      file << "vt " << vertex.tex_coords.x() << " " << vertex.tex_coords.y()
-           << "\n";
+      file << str_format("vt %.6f %.6f\n", vertex.tex_coords.x(),
+                         vertex.tex_coords.y());
     }
     file << "\n";
   }
 
   // Write normals
   for (const auto &vertex : in_mesh.vertices) {
-    file << "vn " << vertex.normal.x() << " " << vertex.normal.y() << " "
-         << vertex.normal.z() << "\n";
+    file << str_format("vn %.6f %.6f %.6f\n", vertex.normal.x(),
+                       vertex.normal.y(), vertex.normal.z());
   }
-
   file << "\n";
 
   // Write faces (indices)
@@ -211,11 +209,10 @@ bool save_obj_mesh(const std::string &filepath, const mesh &in_mesh) {
     uint32_t i3 = in_mesh.indices[i + 2] + 1;
 
     if (has_texcoords) {
-      file << "f " << i1 << "/" << i1 << "/" << i1 << " " << i2 << "/" << i2
-           << "/" << i2 << " " << i3 << "/" << i3 << "/" << i3 << "\n";
+      file << str_format("f %d/%d/%d %d/%d/%d %d/%d/%d\n", i1, i1, i1, i2, i2,
+                         i2, i3, i3, i3);
     } else {
-      file << "f " << i1 << "//" << i1 << " " << i2 << "//" << i2 << " " << i3
-           << "//" << i3 << "\n";
+      file << str_format("f %d//%d %d//%d %d//%d\n", i1, i1, i2, i2, i3, i3);
     }
   }
 

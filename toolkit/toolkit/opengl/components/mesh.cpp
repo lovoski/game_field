@@ -155,6 +155,15 @@ void mesh_data::draw_gui(entt::registry &registry, entt::entity entity) {
 
     ImGui::EndTable();
   }
+  if (ImGui::Button("Export Static Mesh", {-1, 30})) {
+    assets::mesh tmp_mesh;
+    tmp_mesh.vertices = vertices;
+    tmp_mesh.indices = indices;
+    std::string save_filepath;
+    if (save_file_dialog("Save as static mesh", {"*.obj"}, save_filepath)) {
+      assets::save_obj_mesh(save_filepath, tmp_mesh);
+    }
+  }
   if (blendshapes.size() > 0) {
     if (ImGui::TreeNode("Blend Shapes")) {
       for (auto &blend : blendshapes) {
