@@ -6,10 +6,6 @@
 
 namespace toolkit::sim {
 
-std::pair<math::vector3, float>
-welzl_bounding_sphere(const std::vector<math::vector3> &points,
-                      bool shuffle = false);
-
 enum collider_type {
   SPHERE,
   CAPSULE,
@@ -18,7 +14,7 @@ enum collider_type {
 
 struct base_collider {
   collider_type type;
-  virtual void null_func() {}
+  virtual math::vector3 get_support(const math::vector3 &direction) const = 0;
 };
 
 struct sphere_collider : public base_collider {
@@ -28,6 +24,7 @@ struct sphere_collider : public base_collider {
   math::vector3 local_pos = math::vector3::Zero();
   // world position of the sphere center
   math::vector3 world_pos = math::vector3::Zero();
+  math::vector3 get_support(const math::vector3 &direction) const override;
 };
 REFLECT(sphere_collider, radius, local_pos)
 
@@ -41,6 +38,7 @@ struct capsule_collider : public base_collider {
                 local_angle = math::vector3::Zero(),
                 world_pos = math::vector3::Zero(), world_dir = math::world_up;
   math::quat world_rot = math::quat::Identity();
+  math::vector3 get_support(const math::vector3 &direction) const override;
 };
 REFLECT(capsule_collider, cap_radius, cap_distance, local_pos, local_angle)
 
@@ -69,6 +67,8 @@ struct convex_hull_collider : public base_collider {
 
   std::vector<std::set<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
       face_to_neighbors;
+
+  math::vector3 get_support(const math::vector3 &direction) const override;
 };
 
 struct collider_contact {
@@ -80,7 +80,7 @@ struct physics_force {
 };
 
 std::vector<collider_contact> colliders_get_contacts(base_collider *c1,
-                                                      base_collider *c2);
+                                                     base_collider *c2);
 
 struct rigid_sim_object : public icomponent {
   rigid_sim_object() { setup_mass_inertia(1.0f, false); }

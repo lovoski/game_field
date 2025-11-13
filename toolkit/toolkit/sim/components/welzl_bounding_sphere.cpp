@@ -1,4 +1,4 @@
-#include "toolkit/sim/components/colliders.hpp"
+#include "toolkit/sim/components/algo.hpp"
 #include <algorithm>
 #include <random>
 #include <limits>

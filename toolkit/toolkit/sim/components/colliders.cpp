@@ -1,7 +1,42 @@
 #include "toolkit/sim/components/colliders.hpp"
 #include "QuickHull.hpp"
+#include "toolkit/sim/components/algo.hpp"
 
 namespace toolkit::sim {
+
+math::vector3
+sphere_collider::get_support(const math::vector3 &direction) const {
+  return world_pos + direction.normalized() * radius;
+}
+
+math::vector3
+capsule_collider::get_support(const math::vector3 &direction) const {
+  math::vector3 norm_dir = direction.normalized();
+  math::vector3 sphere_support = norm_dir * cap_radius;
+  math::vector3 seg_dir = world_dir.normalized();
+  float half_dist = 0.5f * cap_distance;
+  math::vector3 seg_support;
+  if (direction.dot(seg_dir) > 0.0f) {
+    seg_support = world_pos + (half_dist * seg_dir);
+  } else {
+    seg_support = world_pos - (half_dist * seg_dir);
+  }
+  return seg_support + sphere_support;
+}
+
+math::vector3
+convex_hull_collider::get_support(const math::vector3 &direction) const {
+  float max_dot = -std::numeric_limits<float>::max();
+  math::vector3 point = math::vector3::Zero();
+  for (int i = 0; i < transformed_vertices.size(); i++) {
+    float dot = transformed_vertices[i].dot(direction);
+    if (dot > max_dot) {
+      max_dot = dot;
+      point = transformed_vertices[i];
+    }
+  }
+  return point;
+}
 
 void convex_hull_collider::create_from_data(
     std::vector<assets::mesh_vertex> &vertices_data) {
