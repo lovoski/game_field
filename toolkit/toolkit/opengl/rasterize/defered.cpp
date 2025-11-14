@@ -195,7 +195,9 @@ void defered_render_system::init0(entt::registry &registry) {
   resize(canvas_width, canvas_height);
 }
 
-void defered_render_system::init1(entt::registry &registry) {}
+void defered_render_system::init1(entt::registry &registry) {
+  resize(canvas_width, canvas_height);
+}
 
 void defered_render_system::resize(int width, int height) {
   canvas_width = width;

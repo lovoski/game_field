@@ -26,10 +26,11 @@ capsule_collider::get_support(const math::vector3 &direction) const {
 
 math::vector3
 convex_hull_collider::get_support(const math::vector3 &direction) const {
+  math::vector3 norm_dir = direction.normalized();
   float max_dot = -std::numeric_limits<float>::max();
   math::vector3 point = math::vector3::Zero();
   for (int i = 0; i < transformed_vertices.size(); i++) {
-    float dot = transformed_vertices[i].dot(direction);
+    float dot = transformed_vertices[i].dot(norm_dir);
     if (dot > max_dot) {
       max_dot = dot;
       point = transformed_vertices[i];
@@ -221,7 +222,7 @@ void rigid_sim_object::update_collider_properties() {
   } else if (auto collider_ptr =
                  dynamic_cast<convex_hull_collider *>(collider.get())) {
     collider_ptr->transformed_bounding_sphere_center =
-        collider_ptr->bounding_sphere_center + world_position;
+        world_rotation * collider_ptr->bounding_sphere_center + world_position;
     for (int i = 0; i < collider_ptr->transformed_vertices.size(); i++) {
       collider_ptr->transformed_vertices[i] =
           world_rotation * collider_ptr->vertices[i] + world_position;

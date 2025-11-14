@@ -178,44 +178,47 @@ std::vector<collider_contact> colliders_get_contacts(base_collider *c1,
 
   gjk_simplex simplex;
   if (gjk_collides(c1, c2, simplex)) {
-    // there's a collision, get collision normal using EPA
-    math::vector3 normal;
-    float penetration;
-    if (!epa(c1, c2, simplex, normal, penetration)) {
-      // epa fails
-      return results;
-    }
-    // create the final collision manifold
-    contact.normal = normal;
 
-    if ((c1->type == collider_type::SPHERE) ||
-        (c2->type == collider_type::SPHERE)) {
-      // sphere convex collision
-      if (c2->type == collider_type::SPHERE) {
-        contact.normal *= -1;
-        std::swap(c1, c2);
-      }
-      auto collider1 = dynamic_cast<sphere_collider *>(c1);
-      contact.contact_point1 =
-          collider1->world_pos + contact.normal * collider1->radius;
-      contact.contact_point2 =
-          contact.contact_point1 - penetration * contact.normal;
-      results.push_back(contact);
-    } else if ((c1->type == collider_type::CAPSULE) ||
-               (c2->type == collider_type::CAPSULE)) {
-      // capsule convex collision
-      if (c2->type == collider_type::CAPSULE) {
-        contact.normal *= -1;
-        std::swap(c1, c2);
-      }
-      results.push_back(contact);
-    } else {
-      // convex convex collision
-      auto collider1 = dynamic_cast<convex_hull_collider *>(c1);
-      auto collider2 = dynamic_cast<convex_hull_collider *>(c2);
-      convex_convex_contact_manifold(collider1, collider2, contact.normal,
-                                     results);
-    }
+    spdlog::info("Collision between colliders");
+
+    // // there's a collision, get collision normal using EPA
+    // math::vector3 normal;
+    // float penetration;
+    // if (!epa(c1, c2, simplex, normal, penetration)) {
+    //   // epa fails
+    //   return results;
+    // }
+    // // create the final collision manifold
+    // contact.normal = normal;
+
+    // if ((c1->type == collider_type::SPHERE) ||
+    //     (c2->type == collider_type::SPHERE)) {
+    //   // sphere convex collision
+    //   if (c2->type == collider_type::SPHERE) {
+    //     contact.normal *= -1;
+    //     std::swap(c1, c2);
+    //   }
+    //   auto collider1 = dynamic_cast<sphere_collider *>(c1);
+    //   contact.contact_point1 =
+    //       collider1->world_pos + contact.normal * collider1->radius;
+    //   contact.contact_point2 =
+    //       contact.contact_point1 - penetration * contact.normal;
+    //   results.push_back(contact);
+    // } else if ((c1->type == collider_type::CAPSULE) ||
+    //            (c2->type == collider_type::CAPSULE)) {
+    //   // capsule convex collision
+    //   if (c2->type == collider_type::CAPSULE) {
+    //     contact.normal *= -1;
+    //     std::swap(c1, c2);
+    //   }
+    //   results.push_back(contact);
+    // } else {
+    //   // convex convex collision
+    //   auto collider1 = dynamic_cast<convex_hull_collider *>(c1);
+    //   auto collider2 = dynamic_cast<convex_hull_collider *>(c2);
+    //   convex_convex_contact_manifold(collider1, collider2, contact.normal,
+    //                                  results);
+    // }
   }
 
   return results;

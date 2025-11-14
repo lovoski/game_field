@@ -5,7 +5,7 @@ namespace toolkit::sim {
 void polytope_from_gjk_simplex(const gjk_simplex &simplex,
                                std::vector<math::vector3> &polytope,
                                std::vector<Eigen::Vector3i> &faces) {
-  assert(simplex.num == 4);
+  assert(simplex.dim == 4);
   polytope.resize(4);
   polytope[0] = simplex.a;
   polytope[1] = simplex.b;

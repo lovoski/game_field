@@ -14,6 +14,8 @@ enum collider_type {
 
 struct base_collider {
   collider_type type;
+  math::vector3 world_pos = math::vector3::Zero(),
+                local_pos = math::vector3::Zero();
   virtual math::vector3 get_support(const math::vector3 &direction) const = 0;
 };
 
@@ -22,8 +24,6 @@ struct sphere_collider : public base_collider {
   float radius = 1.0f;
   // local offset of the center to the attached sim_obj
   math::vector3 local_pos = math::vector3::Zero();
-  // world position of the sphere center
-  math::vector3 world_pos = math::vector3::Zero();
   math::vector3 get_support(const math::vector3 &direction) const override;
 };
 REFLECT(sphere_collider, radius, local_pos)
@@ -34,9 +34,7 @@ REFLECT(sphere_collider, radius, local_pos)
 struct capsule_collider : public base_collider {
   capsule_collider() { type = collider_type::CAPSULE; }
   float cap_radius = 1.0f, cap_distance = 2.0f;
-  math::vector3 local_pos = math::vector3::Zero(),
-                local_angle = math::vector3::Zero(),
-                world_pos = math::vector3::Zero(), world_dir = math::world_up;
+  math::vector3 local_angle = math::vector3::Zero(), world_dir = math::world_up;
   math::quat world_rot = math::quat::Identity();
   math::vector3 get_support(const math::vector3 &direction) const override;
 };

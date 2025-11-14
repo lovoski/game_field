@@ -10,7 +10,7 @@ welzl_bounding_sphere(const std::vector<math::vector3> &points,
 
 struct gjk_simplex {
   math::vector3 a, b, c, d;
-  std::uint32_t num;
+  std::uint32_t dim;
 };
 
 math::vector3 support_point_of_minkowski_difference(base_collider *c1,
