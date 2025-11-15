@@ -1,5 +1,4 @@
-#include "toolkit/sim/components/algo.hpp"
-#include "toolkit/sim/components/colliders.hpp"
+#include "toolkit/sim/algorithms/algo.hpp"
 
 namespace toolkit::sim {
 

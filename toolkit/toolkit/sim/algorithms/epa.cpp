@@ -1,4 +1,4 @@
-#include "toolkit/sim/components/algo.hpp"
+#include "toolkit/sim/algorithms/algo.hpp"
 
 #define FLOAT_MAX std::numeric_limits<float>::max()
 #define EPA_MAX_ITERATIONS 100

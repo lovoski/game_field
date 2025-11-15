@@ -1,4 +1,4 @@
-#include "toolkit/sim/components/algo.hpp"
+#include "toolkit/sim/algorithms/algo.hpp"
 #include <algorithm>
 #include <random>
 #include <limits>

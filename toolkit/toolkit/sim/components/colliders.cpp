@@ -1,6 +1,6 @@
 #include "toolkit/sim/components/colliders.hpp"
 #include "QuickHull.hpp"
-#include "toolkit/sim/components/algo.hpp"
+#include "toolkit/sim/algorithms/algo.hpp"
 
 namespace toolkit::sim {
 
@@ -223,6 +223,7 @@ void rigid_sim_object::update_collider_properties() {
                  dynamic_cast<convex_hull_collider *>(collider.get())) {
     collider_ptr->transformed_bounding_sphere_center =
         world_rotation * collider_ptr->bounding_sphere_center + world_position;
+    collider_ptr->world_pos = collider_ptr->transformed_bounding_sphere_center;
     for (int i = 0; i < collider_ptr->transformed_vertices.size(); i++) {
       collider_ptr->transformed_vertices[i] =
           world_rotation * collider_ptr->vertices[i] + world_position;

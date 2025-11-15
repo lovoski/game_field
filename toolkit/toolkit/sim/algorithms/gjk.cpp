@@ -1,4 +1,4 @@
-#include "toolkit/sim/components/algo.hpp"
+#include "toolkit/sim/algorithms/algo.hpp"
 
 using namespace toolkit::math;
 
