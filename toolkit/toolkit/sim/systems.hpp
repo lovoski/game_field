@@ -40,8 +40,10 @@ private:
   float cur_time = 0.0f;
 
   int num_sub_steps = 20, sim_fps = 60;
-
   math::vector3 gravity = math::vector3(0.0, -9.8, 0.0);
+
+  bool debug_draw_velocity = false;
+  bool debug_draw_bounding_spheres = false, debug_draw_collision_body = true;
 
   REFLECT_PRIVATE(phy_system)
 };

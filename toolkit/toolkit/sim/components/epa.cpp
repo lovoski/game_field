@@ -1,10 +1,50 @@
 #include "toolkit/sim/components/algo.hpp"
 
+#define FLOAT_MAX std::numeric_limits<float>::max()
+#define EPA_MAX_ITERATIONS 100
+using vector3i = Eigen::Vector3i;
+using namespace toolkit::math;
+
 namespace toolkit::sim {
 
-void polytope_from_gjk_simplex(const gjk_simplex &simplex,
-                               std::vector<math::vector3> &polytope,
-                               std::vector<Eigen::Vector3i> &faces) {
+void get_face_normal_dist_to_origin(const std::vector<vector3> &polytope,
+                                    const std::vector<vector3i> &faces,
+                                    std::vector<vector3> &normals,
+                                    std::vector<float> &dist_to_origin,
+                                    int &min_dist_face_idx);
+
+void add_if_unique_edge(std::vector<std::pair<std::size_t, std::size_t>> &edges,
+                        std::size_t a, std::size_t b) {
+  // Search for the reverse edge (b, a)
+  auto reverse = std::find(edges.begin(), edges.end(), std::make_pair(b, a));
+
+  if (reverse != edges.end()) {
+    // Found (b, a). This is an interior edge.
+    // Remove (b, a) and do not add (a, b).
+    edges.erase(reverse);
+  } else {
+    // Did not find (b, a). This is a unique edge (so far).
+    edges.emplace_back(std::make_pair(a, b));
+  }
+}
+
+/**
+ * Reference:
+ * https://winter.dev/articles/epa-algorithm
+ *
+ * This algorithm takes the final simplex that contained the origin and finds
+ * the normal of collision, aka the shortest vector to nudge the shapes out of
+ * each other.
+ *
+ * The naive solution is to use the normal of the closest face to the origin,
+ * but remember, a simplex does not need to contain any of the original
+ * polygon's faces, so we could end up with an incorrect normal.
+ */
+bool epa_contact(base_collider *c1, base_collider *c2, gjk_simplex &simplex,
+                 vector3 &_normal, float &_penetration) {
+  std::vector<vector3> polytope;
+  std::vector<vector3i> faces;
+  // build initial polytope from GJK simplex
   assert(simplex.dim == 4);
   polytope.resize(4);
   polytope[0] = simplex.a;
@@ -12,182 +52,115 @@ void polytope_from_gjk_simplex(const gjk_simplex &simplex,
   polytope[2] = simplex.c;
   polytope[3] = simplex.d;
   faces.resize(4);
-  faces[0] = Eigen::Vector3i(0, 1, 2); // ABC
-  faces[1] = Eigen::Vector3i(0, 2, 3); // ACD
-  faces[2] = Eigen::Vector3i(0, 3, 1); // ADB
-  faces[3] = Eigen::Vector3i(1, 2, 3); // BCD
-}
+  faces[0] = vector3i(0, 1, 2);
+  faces[1] = vector3i(0, 3, 1);
+  faces[2] = vector3i(0, 2, 3);
+  faces[3] = vector3i(1, 3, 2);
 
-void get_face_normal_and_distance_to_origin(
-    Eigen::Vector3i &face, std::vector<math::vector3> &polytope,
-    math::vector3 &_normal, float &_distance) {
-  math::vector3 a = polytope[face.x()];
-  math::vector3 b = polytope[face.y()];
-  math::vector3 c = polytope[face.z()];
-  math::vector3 ab = b - a;
-  math::vector3 ac = c - a;
-  math::vector3 normal = (ab.cross(ac)).normalized();
-  assert(normal.x() != 0.0 || normal.y() != 0.0 || normal.z() != 0.0);
-  // When this value is not 0, it is possible that the normals are not found
-  // even if the polytope is not degenerate
-  const float DISTANCE_TO_ORIGIN_TOLERANCE = 0.0f;
-  float distance = normal.dot(a);
-  // the distance from the face's *plane* to the origin (considering an infinite
-  // plane).
-  if (distance < -DISTANCE_TO_ORIGIN_TOLERANCE) {
-    // if the distance is less than 0, it means that our normal is point inwards
-    // instead of outwards in this case, we just invert both normal and distance
-    // this way, we don't need to worry about face's winding
-    normal = -normal;
-    distance = -distance;
-  } else if (distance >= -DISTANCE_TO_ORIGIN_TOLERANCE &&
-             distance <= DISTANCE_TO_ORIGIN_TOLERANCE) {
-    // if the distance is exactly 0.0, then it means that the origin is lying
-    // exactly on the face. in this case, we can't directly infer the
-    // orientation of the normal. since our shape is convex, we analyze the
-    // other vertices of the hull to deduce the orientation
-    bool was_able_to_calculate_normal = false;
-    for (int i = 0; i < polytope.size(); ++i) {
-      math::vector3 current = polytope[i];
-      float auxiliar_distance = normal.dot(current);
-      if (auxiliar_distance < -DISTANCE_TO_ORIGIN_TOLERANCE ||
-          auxiliar_distance > DISTANCE_TO_ORIGIN_TOLERANCE) {
-        // since the shape is convex, the other vertices should always be
-        // "behind" the normal plane
-        normal = auxiliar_distance < -DISTANCE_TO_ORIGIN_TOLERANCE ? normal
-                                                                   : -normal;
-        was_able_to_calculate_normal = true;
-        break;
-      }
-    }
-    // If we were not able to calculate the normal, it means that ALL points of
-    // the polytope are in the same plane Therefore, we either have a degenerate
-    // polytope or our tolerance is not big enough
-    assert(was_able_to_calculate_normal);
-  }
-  _normal = normal;
-  _distance = distance;
-}
+  std::vector<vector3> normals;
+  std::vector<float> dist_to_origin;
+  int min_dist_face_idx = -1;
+  get_face_normal_dist_to_origin(polytope, faces, normals, dist_to_origin,
+                                 min_dist_face_idx);
 
-void add_edge(std::vector<Eigen::Vector2i> &edges, Eigen::Vector2i edge,
-              const std::vector<math::vector3> &polytope) {
-  for (int i = 0; i < edges.size(); i++) {
-    auto current = edges[i];
-    if ((edge.x() == current.x() && edge.y() == current.y()) ||
-        (edge.x() == current.y() && edge.y() == current.x())) {
-      edges.erase(edges.begin() + i);
-      return;
-    }
-    // @TEMPORARY: Once indexes point to unique vertices, this won't be needed.
-    math::vector3 current_v1 = polytope[current.x()];
-    math::vector3 current_v2 = polytope[current.y()];
-    math::vector3 edge_v1 = polytope[edge.x()];
-    math::vector3 edge_v2 = polytope[edge.y()];
-    if (((current_v1 == edge_v1) && (current_v2 == edge_v2)) ||
-        ((current_v1 == edge_v2) && (current_v2 == edge_v1))) {
-      edges.erase(edges.begin() + i);
-      return;
-    }
-  }
-  edges.push_back(edge);
-}
-
-bool epa(base_collider *c1, base_collider *c2, gjk_simplex &simplex,
-         math::vector3 &_normal, float &_penetration) {
-  std::vector<math::vector3> polytope;
-  std::vector<Eigen::Vector3i> faces;
-  // build initial polytope from GJK simplex
-  polytope_from_gjk_simplex(simplex, polytope, faces);
-
-  std::vector<math::vector3> normals(128);
-  std::vector<float> faces_distance_to_origin(128);
-
-  math::vector3 min_normal;
-  float min_distance = std::numeric_limits<float>::max();
-  for (int i = 0; i < faces.size(); i++) {
-    math::vector3 normal;
-    float distance;
-    auto face = faces[i];
-
-    get_face_normal_and_distance_to_origin(face, polytope, normal, distance);
-
-    normals.push_back(normal);
-    faces_distance_to_origin.push_back(distance);
-
-    if (distance < min_distance) {
-      min_distance = distance;
-      min_normal = normal;
-    }
-  }
-
-  std::vector<Eigen::Vector2i> edges(1024);
+  // find the normal of the face closest to the origin
+  vector3 min_normal = normals[min_dist_face_idx];
+  float min_distance = dist_to_origin[min_dist_face_idx];
   bool converged = false;
-  for (int it = 0; it < 100; it++) {
-    math::vector3 support_point =
+  for (int it = 0; it < EPA_MAX_ITERATIONS; it++) {
+    // min_normal always points to the origin
+    vector3 support =
         support_point_of_minkowski_difference(c1, c2, min_normal);
-    // If the support time lies on the face currently set as the closest to the
-    // origin, we are done.
-    float d = min_normal.dot(support_point);
-    if (fabs(d - min_distance) < 1e-4f) {
+    float support_dist = min_normal.dot(support);
+    // no further support point can be found, take this as 'converged'
+    if ((std::abs(support_dist - min_distance) < 1e-5f) ||
+        ((support - (polytope[faces[min_dist_face_idx].x()] +
+                     polytope[faces[min_dist_face_idx].y()] +
+                     polytope[faces[min_dist_face_idx].z()]) /
+                        3.0f)
+             .norm() < 1e-5f)) {
       _normal = min_normal;
-      _penetration = min_distance;
+      _penetration = min_distance + 1e-5f;
       converged = true;
       break;
     }
-    // add new point to polytope
-    int new_point_index = polytope.size();
-    polytope.push_back(support_point);
-    // expand polytope
-    for (int i = 0; i < normals.size(); i++) {
-      math::vector3 normal = normals[i];
-      auto face = faces[i];
-      // If the face normal points towards the support point, we need to
-      // reconstruct it.
-      math::vector3 centroid =
-          (polytope[face.x()] + polytope[face.y()] + polytope[face.z()]) / 3.0f;
-      // If the face normal points towards the support point, we need to
-      // reconstruct it.
-      if (normal.dot(support_point - centroid) > 0.0f) {
-        Eigen::Vector2i edge1 = Eigen::Vector2i(face.x(), face.y()),
-                        edge2 = Eigen::Vector2i(face.y(), face.z()),
-                        edge3 = Eigen::Vector2i(face.z(), face.x());
-        add_edge(edges, edge1, polytope);
-        add_edge(edges, edge2, polytope);
-        add_edge(edges, edge3, polytope);
-
+    // add 'support' to the polytope
+    int support_point_idx = polytope.size();
+    polytope.push_back(support);
+    std::vector<std::pair<std::size_t, std::size_t>> edges;
+    for (int i = normals.size() - 1; i >= 0; i--) {
+      vector3 centroid = (polytope[faces[i].x()] + polytope[faces[i].y()] +
+                          polytope[faces[i].z()]) /
+                         3.0f;
+      if (normals[i].dot(support - centroid) > 0.0f) {
+        // this face needs reconstruction, keep track of its edges
+        add_if_unique_edge(edges, faces[i].x(), faces[i].y());
+        add_if_unique_edge(edges, faces[i].y(), faces[i].z());
+        add_if_unique_edge(edges, faces[i].z(), faces[i].x());
+        // remove this face
         faces.erase(faces.begin() + i);
-        faces_distance_to_origin.erase(faces_distance_to_origin.begin() + i);
         normals.erase(normals.begin() + i);
-        --i;
+        dist_to_origin.erase(dist_to_origin.begin() + i);
       }
     }
+    // reconstruct the removed faces from edges
     for (int i = 0; i < edges.size(); i++) {
-      auto edge = edges[i];
-      Eigen::Vector3i new_face;
-      new_face.x() = edge.x();
-      new_face.y() = edge.y();
-      new_face.z() = new_point_index;
+      vector3i new_face =
+          vector3i(edges[i].first, edges[i].second, support_point_idx);
       faces.push_back(new_face);
-      math::vector3 new_face_normal;
-      float new_face_distance;
-      get_face_normal_and_distance_to_origin(
-          new_face, polytope, new_face_normal, new_face_distance);
-      normals.push_back(new_face_normal);
-      faces_distance_to_origin.push_back(new_face_distance);
     }
-    min_distance = std::numeric_limits<float>::max();
-    for (int i = 0; i < faces_distance_to_origin.size(); i++) {
-      float distance = faces_distance_to_origin[i];
-      if (distance < min_distance) {
-        min_distance = distance;
-        min_normal = normals[i];
-      }
-    }
-    edges.clear();
+    // recompute normals and distance to origin for the expanded polytope
+    get_face_normal_dist_to_origin(polytope, faces, normals, dist_to_origin,
+                                   min_dist_face_idx);
+    min_normal = normals[min_dist_face_idx];
+    min_distance = dist_to_origin[min_dist_face_idx];
   }
-  if (!converged)
+
+  if (!converged) {
     spdlog::error("EPA did not converge");
-  return converged;
+    return false;
+  }
+  return true;
+}
+
+void get_face_normal_dist_to_origin(const std::vector<vector3> &polytope,
+                                    const std::vector<vector3i> &faces,
+                                    std::vector<vector3> &normals,
+                                    std::vector<float> &dist_to_origin,
+                                    int &min_dist_face_idx) {
+  normals.resize(faces.size());
+  dist_to_origin.resize(faces.size());
+  float min_distance = FLOAT_MAX;
+  for (int i = 0; i < faces.size(); i++) {
+    auto a = polytope[faces[i].x()];
+    auto b = polytope[faces[i].y()];
+    auto c = polytope[faces[i].z()];
+
+    vector3 ab = b - a;
+    vector3 ac = c - a;
+    vector3 normal = ab.cross(ac);
+    float len = normal.norm();
+
+    // reject degenerate face
+    if (len < 1e-6f) {
+      normals[i] = vector3(0, 0, 0);
+      dist_to_origin[i] = FLOAT_MAX;
+      continue;
+    }
+    normal /= len;
+    float distance = normal.dot(a); // signed distance
+    // ensure outward direction:
+    if (distance < 0) {
+      normal = -normal;
+      distance = -distance;
+    }
+    normals[i] = normal;
+    dist_to_origin[i] = distance;
+    if (distance < min_distance) {
+      min_dist_face_idx = i;
+      min_distance = distance;
+    }
+  }
 }
 
 }; // namespace toolkit::sim

@@ -191,39 +191,43 @@ void phy_system::draw_to_scene(entt::registry &registry, transform &cam_trans,
   registry.view<transform, rigid_sim_object>().each(
       [&](entt::entity entity, transform &trans, rigid_sim_object &sim_obj) {
         if (sim_obj.collider != nullptr) {
-          if (sim_obj.collider->type == collider_type::SPHERE) {
-            auto collider_ptr =
-                dynamic_cast<sphere_collider *>(sim_obj.collider.get());
-            opengl::draw_sphere(collider_ptr->world_pos, cam_comp.vp,
-                                collider_ptr->radius, opengl::White, true);
-          } else if (sim_obj.collider->type == collider_type::CAPSULE) {
-            auto collider_ptr =
-                dynamic_cast<capsule_collider *>(sim_obj.collider.get());
-            opengl::draw_capsule(
-                collider_ptr->world_pos -
-                    collider_ptr->world_dir * collider_ptr->cap_distance * 0.5f,
-                collider_ptr->world_pos +
-                    collider_ptr->world_dir * collider_ptr->cap_distance * 0.5f,
-                cam_comp.vp, opengl::White, true, collider_ptr->cap_radius,
-                collider_ptr->cap_radius);
-          } else if (sim_obj.collider->type == collider_type::CONVEX_HULL) {
-            auto collider_ptr =
-                dynamic_cast<convex_hull_collider *>(sim_obj.collider.get());
-            std::vector<assets::mesh_vertex> vertices(
-                collider_ptr->vertices.size());
-            for (int i = 0; i < collider_ptr->vertices.size(); i++)
-              vertices[i].position << collider_ptr->transformed_vertices[i],
-                  1.0;
-            opengl::draw_mesh(vertices, collider_ptr->indices, cam_comp.vp,
-                              opengl::White);
+          if (debug_draw_collision_body) {
+            if (sim_obj.collider->type == collider_type::SPHERE) {
+              auto collider_ptr =
+                  dynamic_cast<sphere_collider *>(sim_obj.collider.get());
+              opengl::draw_sphere(collider_ptr->world_pos, cam_comp.vp,
+                                  collider_ptr->radius, opengl::White, true);
+            } else if (sim_obj.collider->type == collider_type::CAPSULE) {
+              auto collider_ptr =
+                  dynamic_cast<capsule_collider *>(sim_obj.collider.get());
+              opengl::draw_capsule(
+                  collider_ptr->world_pos -
+                      collider_ptr->world_dir * collider_ptr->cap_distance * 0.5f,
+                  collider_ptr->world_pos +
+                      collider_ptr->world_dir * collider_ptr->cap_distance * 0.5f,
+                  cam_comp.vp, opengl::White, true, collider_ptr->cap_radius,
+                  collider_ptr->cap_radius);
+            } else if (sim_obj.collider->type == collider_type::CONVEX_HULL) {
+              auto collider_ptr =
+                  dynamic_cast<convex_hull_collider *>(sim_obj.collider.get());
+              std::vector<assets::mesh_vertex> vertices(
+                  collider_ptr->vertices.size());
+              for (int i = 0; i < collider_ptr->vertices.size(); i++)
+                vertices[i].position << collider_ptr->transformed_vertices[i],
+                    1.0;
+              opengl::draw_mesh(vertices, collider_ptr->indices, cam_comp.vp,
+                                opengl::White);
+            }
           }
-          // draw bounding sphere of collider
-          opengl::draw_sphere(sim_obj.bounding_sphere_center, cam_comp.vp,
-                              sim_obj.bounding_sphere_radius, opengl::Green,
-                              true);
-          // draw mass center
-          opengl::draw_sphere(sim_obj.mass_center_world_space, cam_comp.vp,
-                              0.01f, opengl::Purple);
+          if (debug_draw_bounding_spheres) {
+            // draw bounding sphere of collider
+            opengl::draw_sphere(sim_obj.bounding_sphere_center, cam_comp.vp,
+                                sim_obj.bounding_sphere_radius, opengl::Green,
+                                true);
+            // draw mass center
+            opengl::draw_sphere(sim_obj.mass_center_world_space, cam_comp.vp,
+                                0.01f, opengl::Purple);
+          }
         }
       });
 

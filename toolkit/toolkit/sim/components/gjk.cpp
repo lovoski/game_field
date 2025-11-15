@@ -14,14 +14,6 @@ vector3 support_point_of_minkowski_difference(base_collider *c1,
   return c1->get_support(direction) - c2->get_support(-direction);
 }
 
-inline vector3 triple_cross(const vector3 &a, const vector3 &b, const vector3 &c) {
-  return (a.cross(b)).cross(c);
-}
-
-inline bool same_direction(const vector3 &a, const vector3 &b) {
-  return a.dot(b) > 0.0f;
-}
-
 bool do_simplex_2(gjk_simplex &simplex, vector3 &direction) {
   vector3 a = simplex.a; // the last point added
   vector3 b = simplex.b;
