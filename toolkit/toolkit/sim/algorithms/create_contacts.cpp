@@ -202,22 +202,10 @@ std::vector<collider_contact> colliders_get_contacts(base_collider *c1,
       results.push_back(contact);
     } else if ((c1->type == collider_type::CAPSULE) ||
                (c2->type == collider_type::CAPSULE)) {
-      // // capsule convex collision
-      // if (c2->type == collider_type::CAPSULE) {
-      //   contact.normal *= -1;
-      //   std::swap(c1, c2);
-      // }
-      // results.push_back(contact);
     } else {
-      // spdlog::info("Contact between colliders, penetration {0}", penetration);
-      // convex convex collision
       auto collider1 = dynamic_cast<convex_hull_collider *>(c1);
       auto collider2 = dynamic_cast<convex_hull_collider *>(c2);
-      contact.contact_point1 = collider1->world_pos;
-      contact.contact_point2 = collider2->world_pos;
-      results.push_back(contact);
-      // convex_convex_contact_manifold(collider1, collider2, contact.normal,
-      //                                results);
+      convex_convex_contact_manifold(collider1, collider2, normal, results);
     }
   }
 
