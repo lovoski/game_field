@@ -33,7 +33,9 @@ public:
 
   void draw_menu_gui() override;
 
-  math::vector2 get_render_size() {}
+  math::vector2 get_render_size() {
+    return math::vector2(canvas_width, canvas_height);
+  }
 
   bool should_draw_grid = true;
   int grid_spacing = 1;
