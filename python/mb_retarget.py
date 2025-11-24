@@ -204,14 +204,6 @@ mobuMap_SMPL = {
 }
 
 # -------------- start utils ---------------
-def listFiles(directory, extension=".bvh"):
-    results = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.endswith(extension):
-                results.append(file)
-    return results
-
 def deselectAll():
     modelList = FBModelList()
     FBGetSelectedModels(modelList, None, True)
@@ -300,30 +292,33 @@ def traverse_and_collect_end_effectors(model, models_to_delete):
 
 source_directory = r"D:\Code\ai\motion_processing\arfriend_data\source"
 templat_directory = r"D:\Code\ai\motion_processing\template"
-retargetDirectory = r"D:\Code\ai\motion_processing\arfriend_data\retarget"
+retarget_directory = r"D:\Code\ai\motion_processing\arfriend_data\retarget"
 
-if not os.path.exists(retargetDirectory):
-    os.mkdir(retargetDirectory)
+if not os.path.exists(retarget_directory):
+    os.mkdir(retarget_directory)
 
 app = FBApplication()
 scene = FBSystem().Scene
 
-# sourceMotionFiles = listFiles(sourceMotionDirectory)
-# targetSkeletonFiles = listFiles(skeletonsDirectory, ".bvh")
-
+"""
+将 source 的动作 retarget 到 target 骨骼上，两者都应该是 .bvh 格式，并且：
+    1. source 和 target 两个文件的第一帧动作均应该处于 tpose
+    2. 两者应该处于合适的 scale，一般以 cm 为单位
+    3. 确保关键的关节能够对应上 mobuMap 和 mobuMap_SMPL（这两个 map 将 bvh 中的关节名映射到 motion builder 内置的关节名称）
+"""
 source_target_file_pair = {}
 source_files = os.listdir(source_directory)
 for source_file in source_files:
     if not source_file.endswith(".bvh"):
         continue
-    data_prefix = source_file.split("_")[0]
+    data_prefix = os.path.splitext(source_file)[0]
     source_file_path = os.path.join(source_directory, source_file)
     target_file_path = os.path.join(templat_directory, f"{data_prefix}.bvh")
     source_name = source_file.replace(".bvh", "")
     source_target_file_pair[source_name] = {
         "source": source_file_path,
         "target": target_file_path
-    }    
+    }
 
 
 
@@ -365,7 +360,7 @@ for source_target_pair in source_target_file_pair.values():
         scene.Evaluate()
     lPlayer.Goto(FBTime(0, 0, 0, 0))
     plotAnim(character, motionCharacter)
-    exportPath = os.path.join(retargetDirectory, motionFile)
+    exportPath = os.path.join(retarget_directory, motionFile)
     print(f"Retarget motion {motionFile} to {exportPath}")
     character.SelectModels(True, True, True, True)
     app.FileExport(exportPath)

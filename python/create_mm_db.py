@@ -355,7 +355,31 @@ def extract_motion_trajectory(base_dir, output_dir):
 if __name__ == "__main__":
     import os
 
-    create_mm_db('/mnt/d/datasets/InterAct/mm_processed')
+    # create_mm_db('/mnt/d/datasets/InterAct/mm_processed')
+    
+    files = [
+        (
+            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/pushAndStumble1_subject5.bvh",
+            397,
+            706,
+        ),
+        (
+            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/run1_subject5.bvh",
+            172,
+            14136,
+        ),
+        (
+            r"/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion/walk1_subject5.bvh",
+            160,
+            15518,
+        ),
+    ]
+    
+    for filepath, start_idx, end_idx in files:
+        data = bvh.load(filepath)
+        data['positions'] = data['positions'][start_idx:end_idx]
+        data['rotations'] = data['rotations'][start_idx:end_idx]
+        bvh.save(os.path.basename(filepath), data)
 
     # lafan1_base_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion'
     # lafan1_processed_dir = '/mnt/d/repo/GenoViewPython-MotionMatching/resources/lafan_motion_processed'
