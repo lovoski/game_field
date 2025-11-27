@@ -178,7 +178,7 @@ void phy_system::draw_gui(entt::registry &registry, entt::entity entity) {
 
 void phy_system::draw_menu_gui() {
   ImGui::MenuItem("Settings", nullptr, nullptr, false);
-  if (ImGui::InputInt("Num Steps", &num_sub_steps)) {
+  if (ImGui::InputInt("Num Sub Steps", &num_sub_steps)) {
     num_sub_steps = num_sub_steps >= 0 ? num_sub_steps : 0;
   }
   if (ImGui::InputInt("Simulate FPS", &sim_fps)) {

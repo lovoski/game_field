@@ -155,6 +155,7 @@ void mesh_data::draw_gui(entt::registry &registry, entt::entity entity) {
 
     ImGui::EndTable();
   }
+  ImGui::Checkbox("Should Render Mesh", &should_render_mesh);
   if (ImGui::Button("Export Static Mesh", {-1, 30})) {
     assets::mesh tmp_mesh;
     tmp_mesh.vertices = vertices;

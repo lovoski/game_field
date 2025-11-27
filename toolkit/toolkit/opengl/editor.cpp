@@ -7,6 +7,7 @@
 #include "toolkit/opengl/rasterize/shaders.hpp"
 #include "toolkit/opengl/scripts/smplx.hpp"
 #include "toolkit/opengl/scripts/test_draw.hpp"
+#include "toolkit/opengl/scripts/mesh_panel.hpp"
 
 namespace toolkit::opengl {
 

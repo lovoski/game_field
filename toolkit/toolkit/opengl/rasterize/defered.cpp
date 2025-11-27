@@ -615,6 +615,8 @@ void defered_render_system::render(entt::registry &registry,
                                            : trans.matrix())) {
           return; // break if not visible
         }
+        if (!data.should_render_mesh)
+          return; // break if should not be rendered
         gbuffer_geometry_pass.set_vec3("albedo", data.material.albedo)
             .set_bool("wireframe", data.material.wireframe && enable_wireframe)
             .set_float("wireframe_width", data.material.wireframe_width)
@@ -676,6 +678,8 @@ void defered_render_system::render(entt::registry &registry,
                   data.skinned ? math::matrix4::Identity() : trans.matrix())) {
             return; // break if not visible
           }
+          if (!data.should_render_mesh)
+            return;
           shadow_depth_program.set_mat4("gModel",
                                         data.skinned ? math::matrix4::Identity()
                                                      : trans.matrix());
@@ -789,7 +793,6 @@ void defered_render_system::render(entt::registry &registry,
 
     // ------------------- apply post processing -------------------
     glEnable(GL_BLEND);
-
     // 1. ambient occlusion
     if (enable_ao_pass) {
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

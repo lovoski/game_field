@@ -48,7 +48,7 @@ void convex_hull_collider::create_from_data(
     points[i].y = vertices_data[i].position.y();
     points[i].z = vertices_data[i].position.z();
   }
-  auto hull = qh.getConvexHull(points, true, false);
+  auto hull = qh.getConvexHull(points, false, false);
   auto &index_buffer = hull.getIndexBuffer();
   auto &vertex_buffer = hull.getVertexBuffer();
 
@@ -209,6 +209,8 @@ nlohmann::json rigid_sim_object::late_serialize() {
 void rigid_sim_object::late_deserialize(nlohmann::json &data) {}
 
 void rigid_sim_object::update_collider_properties() {
+  if (!collider)
+    return;
   if (auto collider_ptr = dynamic_cast<sphere_collider *>(collider.get())) {
     collider_ptr->world_pos =
         world_rotation * collider_ptr->local_pos + world_position;
