@@ -8,7 +8,6 @@ find_package(assimp CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CGAL CONFIG REQUIRED)
 add_subdirectory("toolkit/deps/cnpy")
@@ -37,7 +36,7 @@ target_link_libraries(
   glad::glad 
   glfw 
   spdlog::spdlog 
-  imgui::imgui 
+  imgui 
   sun_sky 
   assimp::assimp 
   CGAL::CGAL
