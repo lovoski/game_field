@@ -3,8 +3,8 @@
 #include "toolkit/opengl/rasterize/kernal.hpp"
 #include "toolkit/opengl/rasterize/shaders.hpp"
 #include "toolkit/opengl/rasterize/system.hpp"
-#include "toolkit/sim/systems.hpp"
 #include "toolkit/scriptable.hpp"
+#include "toolkit/sim/systems.hpp"
 
 namespace toolkit::opengl {
 
@@ -425,7 +425,8 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
     scene_buffer_apply_blendshape_program.use();
     for (auto ent : mesh_with_active_bs) {
       auto &data = mesh_data_entities.get<mesh_data>(ent);
-
+      if (!data.should_render_mesh)
+        continue;
       for (int i = 0; i < data.blendshapes.size(); i++) {
         if (data.blendshapes[i].weight == 0.0f) {
           continue; // skip inactive blend shapes
@@ -489,6 +490,8 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
           auto &data =
               mesh_data_entities.get<mesh_data>(bundle.mesh_entities[k]);
           data.skinned = true;
+          if (!data.should_render_mesh)
+            continue;
           scene_buffer_apply_mesh_skinning_program
               .bind_buffer(data.vertex_buffer.get_handle(), 0)
               .bind_buffer(skeleton_matrices_buffer.get_handle(), 1)
@@ -515,8 +518,22 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
         // into one uniform bounding box
         if (bundle_data.mesh_entities.size() == 0)
           return;
+        bool should_render_any_mesh = false;
+        int first_mesh_should_render = -1;
+        for (int i = 0; i < bundle_data.mesh_entities.size(); i++) {
+          if (registry.get<mesh_data>(bundle_data.mesh_entities[i])
+                  .should_render_mesh) {
+            should_render_any_mesh = true;
+            first_mesh_should_render = i;
+            break;
+          }
+        }
+        if (!should_render_any_mesh)
+          return;
         for (auto mesh_ent : bundle_data.mesh_entities) {
           auto &mesh_comp = registry.get<mesh_data>(mesh_ent);
+          if (!mesh_comp.should_render_mesh)
+            continue;
           auto [bb_min, bb_max] = per_mesh_global_aabb_program(
               scene_vertex_buffer, scene_index_buffer,
               mesh_comp.scene_vertex_offset, mesh_comp.scene_index_offset,
@@ -524,13 +541,15 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
           mesh_comp.bb_min = bb_min;
           mesh_comp.bb_max = bb_max;
         }
-        auto &mesh_comp0 =
-            registry.get<mesh_data>(bundle_data.mesh_entities[0]);
+        auto &mesh_comp0 = registry.get<mesh_data>(
+            bundle_data.mesh_entities[first_mesh_should_render]);
         bundle_data.bb_min = mesh_comp0.bb_min;
         bundle_data.bb_max = mesh_comp0.bb_max;
-        for (int i = 1; i < bundle_data.mesh_entities.size(); i++) {
+        for (int i = 0; i < bundle_data.mesh_entities.size(); i++) {
           auto &mesh_comp =
               registry.get<mesh_data>(bundle_data.mesh_entities[i]);
+          if (!mesh_comp.should_render_mesh)
+            continue;
           bundle_data.bb_min = math::min3(bundle_data.bb_min, mesh_comp.bb_min);
           bundle_data.bb_max = math::max3(bundle_data.bb_max, mesh_comp.bb_max);
         }
@@ -673,13 +692,12 @@ void defered_render_system::render(entt::registry &registry,
         shadow_depth_program.set_mat4("gVP", bundle_data.shadow_vp);
         trans_mesh_view.each([&](entt::entity entity, transform &trans,
                                  mesh_data &data) {
-          if (!visibility_check(
+          if (!data.should_render_mesh ||
+              !visibility_check(
                   bundle_data.vis_planes, data.bb_min, data.bb_max,
                   data.skinned ? math::matrix4::Identity() : trans.matrix())) {
             return; // break if not visible
           }
-          if (!data.should_render_mesh)
-            return;
           shadow_depth_program.set_mat4("gModel",
                                         data.skinned ? math::matrix4::Identity()
                                                      : trans.matrix());
