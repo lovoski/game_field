@@ -4,10 +4,6 @@
 
 namespace toolkit::sim {
 
-std::pair<math::vector3, float>
-welzl_bounding_sphere(const std::vector<math::vector3> &points,
-                      bool shuffle = false);
-
 struct gjk_simplex {
   math::vector3 a, b, c, d;
   std::uint32_t dim;

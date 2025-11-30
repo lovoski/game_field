@@ -64,7 +64,7 @@ struct convex_hull_collider : public base_collider {
   math::vector3 bounding_sphere_center = math::vector3::Zero(),
                 transformed_bounding_sphere_center = math::vector3::Zero();
 
-  std::vector<std::set<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
+  std::vector<std::vector<std::uint32_t>> vertex_to_faces, vertex_to_neighbors,
       face_to_neighbors;
 
   math::vector3 get_support(const math::vector3 &direction) const override;
