@@ -40,15 +40,16 @@ convex_hull_collider::get_support(const math::vector3 &direction) const {
 }
 
 void convex_hull_collider::create_from_data(
-    std::vector<assets::mesh_vertex> &vertices_data) {
+    std::vector<assets::mesh_vertex> &vertices_data,
+    math::vector3 world_scale) {
   quickhull::QuickHull<float> qh;
   std::vector<quickhull::Vector3<float>> points(vertices_data.size());
   for (int i = 0; i < vertices_data.size(); i++) {
-    points[i].x = vertices_data[i].position.x();
-    points[i].y = vertices_data[i].position.y();
-    points[i].z = vertices_data[i].position.z();
+    points[i].x = vertices_data[i].position.x() * world_scale.x();
+    points[i].y = vertices_data[i].position.y() * world_scale.y();
+    points[i].z = vertices_data[i].position.z() * world_scale.z();
   }
-  auto hull = qh.getConvexHull(points, false, false);
+  auto hull = qh.getConvexHull(points, true, false);
   auto &index_buffer = hull.getIndexBuffer();
   auto &vertex_buffer = hull.getVertexBuffer();
 
@@ -89,7 +90,8 @@ void convex_hull_collider::create_from_data(
     auto v0 = vertices[index_buffer[3 * i + 0]],
          v1 = vertices[index_buffer[3 * i + 1]],
          v2 = vertices[index_buffer[3 * i + 2]];
-    faces[i].normal = ((v1 - v0).cross(v2 - v1)).normalized();
+    // normals should always points outwards the mesh
+    faces[i].normal = -((v1 - v0).cross(v2 - v0)).normalized();
   }
   for (int i = 0; i < faces.size(); i++) {
     auto n0 = vertex_to_faces[faces[i].elements[0]];
@@ -113,6 +115,10 @@ void convex_hull_collider::create_from_data(
 
   transformed_vertices = vertices;
   transformed_faces = faces;
+
+  auto bs = welzl_bounding_sphere(vertices, true);
+  bounding_sphere_center = bs.first;
+  bounding_sphere_radius = bs.second;
 }
 
 void rigid_sim_object::setup_mass_inertia(float imass, bool is_fixed) {
@@ -201,12 +207,45 @@ void rigid_sim_object::setup_mass_inertia(float imass, bool is_fixed) {
   }
 }
 
-nlohmann::json rigid_sim_object::late_serialize() {
+nlohmann::json rigid_sim_object::late_serialize(entt::registry &registry,
+                                                entt::entity entity) {
   nlohmann::json extra_data;
+  if (collider->type == collider_type::SPHERE) {
+    extra_data["collider_type"] = "sphere";
+    extra_data["collider_data"] =
+        *(dynamic_cast<sphere_collider *>(collider.get()));
+  } else if (collider->type == collider_type::CAPSULE) {
+    extra_data["collider_type"] = "capsule";
+    extra_data["collider_data"] =
+        *(dynamic_cast<capsule_collider *>(collider.get()));
+  } else if (collider->type == collider_type::CAPSULE) {
+    extra_data["collider_type"] = "convex_hull";
+    extra_data["collider_data"] =
+        *(dynamic_cast<convex_hull_collider *>(collider.get()));
+  }
   return extra_data;
 }
 
-void rigid_sim_object::late_deserialize(nlohmann::json &data) {}
+void rigid_sim_object::late_deserialize(entt::registry &registry,
+                                        entt::entity entity,
+                                        nlohmann::json &data) {
+  // if any convex hull colliders, create it from data
+  if (data.contains("collider_type")) {
+    if (data["collider_type"].get<std::string>() == "sphere") {
+      sphere_collider c = data["collider_data"];
+      collider = std::make_shared<sphere_collider>(c);
+    } else if (data["collider_type"].get<std::string>() == "capsule") {
+      capsule_collider c = data["collider_data"];
+      collider = std::make_shared<capsule_collider>(c);
+    } else if (data["collider_type"].get<std::string>() == "cconvex_hull") {
+      convex_hull_collider c = data["collider_data"];
+      c.create_from_data(registry.get<opengl::mesh_data>(entity).vertices,
+                         registry.get<transform>(entity).world_scl());
+      collider = std::make_shared<convex_hull_collider>(c);
+    }
+    setup_mass_inertia(fixed ? 0.0f : inverse_mass, fixed);
+  }
+}
 
 void rigid_sim_object::update_collider_properties() {
   if (!collider)
@@ -282,10 +321,8 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
       } else {
         spdlog::info("Create convex hull collider for mesh");
         convex_hull_collider c;
-        c.create_from_data(mesh_ptr->vertices);
-        auto bs = welzl_bounding_sphere(c.vertices, true);
-        c.bounding_sphere_center = bs.first;
-        c.bounding_sphere_radius = bs.second;
+        c.create_from_data(mesh_ptr->vertices,
+                           registry.get<transform>(entity).world_scl());
         collider = std::make_shared<convex_hull_collider>(c);
         setup_mass_inertia(fixed ? 0.0f : inverse_mass, fixed);
       }
@@ -317,6 +354,11 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
                         c->local_angle.data(), 0.001f, -180.0f, 180.0f);
     } else if (collider->type == collider_type::CONVEX_HULL) {
       ImGui::SeparatorText("Convex Hull Collider");
+      if (ImGui::Button("Update Convex", {-1, 30})) {
+        dynamic_cast<convex_hull_collider *>(collider.get())
+            ->create_from_data(registry.get<opengl::mesh_data>(entity).vertices,
+                               registry.get<transform>(entity).world_scl());
+      }
       if (ImGui::BeginTable("##convex_hull_collider", 2,
                             ImGuiTableFlags_Resizable |
                                 ImGuiTableFlags_Borders)) {

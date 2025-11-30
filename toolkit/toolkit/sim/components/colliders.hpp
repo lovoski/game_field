@@ -53,7 +53,8 @@ struct convex_hull_collider_face {
 struct convex_hull_collider : public base_collider {
   convex_hull_collider() { type = collider_type::CONVEX_HULL; }
 
-  void create_from_data(std::vector<assets::mesh_vertex> &vertices_data);
+  void create_from_data(std::vector<assets::mesh_vertex> &vertices_data,
+                        math::vector3 world_scale);
 
   std::vector<math::vector3> vertices, transformed_vertices;
   std::vector<std::uint32_t> indices;
@@ -68,8 +69,10 @@ struct convex_hull_collider : public base_collider {
 
   math::vector3 get_support(const math::vector3 &direction) const override;
 };
+REFLECT(convex_hull_collider)
 
 struct collider_contact {
+  float penetration = 0.0f;
   math::vector3 contact_point1, contact_point2, normal;
 };
 
@@ -113,8 +116,10 @@ struct rigid_sim_object : public icomponent {
                 angular_velocity = math::vector3::Zero(),
                 linear_velocity = math::vector3::Zero();
 
-  nlohmann::json late_serialize() override;
-  void late_deserialize(nlohmann::json &data) override;
+  nlohmann::json late_serialize(entt::registry &registry,
+                                entt::entity entity) override;
+  void late_deserialize(entt::registry &registry, entt::entity entity,
+                        nlohmann::json &data) override;
 
   void draw_gui(entt::registry &registry, entt::entity entity) override;
 };

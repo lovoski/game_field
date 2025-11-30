@@ -197,7 +197,8 @@ void mesh_data::draw_gui(entt::registry &registry, entt::entity entity) {
   }
 }
 
-nlohmann::json mesh_data::late_serialize() {
+nlohmann::json mesh_data::late_serialize(entt::registry &registry,
+                                         entt::entity entity) {
   // save vertices, indices and blendshapes as compressed base64 string
   nlohmann::json data;
 
@@ -230,7 +231,8 @@ nlohmann::json mesh_data::late_serialize() {
   return data;
 }
 
-void mesh_data::late_deserialize(nlohmann::json &data) {
+void mesh_data::late_deserialize(entt::registry &registry, entt::entity entity,
+                                 nlohmann::json &data) {
   if (!data.is_null()) {
     std::string ss0_base64 = data["vertices"];
     std::string ss1_base64 = data["indices"];

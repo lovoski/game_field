@@ -180,26 +180,31 @@ std::vector<collider_contact> colliders_get_contacts(base_collider *c1,
     // there's a collision, get collision normal using EPA
     math::vector3 normal;
     float penetration;
+    // the contact normal is a rough estimate of how c1 penetrates into c2
     if (!epa_contact(c1, c2, simplex, normal, penetration)) {
       // epa fails
       return results;
     }
     // create the final collision manifold
-    contact.normal = normal;
-
     if ((c1->type == collider_type::SPHERE) ||
         (c2->type == collider_type::SPHERE)) {
+      contact.normal = normal;
+      contact.penetration = penetration;
       // sphere convex collision
-      if (c2->type == collider_type::SPHERE) {
-        contact.normal *= -1;
-        std::swap(c1, c2);
+      if (c1->type == collider_type::SPHERE) {
+        auto collider1 = dynamic_cast<sphere_collider *>(c1);
+        contact.contact_point1 =
+            collider1->world_pos + contact.normal * collider1->radius;
+        contact.contact_point2 =
+            contact.contact_point1 - penetration * contact.normal;
+        results.push_back(contact);
+      } else {
+        auto collider2 = dynamic_cast<sphere_collider *>(c2);
+        contact.contact_point2 =
+            collider2->world_pos - collider2->radius * normal;
+        contact.contact_point1 = contact.contact_point2 + normal * penetration;
+        results.push_back(contact);
       }
-      auto collider1 = dynamic_cast<sphere_collider *>(c1);
-      contact.contact_point1 =
-          collider1->world_pos + contact.normal * collider1->radius;
-      contact.contact_point2 =
-          contact.contact_point1 - penetration * contact.normal;
-      results.push_back(contact);
     } else if ((c1->type == collider_type::CAPSULE) ||
                (c2->type == collider_type::CAPSULE)) {
     } else {

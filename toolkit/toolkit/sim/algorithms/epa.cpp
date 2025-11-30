@@ -36,6 +36,10 @@ void add_edge_if_no_reversed(
  * the normal of collision, aka the shortest vector to nudge the shapes out of
  * each other.
  *
+ * The core idea of epa is to construct such a polytope that always wraps around
+ * the origin, by gradually introducing the support point to the normal of the
+ * closest face on this polytope to the origin.
+ *
  * The naive solution is to use the normal of the closest face to the origin,
  * but remember, a simplex does not need to contain any of the original
  * polygon's faces, so we could end up with an incorrect normal.
@@ -60,7 +64,7 @@ bool epa_contact(base_collider *c1, base_collider *c2, gjk_simplex &simplex,
   std::vector<vector3> normals;
   std::vector<float> dist_to_origin;
   int min_dist_face_idx = -1;
-  // normals computed by thiss function always points outwards the origin, so we
+  // normals computed by this function always points outwards the origin, so we
   // can search the minkowski difference for another support point directly with
   // this normal as direction
   get_face_normal_dist_to_origin(polytope, faces, normals, dist_to_origin,
@@ -71,12 +75,13 @@ bool epa_contact(base_collider *c1, base_collider *c2, gjk_simplex &simplex,
   float min_distance = dist_to_origin[min_dist_face_idx];
   bool converged = false;
   for (int it = 0; it < EPA_MAX_ITERATIONS; it++) {
-    // min_normal always points to the origin
+    // min_normal always points outward the origin, this is the furthest point
+    // we can get through this direction on the shape
     vector3 support = support_point_of_minkowski_difference(c1, c2, min_normal);
     float support_dist = min_normal.dot(support);
     // compute the centroid for face that's closest to the origin, when the
     // support point is too close to this centroid, a degenerated case might
-    // happen, we simply call this as converged
+    // happen, we simply call this converged
     vector3 min_face_centroid = polytope[faces[min_dist_face_idx].x()] +
                                 polytope[faces[min_dist_face_idx].y()] +
                                 polytope[faces[min_dist_face_idx].z()] / 3.0f;
@@ -152,6 +157,7 @@ void get_face_normal_dist_to_origin(const std::vector<vector3> &polytope,
     auto c = polytope[faces[i].z()];
     vector3 ab = b - a;
     vector3 ac = c - a;
+    // the normal points outwards the origin
     vector3 normal = ab.cross(ac);
     float len = normal.norm();
     // reject degenerate face

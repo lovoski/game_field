@@ -58,8 +58,10 @@ struct mesh_data : public icomponent {
 
   void draw(GLenum mode = GL_TRIANGLES);
 
-  nlohmann::json late_serialize() override;
-  void late_deserialize(nlohmann::json &data) override;
+  nlohmann::json late_serialize(entt::registry &registry,
+                                entt::entity entity) override;
+  void late_deserialize(entt::registry &registry, entt::entity entity,
+                        nlohmann::json &data) override;
 
   bool force_update_flag = false;
   void update_buffers();

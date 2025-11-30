@@ -120,8 +120,12 @@ public:
   virtual void draw_gui(entt::registry &registry, entt::entity entity) {}
   virtual std::string get_name() { return typeid(*this).name(); }
 
-  virtual nlohmann::json late_serialize() { return nlohmann::json(); }
-  virtual void late_deserialize(nlohmann::json &data) {}
+  virtual nlohmann::json late_serialize(entt::registry &registry,
+                                        entt::entity entity) {
+    return nlohmann::json();
+  }
+  virtual void late_deserialize(entt::registry &registry, entt::entity entity,
+                                nlohmann::json &data) {}
 };
 
 #define DECLARE_COMPONENT(class_name, category, ...)                           \
@@ -130,7 +134,7 @@ public:
       entt::registry &registry, entt::entity entity, nlohmann::json &j) {      \
     if (auto *ptr = registry.try_get<class_name>(entity)) {                    \
       j[#class_name] = *ptr;                                                   \
-      j[#class_name]["__late__"] = ptr->late_serialize();                      \
+      j[#class_name]["__late__"] = ptr->late_serialize(registry, entity);      \
     }                                                                          \
   }                                                                            \
   inline void __comp_deserializer__##class_name(                               \
@@ -139,10 +143,10 @@ public:
       auto &comp = registry.emplace<class_name>(entity);                       \
       from_json(j[#class_name], comp);                                         \
       if (j[#class_name].contains("__late__")) {                               \
-        comp.late_deserialize(j[#class_name]["__late__"]);                     \
+        comp.late_deserialize(registry, entity, j[#class_name]["__late__"]);   \
       } else {                                                                 \
         nlohmann::json null_data;                                              \
-        comp.late_deserialize(null_data);                                      \
+        comp.late_deserialize(registry, entity, null_data);                    \
       }                                                                        \
     }                                                                          \
   }                                                                            \
