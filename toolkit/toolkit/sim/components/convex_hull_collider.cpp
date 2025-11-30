@@ -17,12 +17,6 @@ using Vertex_index = CGAL::SM_Vertex_index;
 using Face_index = CGAL::SM_Face_index;
 using Halfedge_index = CGAL::SM_Halfedge_index;
 
-struct MeshConnectivity {
-  std::vector<std::vector<int>> vertex_to_faces;
-  std::vector<std::vector<int>> vertex_to_neighbors;
-  std::vector<std::vector<int>> face_to_neighbors;
-};
-
 void extract_connectivity(const Surface_mesh &mesh,
                           convex_hull_collider &target) {
   // Create vertex index mapping
