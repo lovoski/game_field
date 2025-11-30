@@ -4,17 +4,18 @@ project(toolkit)
 set(CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 20)
 
+find_package(assimp CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(CGAL CONFIG REQUIRED)
 add_subdirectory("toolkit/deps/cnpy")
 add_subdirectory("toolkit/deps/tinyfd")
 add_subdirectory("toolkit/deps/ufbx")
-add_subdirectory("toolkit/deps/zlib_embed")
-add_subdirectory("toolkit/deps/glad")
-add_subdirectory("toolkit/deps/glfw")
-add_subdirectory("toolkit/deps/spdlog")
-add_subdirectory("toolkit/deps/imgui")
 add_subdirectory("toolkit/deps/sun_sky")
-add_subdirectory("toolkit/deps/assimp-5.4.3")
-add_subdirectory("toolkit/deps/quickhull")
+add_subdirectory("toolkit/deps/imgui")
 
 set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/sim" "toolkit/assets" "toolkit/common")
 set(LIB_LIST )
@@ -25,7 +26,22 @@ foreach(DIR ${SRC_DIR_LIST})
 endforeach()
 
 add_library(${PROJECT_NAME} ${SRC_FILES})
-target_link_libraries(${PROJECT_NAME} PUBLIC  cnpy zlib ufbx tinyfd glad glfw spdlog::spdlog imgui sun_sky assimp quickhull)
+target_link_libraries(
+  ${PROJECT_NAME} 
+  PUBLIC 
+  cnpy 
+  imgui
+  ZLIB::ZLIB 
+  ufbx 
+  tinyfd 
+  glad::glad 
+  glfw 
+  spdlog::spdlog 
+  imgui::imgui 
+  sun_sky 
+  assimp::assimp 
+  CGAL::CGAL
+)
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "toolkit/deps/headers")
 if (MSVC)
   target_compile_options(${PROJECT_NAME} PUBLIC /Zc:preprocessor /bigobj /utf-8)

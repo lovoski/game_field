@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 project(imgui)
 
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glad CONFIG REQUIRED)
+
 file(GLOB IMGUI_SRC_FILES "*.cpp")
 list(APPEND IMGUI_SRC_FILES
   "backends/imgui_impl_glfw.cpp"
@@ -10,4 +13,4 @@ list(APPEND IMGUI_SRC_FILES
 
 add_library(${PROJECT_NAME} ${IMGUI_SRC_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC "backends" "${PROJECT_SOURCE_DIR}")
-target_link_libraries(${PROJECT_NAME} PRIVATE glfw glad)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw glad::glad)

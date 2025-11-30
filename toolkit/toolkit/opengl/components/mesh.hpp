@@ -95,10 +95,4 @@ entt::entity create_sphere(entt::registry &registry,
 entt::entity create_cylinder(entt::registry &registry,
                              math::matrix4 t = math::matrix4::Identity());
 
-std::tuple<std::vector<assets::mesh_vertex>, std::vector<std::uint32_t>>
-quickhull(std::vector<assets::mesh_vertex> &vertices,
-          std::vector<std::uint32_t> &indices);
-
-void smooth_normal(toolkit::opengl::mesh_data &data);
-
 }; // namespace toolkit::opengl
