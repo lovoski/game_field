@@ -11,6 +11,7 @@
 #include "toolkit/common/camera.hpp"
 #include "toolkit/opengl/rasterize/system.hpp"
 #include "toolkit/sim/systems.hpp"
+#include "toolkit/bullet/system.hpp"
 
 namespace toolkit::assets {
 

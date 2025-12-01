@@ -10,13 +10,23 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CGAL CONFIG REQUIRED)
+find_package(Bullet CONFIG REQUIRED)
 add_subdirectory("toolkit/deps/cnpy")
 add_subdirectory("toolkit/deps/tinyfd")
 add_subdirectory("toolkit/deps/ufbx")
 add_subdirectory("toolkit/deps/sun_sky")
 add_subdirectory("toolkit/deps/imgui")
 
-set(SRC_DIR_LIST "toolkit/loaders" "toolkit/opengl" "toolkit/anim" "toolkit/sim" "toolkit/assets" "toolkit/common")
+set(
+  SRC_DIR_LIST 
+  "toolkit/loaders" 
+  "toolkit/opengl" 
+  "toolkit/anim" 
+  "toolkit/sim" 
+  "toolkit/bullet" 
+  "toolkit/assets" 
+  "toolkit/common"
+)
 set(LIB_LIST )
 file(GLOB SRC_FILES "toolkit/*.cpp")
 foreach(DIR ${SRC_DIR_LIST})
@@ -40,6 +50,12 @@ target_link_libraries(
   sun_sky 
   assimp::assimp 
   CGAL::CGAL
+  BulletSoftBody
+  BulletDynamics
+  BulletInverseDynamics
+  BulletCollision
+  Bullet3Common
+  LinearMath
 )
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "toolkit/deps/headers")
 if (MSVC)
