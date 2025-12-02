@@ -1,8 +1,12 @@
 #pragma once
 
-#include "toolkit/assets/icons_lucide.h"
-#include "toolkit/opengl/imp.hpp"
+#include <glad/glad.h>
+
+#include <iostream>
+#include <fstream>
+
 #include "toolkit/common/camera.hpp"
+#include "toolkit/loaders/image.hpp"
 #include "toolkit/system.hpp"
 
 namespace toolkit::opengl {
@@ -110,164 +114,13 @@ private:
   GLint m_internal_format; // GL_RGBA8
 };
 
-class context {
-public:
-  // Get the singleton instance
-  static context &get_instance() {
-    static context instance;
-    return instance;
-  }
-
-  context(const context &) = delete;
-  context &operator=(const context &) = delete;
-
-  void init(unsigned int width = 1920, unsigned int height = 1080,
-            const char *title = "App", int majorVersion = 4,
-            int minorVersion = 3);
-  void run(std::function<void(void)> mainLoop);
-  void shutdown();
-
-  void begin_imgui();
-  void end_imgui();
-
-  void swap_buffer() { glfwSwapBuffers(window); }
-
-  void poll();
-
-  // GLFW Callbacks
-  static void framebuffer_resize_callback(GLFWwindow *window, int width,
-                                          int height) {
-    auto &context = context::get_instance();
-    context.wnd_resized = true;
-    context.wnd_width = width;
-    context.wnd_height = height;
-  }
-
-  static void key_callback(GLFWwindow *window, int key, int scancode,
-                           int action, int mods) {
-    auto &context = context::get_instance();
-    if (context.key_states.count(key) == 0)
-      context.key_states[key] = false;
-    bool prevState = context.key_states[key];
-    bool curState = action != GLFW_RELEASE;
-    if (!prevState && curState)
-      context.triggered_keys.insert(key);
-    if (prevState && !curState)
-      context.untriggered_keys.insert(key);
-    context.key_states[key] = curState;
-    context.caps_lock_on = (mods & GLFW_MOD_CAPS_LOCK);
-  }
-
-  static void mouse_button_callback(GLFWwindow *window, int button, int action,
-                                    int mods) {
-    auto &context = context::get_instance();
-    if (context.mouse_button_states.count(button) == 0)
-      context.mouse_button_states[button] = false;
-    bool prevState = context.mouse_button_states[button];
-    bool curState = action != GLFW_RELEASE;
-    if (!prevState && curState)
-      context.triggered_mouse_keys.insert(button);
-    if (prevState && !curState)
-      context.untriggered_mouse_keys.insert(button);
-    context.mouse_button_states[button] = curState;
-  }
-
-  static void cursor_pos_callback(GLFWwindow *window, double xpos,
-                                  double ypos) {
-    auto &context = context::get_instance();
-    context.mouse_x = xpos;
-    context.mouse_y = ypos;
-    if (context.mouse_pos_init) {
-      context.mouse_last_x = xpos;
-      context.mouse_last_y = ypos;
-      context.mouse_pos_init = false;
-    }
-  }
-
-  static void scroll_callback(GLFWwindow *window, double xoffset,
-                              double yoffset) {
-    auto &context = context::get_instance();
-    context.scroll_offset.x() += xoffset;
-    context.scroll_offset.y() += yoffset;
-  }
-
-  // If the specified `key` at pressed state at this frame
-  bool is_key_pressed(int key) const;
-
-  // The specified `key` went from unpressed to pressed at this frame
-  bool is_key_triggered(int key) const;
-
-  // The specified `key` went from pressed to unpressed at this frame
-  bool is_key_untriggered(int key) const;
-
-  // The specified `key` went from unpressed to pressed at this frame
-  bool is_mouse_button_triggered(int key) const;
-
-  // The specified `key` went from pressed to unpressed at this frame
-  bool is_mouse_button_untriggered(int key) const;
-
-  bool is_mouse_button_pressed(int button) const;
-
-  bool loop_cursor_in_window();
-  bool cursor_in_scene_window();
-
-  void set_window_title(std::string title = "app") {
-    if (window)
-      glfwSetWindowTitle(window, title.c_str());
-  }
-
-  math::vector2 get_mouse_position() const { return {mouse_x, mouse_y}; }
-
-  math::vector2 get_scroll_offsets() { return scroll_offset; }
-  math::vector2 get_mouse_offsets() {
-    return {mouse_x - mouse_last_x, mouse_y - mouse_last_y};
-  }
-
-  math::vector2 get_window_size() const { return {wnd_width, wnd_height}; }
-  math::vector2 get_scene_size() const { return {scene_width, scene_height}; }
-
-  GLFWwindow *window = nullptr;
-  uint32_t wnd_width = 0, wnd_height = 0, scene_width = 0, scene_height = 0,
-           scene_pos_x = 0, scene_pos_y = 0;
-
-  bool caps_lock_on = false;
-  bool wnd_resized = false;
-
-  entt::entity active_camera = entt::null;
-
-  static inline std::set<unsigned int> buffer_handles, vertex_array_handles,
-      texture_handles, program_handles, framebuffer_handles;
-
-  texture white_tex, black_tex, checkerboard_tex;
-
-private:
-  // Private constructor to prevent direct instantiation
-  context() : mouse_x(0.0), mouse_y(0.0) {}
-
-  // Member variables
-  std::set<int> triggered_keys, untriggered_keys;
-  std::unordered_map<int, bool> key_states;
-  std::set<int> triggered_mouse_keys, untriggered_mouse_keys;
-  std::unordered_map<int, bool> mouse_button_states;
-  bool mouse_pos_init = true;
-  double mouse_x, mouse_y, mouse_last_x, mouse_last_y;
-  math::vector2 scroll_offset{0.0, 0.0};
-
-  ImFont *default_font, *icon_font;
-};
-
-static context &g_instance = context::get_instance();
-
 // opengl buffer object
 class buffer {
 public:
   buffer() {}
   ~buffer() {}
 
-  void create() {
-    glGenBuffers(1, &gl_handle);
-    context::buffer_handles.insert(gl_handle);
-  }
+  void create();
   void del() {
     if (glIsBuffer(gl_handle))
       glDeleteBuffers(1, &gl_handle);
@@ -380,10 +233,7 @@ public:
   vao() {}
   ~vao() {}
 
-  void create() {
-    glGenVertexArrays(1, &gl_handle);
-    context::vertex_array_handles.insert(gl_handle);
-  }
+  void create();
   void del() {
     if (glIsVertexArray(gl_handle))
       glDeleteVertexArrays(1, &gl_handle);
@@ -410,10 +260,7 @@ public:
   framebuffer() {}
   ~framebuffer() {}
 
-  void create() {
-    glGenFramebuffers(1, &m_fbo);
-    context::framebuffer_handles.insert(m_fbo);
-  }
+  void create();
   void del() {
     if (glIsFramebuffer(m_fbo))
       glDeleteFramebuffers(1, &m_fbo);

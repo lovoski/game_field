@@ -180,7 +180,7 @@ bool gjk_collides(base_collider *c1, base_collider *c2, gjk_simplex &simplex) {
     }
   }
   // didn't converge
-  spdlog::error("GJK did not converge");
+  std::cout << "GJK did not converge" << std::endl;
   return false;
 }
 

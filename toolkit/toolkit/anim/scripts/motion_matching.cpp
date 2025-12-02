@@ -91,10 +91,15 @@ void motion_matching::update(entt::registry &registry, float dt) {
 
 void motion_matching::fixedupdate(entt::registry &registry, float dt) {
   auto actor_comp = registry.try_get<anim::actor>(entity);
-  if (db_loaded && mapping_loaded && (actor_comp != nullptr)) {
+  auto controllers = opengl::sdl_context::get_instance().get_game_controllers();
+  if (controllers.size() > 0 && db_loaded && mapping_loaded &&
+      (actor_comp != nullptr)) {
     // input and trajectory
-    auto [left_stick, right_stick] =
-        query_left_right_joystick(joystick_deadzone);
+    auto [left_stick_raw, right_stick_raw, left_trigger, right_trigger] =
+        opengl::sdl_context::get_instance().get_game_controller_analog_inputs(
+            controllers[0]);
+    math::vector3 left_stick(left_stick_raw.x(), 0.0f, left_stick_raw.y());
+    math::vector3 right_stick(right_stick_raw.x(), 0.0f, right_stick_raw.y());
     desired_vel = 5 * left_stick;
     if (left_stick.norm() > 0.01f)
       desired_dir = left_stick.normalized();
@@ -404,32 +409,6 @@ void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
     off_rot[i] = (off_rot[i] * src_rot[i]) * (target_rot[i].inverse());
     off_ang[i] = off_ang[i] + src_ang[i] - target_ang[i];
   }
-}
-
-std::tuple<math::vector3, math::vector3>
-query_left_right_joystick(float deadzone) {
-  math::vector3 left_stick = math::vector3::Zero(),
-                right_stick = math::vector3::Zero();
-  for (int i = GLFW_JOYSTICK_1; i < GLFW_JOYSTICK_LAST; i++) {
-    if (glfwJoystickPresent(i)) {
-      int axes_count;
-      auto axes = glfwGetJoystickAxes(i, &axes_count);
-      float left_mag = std::sqrt(axes[0] * axes[0] + axes[1] * axes[1]);
-      float right_mag = std::sqrt(axes[2] * axes[2] + axes[3] * axes[3]);
-      if (left_mag > deadzone) {
-        float clip_mag = left_mag > 1.0 ? 1.0 : left_mag * left_mag;
-        left_stick.x() = axes[0] / left_mag * clip_mag;
-        left_stick.z() = axes[1] / left_mag * clip_mag;
-      }
-      if (right_mag > deadzone) {
-        float clip_mag = right_mag > 1.0 ? 1.0 : right_mag * right_mag;
-        right_stick.x() = axes[2] / right_mag * clip_mag;
-        right_stick.z() = axes[3] / right_mag * clip_mag;
-      }
-      break;
-    }
-  }
-  return {left_stick, right_stick};
 }
 
 }; // namespace toolkit::anim

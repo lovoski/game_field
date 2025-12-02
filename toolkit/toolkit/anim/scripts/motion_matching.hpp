@@ -16,9 +16,6 @@ namespace toolkit::anim {
 #define MM_FEATURE_DIM 27
 
 std::tuple<math::vector3, math::vector3>
-query_left_right_joystick(float deadzone = 0.1);
-
-std::tuple<math::vector3, math::vector3>
 spring_damper_position(math::vector3 x0, math::vector3 v0, math::vector3 xt,
                        math::vector3 vt, float dt, float halflife);
 std::tuple<math::quat, math::vector3>

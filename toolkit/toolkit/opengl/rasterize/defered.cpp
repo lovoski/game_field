@@ -244,7 +244,7 @@ void defered_render_system::resize(int width, int height) {
   gbuffer.end_draw_buffers();
   gbuffer.attach_depth_buffer(gbuffer_depth_tex);
   if (!gbuffer.check_status())
-    spdlog::error("gbuffer not complete!");
+    std::cout << "gbuffer not complete!" << std::endl;
   gbuffer.unbind();
 
   color_backup_tex.set_data(width, height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
@@ -270,7 +270,7 @@ void defered_render_system::resize(int width, int height) {
   cbuffer.end_draw_buffers();
   cbuffer.attach_depth_buffer(cbuffer_depth);
   if (!cbuffer.check_status())
-    spdlog::error("cbuffer not complete!");
+    std::cout << "cbuffer not complete!" << std::endl;
   cbuffer.unbind();
 
   scene_light_mask_buffer.bind();
@@ -284,7 +284,7 @@ void defered_render_system::resize(int width, int height) {
                                               GL_COLOR_ATTACHMENT0);
   scene_light_mask_buffer.end_draw_buffers();
   if (!scene_light_mask_buffer.check_status())
-    spdlog::error("scene_light_mask_buffer not complete!");
+    std::cout << "scene_light_mask_buffer not complete!" << std::endl;
   scene_light_mask_buffer.unbind();
 
   ao_buffer.bind();
@@ -297,7 +297,7 @@ void defered_render_system::resize(int width, int height) {
   ao_buffer.attach_color_buffer(ao_color, GL_COLOR_ATTACHMENT0);
   ao_buffer.end_draw_buffers();
   if (!ao_buffer.check_status())
-    spdlog::error("ao buffer not complete!");
+    std::cout << "ao buffer not complete!" << std::endl;
   ao_buffer.unbind();
 
   resize_csm_buffer();
@@ -331,9 +331,10 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
       scene_mesh_counter != mesh_data_entities.size_hint();
   if (scene_vtx_count_mismatch || scene_idx_count_mismatch ||
       scene_mesh_mismatch || any_force_update_flag) {
-    spdlog::info("Detect change in scnene vertex count, scene index count, "
+    std::cout << "Detect change in scnene vertex count, scene index count, "
                  "scene mesh count or force update flag, "
-                 "resize scene vertex buffer and scene index buffer.");
+                 "resize scene vertex buffer and scene index buffer."
+              << std::endl;
     scene_mesh_counter = mesh_data_entities.size_hint();
     scene_vertex_counter = current_scene_vertex_counter;
     scene_index_counter = current_scene_index_counter;
@@ -593,7 +594,7 @@ void defered_render_system::resize_csm_buffer() {
   glDrawBuffer(GL_NONE);
   glReadBuffer(GL_NONE);
   if (!csm_buffer.check_status())
-    spdlog::error("csm buffer not complete!");
+    std::cout << "csm buffer not complete!" << std::endl;
   csm_buffer.unbind();
 }
 

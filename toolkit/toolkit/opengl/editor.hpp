@@ -1,6 +1,6 @@
 #pragma once
 
-#include "toolkit/opengl/base.hpp"
+#include "toolkit/opengl/sdl_context.hpp"
 #include "toolkit/scriptable.hpp"
 #include "toolkit/system.hpp"
 #include "toolkit/utils.hpp"
@@ -8,10 +8,12 @@
 #include "toolkit/transform.hpp"
 
 #include "toolkit/anim/anim_system.hpp"
+#include "toolkit/bullet/system.hpp"
 #include "toolkit/common/camera.hpp"
 #include "toolkit/opengl/rasterize/system.hpp"
 #include "toolkit/sim/systems.hpp"
-#include "toolkit/bullet/system.hpp"
+
+#include <ImGuizmo.h>
 
 namespace toolkit::assets {
 
@@ -118,8 +120,13 @@ public:
 private:
   int gizmo_mode_idx = 0;
   bool in_game_mode = false;
+  bool vsync_on = false;
+
   shader quad_program;
 
+  math::vector2 scene_wnd_size, scene_wnd_pos;
+
+  entt::entity active_camera = entt::null;
   active_camera_manipulate_data cam_manip_data;
 };
 

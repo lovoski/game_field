@@ -1,3 +1,4 @@
+#pragma once
 #include "toolkit/bullet/components/colliders.hpp"
 
 namespace toolkit::bullet {

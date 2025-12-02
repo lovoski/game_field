@@ -68,10 +68,11 @@ void texture_select(opengl::texture &tex, std::filesystem::path &filepath) {
     }
   };
   if (!tex.inited()) {
-    if (ImGui::ImageButton(
-            (void *)static_cast<std::uintptr_t>(
-                opengl::g_instance.checkerboard_tex.get_handle()),
-            {size.x * 0.5f, size.x * 0.5f}, ImVec2(0, 1), ImVec2(1, 0)))
+    if (ImGui::ImageButton((void *)static_cast<std::uintptr_t>(
+                               opengl::sdl_context::get_instance()
+                                   .checkerboard_tex.get_handle()),
+                           {size.x * 0.5f, size.x * 0.5f}, ImVec2(0, 1),
+                           ImVec2(1, 0)))
       select_image();
   } else {
     if (ImGui::ImageButton(

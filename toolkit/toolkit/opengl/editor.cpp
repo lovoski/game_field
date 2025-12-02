@@ -5,14 +5,13 @@
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
 #include "toolkit/opengl/rasterize/shaders.hpp"
-#include "toolkit/opengl/scripts/smplx.hpp"
-#include "toolkit/opengl/scripts/test_draw.hpp"
 #include "toolkit/opengl/scripts/mesh_panel.hpp"
+#include "toolkit/opengl/scripts/smplx.hpp"
 
 namespace toolkit::opengl {
 
 void editor::init() {
-  auto &instance = context::get_instance();
+  auto &instance = sdl_context::get_instance();
   instance.init(1920, 1080, "Editor", 4, 5);
   reset();
 
@@ -32,27 +31,27 @@ void main() {
 )");
 }
 
-void editor::shutdown() { g_instance.shutdown(); }
+void editor::shutdown() { sdl_context::get_instance().shutdown(); }
 
 void editor::late_serialize(nlohmann::json &j) {
   nlohmann::json editor_settings;
-  editor_settings["active_camera"] = g_instance.active_camera;
+  editor_settings["active_camera"] = active_camera;
   editor_settings["camera_manipulate_data"] = cam_manip_data;
   j["editor"] = editor_settings;
 }
 
 void editor::late_deserialize(nlohmann::json &j) {
   if (j.contains("editor")) {
-    g_instance.active_camera = j["editor"]["active_camera"].get<entt::entity>();
+    active_camera = j["editor"]["active_camera"].get<entt::entity>();
     cam_manip_data = j["editor"]["camera_manipulate_data"]
                          .get<active_camera_manipulate_data>();
   } else {
     // use the first camera as active camera, otherwise no active camera
     auto cam_view = registry.view<camera>();
     if (cam_view.size() == 0)
-      g_instance.active_camera = entt::null;
+      active_camera = entt::null;
     else
-      g_instance.active_camera = *(cam_view.begin());
+      active_camera = *(cam_view.begin());
   }
 
   transform_sys = get_sys<transform_system>();
@@ -62,8 +61,9 @@ void editor::late_deserialize(nlohmann::json &j) {
 }
 
 void editor::game_mode_main_loop() {
-  auto &active_cam_trans = registry.get<transform>(g_instance.active_camera);
-  auto &active_cam_comp = registry.get<camera>(g_instance.active_camera);
+  auto &g_instance = sdl_context::get_instance();
+  auto &active_cam_trans = registry.get<transform>(active_camera);
+  auto &active_cam_comp = registry.get<camera>(active_camera);
   float dt = timer.elapse_s();
   timer.reset();
 
@@ -83,9 +83,9 @@ void editor::game_mode_main_loop() {
       sys->lateupdate(registry, dt);
 
   if (g_instance.wnd_resized) {
-    g_instance.scene_width = g_instance.wnd_width;
-    g_instance.scene_height = g_instance.wnd_height;
-    render_sys->resize(g_instance.scene_width, g_instance.scene_height);
+    scene_wnd_size.x() = g_instance.wnd_width;
+    scene_wnd_size.y() = g_instance.wnd_height;
+    render_sys->resize(g_instance.wnd_width, g_instance.wnd_height);
   }
   render_sys->render(registry, active_cam_trans, active_cam_comp);
 
@@ -100,8 +100,9 @@ void editor::game_mode_main_loop() {
   g_instance.swap_buffer();
 }
 void editor::editor_mode_main_loop() {
-  auto &active_cam_trans = registry.get<transform>(g_instance.active_camera);
-  auto &active_cam_comp = registry.get<camera>(g_instance.active_camera);
+  auto &g_instance = sdl_context::get_instance();
+  auto &active_cam_trans = registry.get<transform>(active_camera);
+  auto &active_cam_comp = registry.get<camera>(active_camera);
   float dt = timer.elapse_s();
   timer.reset();
 
@@ -133,15 +134,15 @@ void editor::editor_mode_main_loop() {
   ImGui::BeginChild("GameRenderer");
   auto size = ImGui::GetContentRegionAvail();
   auto pos = ImGui::GetWindowPos();
-  g_instance.scene_pos_x = pos.x;
-  g_instance.scene_pos_y = pos.y;
+  scene_wnd_pos.x() = pos.x;
+  scene_wnd_pos.y() = pos.y;
   ImGui::Image((void *)static_cast<std::uintptr_t>(
                    render_sys->get_target_texture().get_handle()),
                {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
-  if (g_instance.scene_width != size.x || g_instance.scene_height != size.y) {
+  if (scene_wnd_size.x() != size.x || scene_wnd_size.y() != size.y) {
     // resize sceneFBO
-    g_instance.scene_width = size.x;
-    g_instance.scene_height = size.y;
+    scene_wnd_size.x() = size.x;
+    scene_wnd_size.y() = size.y;
     render_sys->resize(size.x, size.y);
     render_sys->render(registry, active_cam_trans, active_cam_comp);
   }
@@ -160,14 +161,15 @@ void editor::editor_mode_main_loop() {
 }
 
 void editor::run() {
+  auto &g_instance = sdl_context ::get_instance();
   timer.reset();
   add_default_objects();
   g_instance.run([&]() {
-    if (g_instance.is_key_triggered(GLFW_KEY_0) &&
-        g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL)) {
-      g_instance.scene_width = g_instance.wnd_width;
-      g_instance.scene_height = g_instance.wnd_height;
-      render_sys->resize(g_instance.scene_width, g_instance.scene_height);
+    if (g_instance.is_key_triggered(SDLK_0) &&
+        g_instance.is_key_pressed(SDLK_LCTRL)) {
+      scene_wnd_size.x() = g_instance.wnd_width;
+      scene_wnd_size.x() = g_instance.wnd_height;
+      render_sys->resize(g_instance.wnd_width, g_instance.wnd_height);
       in_game_mode = !in_game_mode;
     }
     if (!in_game_mode)
@@ -194,32 +196,37 @@ void editor::add_default_objects() {
   trans.name = "main camera";
   trans.set_world_pos(math::vector3(0, 0, 5));
   auto &cam_comp = registry.emplace<camera>(ent);
-  g_instance.active_camera = ent;
+  active_camera = ent;
 }
 
 void editor::editor_shortkeys() {
-  if (g_instance.cursor_in_scene_window()) {
+  auto &g_instance = sdl_context::get_instance();
+  auto cursor_pos = g_instance.get_mouse_position();
+  if (cursor_pos.x() > scene_wnd_pos.x() &&
+      cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
+      cursor_pos.y() > scene_wnd_pos.y() &&
+      cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
     // only change the gizmo operation mode
     // if the cursor is inside scene window
-    if (g_instance.is_key_pressed(GLFW_KEY_1)) {
+    if (g_instance.is_key_pressed(SDLK_1)) {
       with_translate = true;
       with_rotate = false;
       with_scale = false;
     }
-    if (g_instance.is_key_pressed(GLFW_KEY_2)) {
+    if (g_instance.is_key_pressed(SDLK_2)) {
       with_translate = false;
       with_rotate = true;
       with_scale = false;
     }
-    if (g_instance.is_key_pressed(GLFW_KEY_3)) {
+    if (g_instance.is_key_pressed(SDLK_3)) {
       with_translate = false;
       with_rotate = false;
       with_scale = true;
     }
 
     // detect mouse click selection
-    if (g_instance.is_key_pressed(GLFW_KEY_LEFT_CONTROL) &&
-        g_instance.is_mouse_button_triggered(GLFW_MOUSE_BUTTON_LEFT)) {
+    if (g_instance.is_key_pressed(SDLK_LCTRL) &&
+        g_instance.is_mouse_button_triggered(SDL_BUTTON_LEFT)) {
       math::vector3 ray_o, ray_d;
       if (mouse_query_ray(ray_o, ray_d)) {
         std::priority_queue<ray_query_data, std::vector<ray_query_data>,
@@ -227,7 +234,7 @@ void editor::editor_shortkeys() {
             q;
         registry.view<entt::entity, transform>().each(
             [&](entt::entity entity, transform &trans) {
-              if (entity == g_instance.active_camera)
+              if (entity == active_camera)
                 return;
               ray_query_data data;
               data.entity = entity;
@@ -238,11 +245,11 @@ void editor::editor_shortkeys() {
             });
         if (!q.empty()) {
           auto selection = q.top();
-          spdlog::info("Click selection nearest, "
-                       "name:\"{0}\",pdist:{1},dist:{2},sin:{3}",
-                       registry.get<transform>(selection.entity).name,
-                       selection.pdist, selection.dist,
-                       selection.pdist / selection.dist);
+          SDL_Log("Click selection nearest, "
+                  "name:\"{0}\",pdist:{1},dist:{2},sin:{3}",
+                  registry.get<transform>(selection.entity).name,
+                  selection.pdist, selection.dist,
+                  selection.pdist / selection.dist);
           if (selection.pdist / selection.dist <= click_selection_max_sin) {
             q.pop();
             selection_candidates.clear();
@@ -263,7 +270,7 @@ void editor::editor_shortkeys() {
               ImGui::OpenPopup("clickselectioncandidates");
             }
           } else {
-            spdlog::info("Nearest selection too far, set selection to null");
+            SDL_Log("Nearest selection too far, set selection to null");
             selected_entity = entt::null;
           }
         }
@@ -288,15 +295,14 @@ void editor::editor_shortkeys() {
 
 bool editor::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o,
                               math::vector3 &d) {
-  if (!registry.valid(g_instance.active_camera)) {
-    spdlog::error(
-        "Scene active camera invalid, failed to call mouse_query_ray");
+  if (!registry.valid(active_camera)) {
+    SDL_Log("Scene active camera invalid, failed to call mouse_query_ray");
     return false;
   }
-  if (auto cam_comp = registry.try_get<camera>(g_instance.active_camera)) {
+  if (auto cam_comp = registry.try_get<camera>(active_camera)) {
     math::vector4 ndc_pos = math::vector4(
         scrn_pos.x() * 2.0f - 1.0f, scrn_pos.y() * 2.0f - 1.0f, 0.0f, 1.0f);
-    auto &cam_trans = registry.get<transform>(g_instance.active_camera);
+    auto &cam_trans = registry.get<transform>(active_camera);
     math::vector4 p0 = cam_comp->vp.inverse() * ndc_pos;
     math::vector3 world_pos =
         math::vector3(p0.x() / p0.w(), p0.y() / p0.w(), p0.z() / p0.w());
@@ -305,38 +311,38 @@ bool editor::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o,
 
     return true;
   } else {
-    spdlog::error("Scene active camera don't possess a camera component, "
-                  "failed to call mouse_query_ray");
+    SDL_Log("Scene active camera don't possess a camera component, "
+            "failed to call mouse_query_ray");
     return false;
   }
 }
 
 bool editor::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
-  auto scrn_pos = g_instance.get_mouse_position();
-  scrn_pos.x() -= g_instance.scene_pos_x;
-  scrn_pos.y() =
-      g_instance.scene_height - scrn_pos.y() + g_instance.scene_pos_y;
-  scrn_pos.x() /= g_instance.scene_width;
-  scrn_pos.y() /= g_instance.scene_height;
+  auto scrn_pos = sdl_context::get_instance().get_mouse_position();
+  scrn_pos.x() -= scene_wnd_pos.x();
+  scrn_pos.y() = scene_wnd_size.y() - scrn_pos.y() + scene_wnd_pos.y();
+  scrn_pos.x() /= scene_wnd_size.x();
+  scrn_pos.y() /= scene_wnd_size.y();
   return screen_query_ray(scrn_pos, o, d);
 }
 
 void editor::active_camera_manipulate(float dt) {
-  if (auto cam_trans = registry.try_get<transform>(g_instance.active_camera)) {
+  auto &g_instance = sdl_context::get_instance();
+  auto cursor_pos = g_instance.get_mouse_position();
+  if (auto cam_trans = registry.try_get<transform>(active_camera)) {
     // focus on selected entity if `F` is triggered
-    if (selected_entity != entt::null &&
-        g_instance.is_key_triggered(GLFW_KEY_F)) {
-      spdlog::info("Focus camera \"{0}\" to selected entity \"{1}\"",
-                   registry.get<transform>(g_instance.active_camera).name,
-                   registry.get<transform>(selected_entity).name);
+    if (selected_entity != entt::null && g_instance.is_key_triggered(SDLK_f)) {
+      SDL_Log("Focus camera \"{0}\" to selected entity \"{1}\"",
+              registry.get<transform>(active_camera).name,
+              registry.get<transform>(selected_entity).name);
       cam_manip_data.camera_pivot =
           registry.get<transform>(selected_entity).world_pos();
     }
-    auto cam_comp = registry.get<camera>(g_instance.active_camera);
+    auto cam_comp = registry.get<camera>(active_camera);
     auto cam_pos = cam_trans->world_pos();
     if ((cam_pos - cam_manip_data.camera_pivot).norm() < 1e-9f) {
       cam_manip_data.camera_pivot = cam_pos - cam_trans->local_forward();
-      spdlog::info("push pivot away from camera");
+      SDL_Log("push pivot away from camera");
     }
     // scroll movement delta, scale with the distance to pivot
     float movement_delta =
@@ -344,7 +350,10 @@ void editor::active_camera_manipulate(float dt) {
         std::min(std::pow((cam_pos - cam_manip_data.camera_pivot).norm(),
                           cam_manip_data.speed_pow),
                  cam_manip_data.max_speed);
-    if (g_instance.cursor_in_scene_window()) {
+    if (cursor_pos.x() > scene_wnd_pos.x() &&
+        cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
+        cursor_pos.y() > scene_wnd_pos.y() &&
+        cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
       // check action queue for mouse scroll event
       math::vector2 scrollOffset = g_instance.get_scroll_offsets();
       cam_trans->set_world_pos(cam_trans->world_pos() -
@@ -352,9 +361,9 @@ void editor::active_camera_manipulate(float dt) {
                                    movement_delta);
     }
     bool press_mouse_mid_btn =
-        g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_MIDDLE);
+        g_instance.is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
     bool press_mouse_right_btn =
-        g_instance.is_mouse_button_pressed(GLFW_MOUSE_BUTTON_RIGHT);
+        g_instance.is_mouse_button_pressed(SDL_BUTTON_RIGHT);
     math::vector2 mouse_current_pos = g_instance.get_mouse_position();
     // only handle mouse input when cursor in scene window
     if ((press_mouse_mid_btn || press_mouse_right_btn) &&
@@ -374,12 +383,12 @@ void editor::active_camera_manipulate(float dt) {
         if (mouse_offset.norm() > 1e-2f) {
           math::vector3 ray_o, ray_d;
           math::vector2 screen_pos =
-              math::vector2(g_instance.scene_width / 2.0f +
+              math::vector2(scene_wnd_size.x() / 2.0f +
                                 mouse_offset.x() * cam_manip_data.fps_speed,
-                            g_instance.scene_height / 2.0f -
+                            scene_wnd_size.y() / 2.0f -
                                 mouse_offset.y() * cam_manip_data.fps_speed);
-          screen_pos.x() /= g_instance.scene_width;
-          screen_pos.y() /= g_instance.scene_height;
+          screen_pos.x() /= scene_wnd_size.x();
+          screen_pos.y() /= scene_wnd_size.y();
           if (screen_query_ray(screen_pos, ray_o, ray_d)) {
             cam_manip_data.camera_pivot =
                 ray_o +
@@ -391,23 +400,23 @@ void editor::active_camera_manipulate(float dt) {
         math::vector3 camera_movement = math::vector3::Zero();
         math::vector3 cam_vec =
             (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
-        if (g_instance.is_key_pressed(GLFW_KEY_W))
+        if (g_instance.is_key_pressed(SDLK_w))
           camera_movement -= cam_trans->local_forward();
-        if (g_instance.is_key_pressed(GLFW_KEY_S))
+        if (g_instance.is_key_pressed(SDLK_s))
           camera_movement += cam_trans->local_forward();
-        if (g_instance.is_key_pressed(GLFW_KEY_A))
+        if (g_instance.is_key_pressed(SDLK_a))
           camera_movement -= cam_trans->local_right();
-        if (g_instance.is_key_pressed(GLFW_KEY_D))
+        if (g_instance.is_key_pressed(SDLK_d))
           camera_movement += cam_trans->local_right();
         camera_movement *= (cam_manip_data.fps_camera_speed * dt);
         cam_manip_data.camera_pivot += camera_movement;
         cam_trans->set_world_pos(cam_trans->world_pos() + camera_movement);
       } else if (press_mouse_mid_btn) {
         // rotate the camera around the pivot, or translate the camera
-        if (g_instance.is_key_pressed(GLFW_KEY_LEFT_SHIFT)) {
+        if (g_instance.is_key_pressed(SDLK_LSHIFT)) {
           // translate the camera according to nfc offset
           if (mouse_offset.norm() > 1e-2f) {
-            math::vector2 scene_size = g_instance.get_scene_size();
+            math::vector2 scene_size = scene_wnd_size;
             math::vector4 nfcPos = {-mouse_offset.x() / scene_size.x(),
                                     mouse_offset.y() / scene_size.y(), 1.0f,
                                     1.0f};
@@ -460,13 +469,13 @@ void editor::active_camera_manipulate(float dt) {
 }
 
 void editor::draw_gizmos(bool enable) {
-  if (enable && registry.valid(g_instance.active_camera)) {
+  if (enable && registry.valid(active_camera)) {
     ImGuizmo::AllowAxisFlip(false);
     ImGuizmo::SetDrawlist();
-    ImGuizmo::SetRect(g_instance.scene_pos_x, g_instance.scene_pos_y,
-                      g_instance.scene_width, g_instance.scene_height);
-    auto &camTrans = registry.get<transform>(g_instance.active_camera);
-    auto &camComp = registry.get<camera>(g_instance.active_camera);
+    ImGuizmo::SetRect(scene_wnd_pos.x(), scene_wnd_pos.y(), scene_wnd_size.x(),
+                      scene_wnd_size.y());
+    auto &camTrans = registry.get<transform>(active_camera);
+    auto &camComp = registry.get<camera>(active_camera);
     if (registry.valid(selected_entity)) {
       auto &selTrans = registry.get<transform>(selected_entity);
       math::matrix4 transform = selTrans.matrix();
@@ -503,7 +512,7 @@ void editor::draw_main_menubar() {
       if (ImGui::MenuItem("Reset Scene")) {
         reset();
         add_default_objects();
-        spdlog::info("Reset scene");
+        SDL_Log("Reset scene");
       }
       if (ImGui::MenuItem("Save  Scene")) {
         std::string filepath;
@@ -513,9 +522,9 @@ void editor::draw_main_menubar() {
           if (output.is_open()) {
             output << data.dump() << std::endl;
             output.close();
-            spdlog::info("Save scene to {0}", filepath);
+            SDL_Log("Save scene to %s", filepath.c_str());
           } else {
-            spdlog::error("Failed to save scene to {0}", filepath);
+            SDL_Log("Failed to save scene to %s", filepath.c_str());
           }
         }
       }
@@ -528,9 +537,9 @@ void editor::draw_main_menubar() {
                 std::string((std::istreambuf_iterator<char>(input)),
                             std::istreambuf_iterator<char>()));
             deserialize(data);
-            spdlog::info("Load scene from {0}", filepath);
+            SDL_Log("Load scene from %s", filepath.c_str());
           } else {
-            spdlog::error("Failed to load scene from {0}", filepath);
+            SDL_Log("Failed to load scene from %s", filepath.c_str());
           }
         }
       }
@@ -547,9 +556,9 @@ void editor::draw_main_menubar() {
                 std::string((std::istreambuf_iterator<char>(input)),
                             std::istreambuf_iterator<char>()));
             load_bundle(data);
-            spdlog::info("Import bundle to current scene from {0}", filepath);
+            SDL_Log("Import bundle to current scene from %s", filepath.c_str());
           } else {
-            spdlog::error("Failed to import bundle from {0}", filepath);
+            SDL_Log("Failed to import bundle from %s", filepath.c_str());
           }
           input.close();
         }
@@ -568,8 +577,9 @@ void editor::draw_main_menubar() {
           if (endswith(filepath, ".FBX") || endswith(filepath, ".fbx")) {
             auto root_entity = assets::open_model_ufbx(registry, filepath);
             if (root_entity != entt::null)
-              spdlog::info("Load model file {0} with ufbx, mount at entity {1}",
-                           filepath, registry.get<transform>(root_entity).name);
+              SDL_Log("Load model file %s with ufbx, mount at entity %s",
+                      filepath.c_str(),
+                      registry.get<transform>(root_entity).name.c_str());
           } else if (endswith(filepath, ".OBJ") || endswith(filepath, ".obj")) {
             std::vector<assets::mesh> loaded_meshes;
             if (assets::load_obj_mesh(filepath, loaded_meshes)) {
@@ -607,19 +617,19 @@ void editor::draw_main_menubar() {
                   opengl::init_opengl_buffers(mesh_data);
                 }
               } else {
-                spdlog::error("Loaded model has zero meshes, filepath={0}",
-                              filepath);
+                SDL_Log("Loaded model has zero meshes, filepath %s",
+                        filepath.c_str());
               }
-              spdlog::info("Load mesh from {0}", filepath);
+              SDL_Log("Load mesh from %s", filepath.c_str());
             } else {
-              spdlog::error("Failed to load mesh from {0}", filepath);
+              SDL_Log("Failed to load mesh from %s", filepath.c_str());
             }
           } else {
             auto root_entity = assets::open_model_assimp(registry, filepath);
             if (root_entity != entt::null)
-              spdlog::info(
-                  "Load model file {0} with assimp, mount at entity {1}",
-                  filepath, registry.get<transform>(root_entity).name);
+              SDL_Log("Load model file %s with assimp, mount at entity %s",
+                      filepath.c_str(),
+                      registry.get<transform>(root_entity).name.c_str());
           }
         }
       }
@@ -627,7 +637,7 @@ void editor::draw_main_menubar() {
         std::string filepath;
         if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
                              filepath)) {
-          spdlog::info("Load motion file {0}", filepath);
+          SDL_Log("Load motion file %s", filepath.c_str());
           auto container = registry.create();
           auto &container_trans = registry.emplace<transform>(container);
           container_trans.name =
@@ -641,7 +651,7 @@ void editor::draw_main_menubar() {
         std::string dirpath;
         if (open_folder_dialog("Import folder containing .bvh files",
                                dirpath)) {
-          spdlog::info("Load all .bvh motion files under {0}", dirpath);
+          SDL_Log("Load all .bvh motion files under %s", dirpath.c_str());
           anim::import_all_bvh_motion(registry, dirpath);
         }
       }
@@ -666,7 +676,7 @@ void editor::draw_main_menubar() {
       int active_camera_index = -1, tmp_counter = 0;
       registry.view<camera, transform>().each(
           [&](entt::entity entity, camera &cam, transform &trans) {
-            if (entity == g_instance.active_camera)
+            if (entity == active_camera)
               active_camera_index = tmp_counter;
             valid_cameras.push_back(entity);
             valid_camera_names.push_back(str_format(
@@ -676,9 +686,9 @@ void editor::draw_main_menubar() {
       gui::combo_default("active camera", active_camera_index,
                          valid_camera_names, [&](int current) {
                            if (current == -1)
-                             g_instance.active_camera = entt::null;
+                             active_camera = entt::null;
                            else
-                             g_instance.active_camera = valid_cameras[current];
+                             active_camera = valid_cameras[current];
                          });
 
       gui::combo("gizmo mode", gizmo_mode_idx, {"world", "local"},
@@ -689,6 +699,9 @@ void editor::draw_main_menubar() {
                      current_gizmo_mode = ImGuizmo::MODE::WORLD;
                  });
       ImGui::Checkbox("Editor Manipulate Camera", &editor_manipulate_camera);
+      if (ImGui::Checkbox("Turn On VSync", &vsync_on)) {
+        sdl_context::get_instance().set_vsync_state(vsync_on);
+      }
 
       ImGui::EndMenu();
     }
@@ -733,13 +746,13 @@ void draw_entity_hierarchy_recursive(
   // Draw current node
   std::string entity_name = current_transform.name;
   if (registry.try_get<anim::bone_node>(current)) {
-    entity_name = str_format("%s %s", ICON_LC_BONE, entity_name.c_str());
+    entity_name = str_format("(骨骼) %s", entity_name.c_str());
   } else if (registry.try_get<camera>(current)) {
-    entity_name = str_format("%s %s", ICON_LC_CAMERA, entity_name.c_str());
+    entity_name = str_format("(摄像机) %s", entity_name.c_str());
   } else if (registry.try_get<point_light>(current)) {
-    entity_name = str_format("%s %s", ICON_LC_LIGHTBULB, entity_name.c_str());
+    entity_name = str_format("(点光源) %s", entity_name.c_str());
   } else if (registry.try_get<mesh_data>(current)) {
-    entity_name = str_format("%s %s", ICON_LC_BOXES, entity_name.c_str());
+    entity_name = str_format("(网格) %s", entity_name.c_str());
   }
 
   bool nodeOpen =
@@ -840,9 +853,9 @@ void editor::draw_entity_hierarchy() {
         std::ofstream output(filepath);
         if (output.is_open()) {
           output << data.dump() << std::endl;
-          spdlog::info("Save bundle to filepath {0}", filepath);
+          SDL_Log("Save bundle to filepath %s", filepath.c_str());
         } else {
-          spdlog::error("Failed to save bundle to filepath {0}", filepath);
+          SDL_Log("Failed to save bundle to filepath %s", filepath.c_str());
         }
         output.close();
       }
@@ -910,8 +923,8 @@ void editor::draw_entity_components() {
         if (ImGui::BeginMenu(p.first.c_str())) {
           for (auto &i : p.second) {
             if (ImGui::MenuItem(i.first.c_str())) {
-              spdlog::info("create component {0} for entity {1}", i.first,
-                           entt::to_integral(current_entity));
+              SDL_Log("create component %s for entity %d", i.first.c_str(),
+                      entt::to_integral(current_entity));
               i.second(registry, current_entity);
             }
           }

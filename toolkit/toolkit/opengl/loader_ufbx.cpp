@@ -3,7 +3,6 @@
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
-#include "toolkit/opengl/scripts/test_draw.hpp"
 #include <ufbx.h>
 
 
@@ -397,7 +396,7 @@ entt::entity open_model_ufbx(entt::registry &registry, std::string filepath) {
   };
   ufbx_scene *scene = ufbx_load_file(filepath.c_str(), &opts, &error);
   if (!scene) {
-    spdlog::error("Failed to load: {0}", error.description.data);
+    std::cout << "Failed to load: " << error.description.data << std::endl;
     return entt::null;
   }
 

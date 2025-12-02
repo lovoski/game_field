@@ -1,6 +1,7 @@
 #pragma once
 
 #include "toolkit/opengl/base.hpp"
+#include "toolkit/opengl/sdl_context.hpp"
 
 namespace toolkit::gui {
 

@@ -1,5 +1,7 @@
 #include "toolkit/opengl/base.hpp"
-#include "toolkit/assets/fonts.hpp"
+#include "toolkit/opengl/sdl_context.hpp"
+#include <fstream>
+#include <iostream>
 
 namespace toolkit::opengl {
 
@@ -16,7 +18,7 @@ void texture::create(GLenum target) {
   gl_target = target;
   initialized = true;
   glGenTextures(1, &gl_handle);
-  context::texture_handles.insert(gl_handle);
+  sdl_context::get_instance().texture_handles.insert(gl_handle);
 }
 void texture::set_data_from_image(assets::image &img) {
   int nChannels = img.nchannels;
@@ -40,196 +42,19 @@ void texture::set_data_from_image(assets::image &img) {
            img.data.data());
 }
 
-void context::init(unsigned int width, unsigned int height, const char *title,
-                   int majorVersion, int minorVersion) {
-  wnd_width = width;
-  wnd_height = height;
-  scene_width = width;
-  scene_height = height;
-
-  glfwInit();
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, majorVersion);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, minorVersion);
-  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-
-  window = glfwCreateWindow(width, height, title, NULL, NULL);
-  if (!window) {
-    printf("Failed to create opengl window version %d.%d\n", majorVersion,
-           minorVersion);
-    return;
-  }
-
-  glfwMakeContextCurrent(window);
-  glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
-  glfwSetCursorPosCallback(window, context::cursor_pos_callback);
-  glfwSetScrollCallback(window, context::scroll_callback);
-  glfwSetMouseButtonCallback(window, context::mouse_button_callback);
-  glfwSetKeyCallback(window, context::key_callback);
-
-  glfwSetFramebufferSizeCallback(window, context::framebuffer_resize_callback);
-
-  if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-    printf("Failed to load glad\n");
-    return;
-  }
-
-  ImGui::CreateContext();
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  ImGui_ImplOpenGL3_Init();
-  ImPlot::CreateContext();
-
-  default_font = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(
-      cascadia_code_yahei_data, cascadia_code_yahei_size, 20.0f, nullptr,
-      ImGui::GetIO().Fonts->GetGlyphRangesChineseFull());
-
-  static const ImWchar icons_ranges[] = {ICON_MIN_LC, ICON_MAX_LC, 0};
-  ImFontConfig icon_font_config;
-  icon_font_config.MergeMode = true;
-  icon_font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-      lucide_ttf, lucide_ttf_len, 16.0f, &icon_font_config, icons_ranges);
-
-  // create system default textures
-  white_tex.create();
-  black_tex.create();
-  checkerboard_tex.create();
-  assets::image img;
-  img.resize(10, 10, 4);
-  for (int i = 0; i < img.width; i++)
-    for (int j = 0; j < img.height; j++) {
-      for (int k = 0; k < 3; k++)
-        img.pixel(i, j, k) = static_cast<unsigned char>(255);
-      img.pixel(i, j, 3) = static_cast<unsigned char>(255);
-    }
-  white_tex.set_data_from_image(img);
-  white_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-                            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-                            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-                            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
-  for (int i = 0; i < img.width; i++)
-    for (int j = 0; j < img.height; j++)
-      for (int k = 0; k < 3; k++)
-        img.pixel(i, j, k) = static_cast<unsigned char>(0);
-  black_tex.set_data_from_image(img);
-  black_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-                            {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-                            {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-                            {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
-  // Create checkerboard pattern
-  const int squareSize = 2; // Size of each checker square
-  for (int i = 0; i < img.width; i++) {
-    for (int j = 0; j < img.height; j++) {
-      bool isWhite = ((i / squareSize) + (j / squareSize)) % 2 == 0;
-      for (int k = 0; k < 3; k++)
-        img.pixel(i, j, k) = static_cast<unsigned char>(isWhite ? 255 : 120);
-    }
-  }
-  checkerboard_tex.set_data_from_image(img);
-  checkerboard_tex.set_parameters({{GL_TEXTURE_MIN_FILTER, GL_NEAREST},
-                                   {GL_TEXTURE_MAG_FILTER, GL_NEAREST},
-                                   {GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE},
-                                   {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
+void buffer::create() {
+  glGenBuffers(1, &gl_handle);
+  sdl_context::get_instance().buffer_handles.insert(gl_handle);
 }
 
-void context::shutdown() {
-  // free opengl handles
-  for (auto handle : buffer_handles)
-    glDeleteBuffers(1, &handle);
-  for (auto handle : vertex_array_handles)
-    glDeleteVertexArrays(1, &handle);
-  for (auto handle : texture_handles)
-    glDeleteTextures(1, &handle);
-  for (auto handle : program_handles)
-    glDeleteProgram(handle);
-  for (auto handle : framebuffer_handles)
-    glDeleteFramebuffers(1, &handle);
-
-  window = nullptr;
-  ImPlot::DestroyContext();
-  ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplGlfw_Shutdown();
-  glfwDestroyWindow(window);
-  glfwTerminate();
+void vao::create() {
+  glGenVertexArrays(1, &gl_handle);
+  sdl_context::get_instance().vertex_array_handles.insert(gl_handle);
 }
 
-void context::run(std::function<void(void)> mainLoop) {
-  while (!glfwWindowShouldClose(window)) {
-    poll();
-
-    mainLoop();
-
-    mouse_last_x = mouse_x;
-    mouse_last_y = mouse_y;
-  }
-}
-
-void context::poll() {
-  wnd_resized = false;
-  scroll_offset << 0.0, 0.0;
-  triggered_keys.clear();
-  untriggered_keys.clear();
-  triggered_mouse_keys.clear();
-  untriggered_mouse_keys.clear();
-  glfwPollEvents();
-}
-
-void context::begin_imgui() {
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
-  ImGui::NewFrame();
-}
-
-void context::end_imgui() {
-  ImGui::EndFrame();
-  ImGui::Render();
-  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-}
-
-bool context::is_key_pressed(int key) const {
-  auto it = key_states.find(key);
-  return it != key_states.end() && it->second;
-}
-bool context::is_key_triggered(int key) const {
-  return triggered_keys.count(key) != 0;
-}
-bool context::is_key_untriggered(int key) const {
-  return untriggered_keys.count(key) != 0;
-}
-bool context::is_mouse_button_triggered(int key) const {
-  return triggered_mouse_keys.count(key) != 0;
-}
-bool context::is_mouse_button_untriggered(int key) const {
-  return untriggered_mouse_keys.count(key) != 0;
-}
-bool context::is_mouse_button_pressed(int button) const {
-  auto it = mouse_button_states.find(button);
-  return it != mouse_button_states.end() && it->second;
-}
-
-bool context::cursor_in_scene_window() {
-  return (mouse_x >= scene_pos_x) && (mouse_x <= scene_pos_x + scene_width) &&
-         (mouse_y >= scene_pos_y) && (mouse_y <= scene_pos_y + scene_height);
-}
-
-bool context::loop_cursor_in_window() {
-  bool loop = false;
-  while (mouse_x < 10) {
-    mouse_x += (wnd_width - 20);
-    loop = true;
-  }
-  while (mouse_x > wnd_width - 10) {
-    mouse_x -= (wnd_width - 20);
-    loop = true;
-  }
-  while (mouse_y < 10) {
-    mouse_y += (wnd_height - 20);
-    loop = true;
-  }
-  while (mouse_y > wnd_height - 10) {
-    mouse_y -= (wnd_height - 20);
-    loop = true;
-  }
-  glfwSetCursorPos(window, mouse_x, mouse_y);
-  return loop;
+void framebuffer::create() {
+  glGenFramebuffers(1, &m_fbo);
+  sdl_context::get_instance().framebuffer_handles.insert(m_fbo);
 }
 
 // Load shader from path, compile and link them into a program
@@ -314,7 +139,7 @@ bool shader::compile_shader_from_source(std::string vss, std::string fss,
   glDeleteShader(fragment);
   if (gss != "none")
     glDeleteShader(geometry);
-  context::program_handles.insert(gl_handle);
+  sdl_context::get_instance().program_handles.insert(gl_handle);
   return true;
 }
 
@@ -365,7 +190,7 @@ void compute_shader::create(const std::string computeCode) {
   // necessary
   glDeleteShader(compute);
 
-  context::program_handles.insert(gl_handle);
+  sdl_context::get_instance().program_handles.insert(gl_handle);
 }
 
 void check_compile_errors(GLuint shader, std::string type) {

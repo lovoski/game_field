@@ -80,7 +80,7 @@ void convex_convex_contact_manifold(convex_hull_collider *c1,
   if ((edge_normal_dot > chosen_normal1_dot + EPSILON) &&
       (edge_normal_dot > chosen_normal2_dot + EPSILON)) {
     // edge
-    spdlog::info("Edge collision between convex hulls");
+    std::cout << "Edge collision between convex hulls" << std::endl;
     float n, m;
     vector3 l1, l2;
     vector3 p1 = c1->transformed_vertices[edges.first.first];
@@ -96,7 +96,7 @@ void convex_convex_contact_manifold(convex_hull_collider *c1,
     }
   } else {
     // face
-    spdlog::info("Face collision between convex hulls");
+    std::cout << "Face collision between convex hulls" << std::endl;
     bool is_face1_the_reference_face = chosen_normal1_dot > chosen_normal2_dot;
     std::vector<vector3> reference_face_support_points =
         is_face1_the_reference_face ? get_vertices_of_faces(c1, face1)

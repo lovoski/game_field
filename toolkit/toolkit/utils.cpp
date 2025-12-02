@@ -3,7 +3,6 @@
 #include <cstdarg>
 #include <fstream>
 #include <iostream>
-#include <spdlog/spdlog.h>
 #include <tinyfiledialogs.h>
 
 namespace fs = std::filesystem;
@@ -212,11 +211,15 @@ void copy_file(std::filesystem::path src_filepath,
   try {
     fs::copy_file(src_filepath, dst_filepath,
                   fs::copy_options::overwrite_existing);
-    spdlog::info("copy file from {0} to {1}", src_filepath.string(),
-                 dst_filepath.string());
+    std::cout << str_format("copy file from %s to %s",
+                            src_filepath.string().c_str(),
+                            dst_filepath.string().c_str())
+              << std::endl;
   } catch (const fs::filesystem_error &e) {
-    spdlog::error("{0}, failed to copy file from {1} to {2}", e.what(),
-                  src_filepath.string(), dst_filepath.string());
+    std::cout << str_format("%s, failed to copy file from %s to %s", e.what(),
+                            src_filepath.string().c_str(),
+                            dst_filepath.string().c_str())
+              << std::endl;
   }
 }
 void copy_dir(std::filesystem::path src_dirpath,
@@ -225,11 +228,15 @@ void copy_dir(std::filesystem::path src_dirpath,
     fs::copy(src_dirpath, dst_dirpath,
              fs::copy_options::recursive |
                  fs::copy_options::overwrite_existing);
-    spdlog::info("copy file from {0} to {1}", src_dirpath.string(),
-                 dst_dirpath.string());
+    std::cout << str_format("copy file from %s to %s",
+                            src_dirpath.string().c_str(),
+                            dst_dirpath.string().c_str())
+              << std::endl;
   } catch (const fs::filesystem_error &e) {
-    spdlog::error("{0}, failed to copy file from {1} to {2}", e.what(),
-                  src_dirpath.string(), dst_dirpath.string());
+    std::cout << str_format("%s, failed to copy file from %s to %s", e.what(),
+                            src_dirpath.string().c_str(),
+                            dst_dirpath.string().c_str())
+              << std::endl;
   }
 }
 
@@ -239,13 +246,13 @@ bool zip_file(std::string in_filename, std::string out_filename, int level) {
 
   std::ifstream infile(in_filename, std::ios::binary);
   if (!infile.is_open()) {
-    spdlog::error("cannot open input file {0}", in_filename);
+    std::cout << "cannot open input file " << in_filename << std::endl;
     return false;
   }
 
   std::ofstream outfile(out_filename, std::ios::binary);
   if (!outfile.is_open()) {
-    spdlog::error("cannot open output file {0}", out_filename);
+    std::cout << "cannot open output file" << out_filename << std::endl;
     return false;
   }
 
@@ -255,7 +262,7 @@ bool zip_file(std::string in_filename, std::string out_filename, int level) {
   strm.opaque = Z_NULL;
 
   if (deflateInit(&strm, level) != Z_OK) {
-    spdlog::error("deflateInit failed");
+    std::cout << "deflateInit failed" << std::endl;
     return false;
   }
 
@@ -264,7 +271,7 @@ bool zip_file(std::string in_filename, std::string out_filename, int level) {
     infile.read(reinterpret_cast<char *>(in.data()), CHUNK);
     strm.avail_in = infile.gcount();
     if (infile.bad()) {
-      spdlog::error("Error reading file");
+      std::cout << "Error reading file" << std::endl;
       deflateEnd(&strm);
       return false;
     }
@@ -278,7 +285,7 @@ bool zip_file(std::string in_filename, std::string out_filename, int level) {
       size_t have = CHUNK - strm.avail_out;
       outfile.write(reinterpret_cast<char *>(out.data()), have);
       if (!outfile.good()) {
-        spdlog::error("Error writing compressed file");
+        std::cout << "Error writing compressed file" << std::endl;
         deflateEnd(&strm);
         return false;
       }
@@ -295,13 +302,13 @@ bool unzip_file(std::string in_filename, std::string out_filename,
 
   std::ifstream infile(in_filename, std::ios::binary);
   if (!infile.is_open()) {
-    spdlog::error("cannot open input file {0}", in_filename);
+    std::cout << "cannot open input file " << in_filename << std::endl;
     return false;
   }
 
   std::ofstream outfile(out_filename, std::ios::binary);
   if (!outfile.is_open()) {
-    spdlog::error("cannot open output file {0}", out_filename);
+    std::cout << "cannot open output file " << out_filename << std::endl;
     return false;
   }
 
@@ -311,7 +318,7 @@ bool unzip_file(std::string in_filename, std::string out_filename,
   strm.opaque = Z_NULL;
 
   if (inflateInit(&strm) != Z_OK) {
-    spdlog::error("inflateInit failed");
+    std::cout << "inflateInit failed" << std::endl;
     return false;
   }
 
@@ -320,7 +327,7 @@ bool unzip_file(std::string in_filename, std::string out_filename,
     infile.read(reinterpret_cast<char *>(in.data()), buffer_size);
     strm.avail_in = infile.gcount();
     if (infile.bad()) {
-      spdlog::error("Error reading compressed file");
+      std::cout << "Error reading compressed file" << std::endl;
       inflateEnd(&strm);
       return false;
     }
@@ -333,14 +340,14 @@ bool unzip_file(std::string in_filename, std::string out_filename,
       strm.next_out = out.data();
       ret = inflate(&strm, Z_NO_FLUSH);
       if (ret == Z_STREAM_ERROR || ret == Z_DATA_ERROR || ret == Z_MEM_ERROR) {
-        spdlog::error("inflate failed");
+        std::cout << "inflate failed" << std::endl;
         inflateEnd(&strm);
         return false;
       }
       size_t have = buffer_size - strm.avail_out;
       outfile.write(reinterpret_cast<char *>(out.data()), have);
       if (!outfile.good()) {
-        spdlog::error("Error writing decompressed file");
+        std::cout << "Error writing decompressed file" << std::endl;
         inflateEnd(&strm);
         return false;
       }

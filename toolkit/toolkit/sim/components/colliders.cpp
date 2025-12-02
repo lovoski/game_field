@@ -233,10 +233,11 @@ void rigid_sim_object::draw_gui(entt::registry &registry, entt::entity entity) {
     if (ImGui::MenuItem("Convex Hull Collider")) {
       auto mesh_ptr = registry.try_get<opengl::mesh_data>(entity);
       if (mesh_ptr == nullptr) {
-        spdlog::error("Entity doesn't have mesh component, can't set to "
-                      "convex collider");
+        std::cout << "Entity doesn't have mesh component, can't set to "
+                     "convex collider"
+                  << std::endl;
       } else {
-        spdlog::info("Create convex hull collider for mesh");
+        std::cout << "Create convex hull collider for mesh" << std::endl;
         convex_hull_collider c;
         c.create_from_data(mesh_ptr->vertices,
                            registry.get<transform>(entity).world_scl());

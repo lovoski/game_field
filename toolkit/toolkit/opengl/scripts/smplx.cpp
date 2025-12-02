@@ -142,7 +142,9 @@ static const std::vector<std::vector<float>> SMPL_J_REGRESSOR_WEIGHTS = {
      0.0009372223285026848, 0.04159576818346977, 0.005636296700686216,
      0.027275199070572853}};
 
-void smplx::start(entt::registry &registry) { model_path = "D:\\0tasks\\smplx_archive\\models"; }
+void smplx::start(entt::registry &registry) {
+  model_path = "D:\\0tasks\\smplx_archive\\models";
+}
 void smplx::init1() {}
 void smplx::destroy(entt::registry &registry) {}
 
@@ -348,14 +350,16 @@ void smplx::setup_smpl_model(entt::registry &registry, cnpy::npz_t &data) {
   mesh_comp.update_buffers();
 }
 
-void smplx::apply_smpl_betas(entt::registry &registry, std::vector<float> betas) {
+void smplx::apply_smpl_betas(entt::registry &registry,
+                             std::vector<float> betas) {
   if (betas.size() != 10) {
-    spdlog::error("SMPL betas must be 10");
+    std::cout << "SMPL betas must be 10" << std::endl;
     return;
   }
   if (bone_entities.size() != 24) {
-    spdlog::error("SMPL must have 24 joints, currently {0}",
-                  bone_entities.size());
+    std::cout << str_format("SMPL must have 24 joints, currently %d",
+                            bone_entities.size())
+              << std::endl;
     return;
   }
   auto &root_trans = registry.get<transform>(bone_entities[0]);
@@ -404,7 +408,8 @@ void smplx::apply_smpl_betas(entt::registry &registry, std::vector<float> betas)
     }
   }
 }
-void smplx::apply_smplx_betas(entt::registry &registry, std::vector<float> betas) {}
+void smplx::apply_smplx_betas(entt::registry &registry,
+                              std::vector<float> betas) {}
 
 void smplx::preupdate(entt::registry &registry, float dt) {}
 
@@ -422,14 +427,15 @@ void smplx::draw_gui(entt::registry &registry, entt::entity entity) {
         str_format("%s_%s.npz", uppper_case(model_type).c_str(),
                    gender_type.c_str()));
     if (std::filesystem::exists(model_filepath)) {
-      spdlog::info("Load file from {0}", model_filepath);
+      std::cout << "Load file from " << model_filepath << std::endl;
       smpl_data = cnpy::npz_load(model_filepath);
       if (model_type == "smplx")
         setup_smplx_model(registry, smpl_data);
       else if (model_type == "smpl")
         setup_smpl_model(registry, smpl_data);
     } else {
-      spdlog::error("File {0} doesn't exist", model_filepath);
+      std::cout << str_format("File %s doesn't exist", model_filepath.c_str())
+                << std::endl;
     }
   }
   for (int i = 0;

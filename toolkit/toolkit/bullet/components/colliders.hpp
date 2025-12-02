@@ -1,3 +1,4 @@
+#pragma once
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/system.hpp"
 #include "toolkit/transform.hpp"

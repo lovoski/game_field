@@ -86,7 +86,7 @@ void import_all_bvh_motion(entt::registry &registry, std::string dirpath,
   listdir(dirpath, [&](std::string filepath) {
     if (!endswith(filepath, ".bvh"))
       return;
-    spdlog::info("Load .bvh file from {0}", filepath);
+    std::cout << "Load .bvh file from " << filepath << std::endl;
     auto container = registry.create();
     auto &container_trans = registry.emplace<transform>(container);
     container_trans.name = std::filesystem::path(filepath).string();

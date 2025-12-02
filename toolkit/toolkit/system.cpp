@@ -27,7 +27,7 @@ nlohmann::json iapp::serialize() {
 
 void iapp::deserialize(nlohmann::json &j) {
   registry.clear();
-  systems.clear();
+  // systems.clear(); // preserve the original order of registered systems
   auto reg = j["registry"];
   auto sys = j["systems"];
   // system data initialization, init0 gets called inside deserialize function

@@ -3,8 +3,6 @@
 #include "toolkit/opengl/components/mesh.hpp"
 #include "toolkit/opengl/editor.hpp"
 #include "toolkit/opengl/gui/utils.hpp"
-#include "toolkit/opengl/scripts/test_draw.hpp"
-
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
@@ -46,8 +44,10 @@ void collect_bone_entities(entt::registry &registry,
       for (int j = 0; j < mesh->mNumBones; j++) {
         auto assimp_bone = mesh->mBones[j];
         if (node_mapping.find(assimp_bone->mNode) == node_mapping.end()) {
-          spdlog::error("Can't find bone node {0} from mesh {1}",
-                        assimp_bone->mNode->mName.C_Str(), mesh->mName.C_Str());
+          std::cout << str_format("Can't find bone node {0} from mesh {1}",
+                                  assimp_bone->mNode->mName.C_Str(),
+                                  mesh->mName.C_Str())
+                    << std::endl;
           continue;
         }
         auto bone_entity = node_mapping[assimp_bone->mNode];
@@ -147,8 +147,10 @@ void process_mesh(entt::registry &registry, entt::entity container,
   for (unsigned int b = 0; b < mesh->mNumBones; b++) {
     auto assimp_bone = mesh->mBones[b];
     if (node_mapping.find(assimp_bone->mNode) == node_mapping.end()) {
-      spdlog::error("Can't find bone node {0} from mesh {1}",
-                    assimp_bone->mNode->mName.C_Str(), mesh->mName.C_Str());
+      std::cout << str_format("Can't find bone node {0} from mesh {1}",
+                              assimp_bone->mNode->mName.C_Str(),
+                              mesh->mName.C_Str())
+                << std::endl;
       continue;
     }
     auto bone_entity = node_mapping[assimp_bone->mNode];

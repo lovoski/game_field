@@ -6,13 +6,9 @@
 
 namespace toolkit::anim {
 
-void vis_skeleton::start(entt::registry &registry) {
-  spdlog::info("Start vis_skeleton sub_system");
-}
+void vis_skeleton::start(entt::registry &registry) {}
 
-void vis_skeleton::destroy(entt::registry &registry) {
-  spdlog::info("Destroy vis_skeleton sub_system");
-}
+void vis_skeleton::destroy(entt::registry &registry) {}
 
 void vis_skeleton::draw_to_scene(entt::registry &registry, transform &cam_trans,
                                  camera &cam_comp) {

@@ -313,12 +313,11 @@ void mesh_data::late_deserialize(entt::registry &registry, entt::entity entity,
              {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
       } else {
         material.albedo_tex_filepath = "";
-        spdlog::error("Albedo texture filepath {0} doesn't exist",
-                      material.albedo_tex_filepath.string());
+        std::cout << "Albedo texture filepath " << material.albedo_tex_filepath << " doesn't exist" << std::endl;
       }
     }
   } else {
-    spdlog::error("Can't load mesh data from null late_deserialize");
+    std::cout << "Can't load mesh data from null late_deserialize" << std::endl;
   }
 }
 
@@ -491,7 +490,7 @@ void skinned_mesh_bundle::try_setup() {
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
     if (!shadowmap_fb.check_status())
-      spdlog::error("skinned mesh bundle shadow buffer not complete!");
+      std::cout << "skinned mesh bundle shadow buffer not complete!" << std::endl;
     shadowmap_fb.unbind();
     gl_initialized = true;
   }

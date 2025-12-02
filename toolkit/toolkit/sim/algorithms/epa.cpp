@@ -137,7 +137,7 @@ bool epa_contact(base_collider *c1, base_collider *c2, gjk_simplex &simplex,
   }
 
   if (!converged) {
-    spdlog::error("EPA did not converge");
+    std::cout << "EPA did not converge" << std::endl;
     return false;
   }
   return true;
