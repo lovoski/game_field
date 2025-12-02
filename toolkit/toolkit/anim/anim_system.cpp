@@ -2,8 +2,8 @@
 #include "toolkit/anim/components/actor.hpp"
 #include "toolkit/anim/scripts/motion_matching.hpp"
 #include "toolkit/anim/scripts/motion_player.hpp"
-#include "toolkit/anim/scripts/tps_cam_controller.hpp"
 #include "toolkit/anim/scripts/traj_tracking.hpp"
+#include "toolkit/anim/scripts/controller.hpp"
 #include <spdlog/spdlog.h>
 
 namespace toolkit::anim {

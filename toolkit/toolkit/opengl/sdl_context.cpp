@@ -169,9 +169,6 @@ void sdl_context::run(std::function<void(void)> mainLoop) {
     // If user code wants to close, they can call SDL_DestroyWindow or similar.
     // We'll check events for SDL_QUIT in poll()
     mainLoop();
-
-    mouse_last_x = mouse_x;
-    mouse_last_y = mouse_y;
   }
 }
 
@@ -179,6 +176,8 @@ void sdl_context::poll() {
   // reset per-frame transient states
   wnd_resized = false;
   scroll_offset = math::vector2{0.0, 0.0};
+  mouse_delta_x = 0.0;
+  mouse_delta_y = 0.0;
   triggered_keys.clear();
   untriggered_keys.clear();
   triggered_mouse_keys.clear();
@@ -249,11 +248,8 @@ void sdl_context::poll() {
       // SDL provides high-precision positions
       mouse_x = static_cast<double>(event.motion.x);
       mouse_y = static_cast<double>(event.motion.y);
-      if (mouse_pos_init) {
-        mouse_last_x = mouse_x;
-        mouse_last_y = mouse_y;
-        mouse_pos_init = false;
-      }
+      mouse_delta_x = static_cast<double>(event.motion.xrel);
+      mouse_delta_y = static_cast<double>(event.motion.yrel);
     } break;
 
     case SDL_MOUSEWHEEL: {
@@ -299,76 +295,6 @@ bool sdl_context::is_mouse_button_untriggered(int key) const {
 bool sdl_context::is_mouse_button_pressed(int button) const {
   auto it = mouse_button_states.find(button);
   return it != mouse_button_states.end() && it->second;
-}
-
-bool sdl_context::loop_cursor_in_window() {
-  // Wrap the cursor inside the window with a margin. This implementation
-  // uses SDL_GetWindowSize to obtain the logical window size (window-space
-  // coordinates) so warping matches the coordinate system used by events.
-  if (!window)
-    return false;
-
-  bool loop = false;
-  int mx = static_cast<int>(mouse_x);
-  int my = static_cast<int>(mouse_y);
-  const int margin = 10;
-
-  // Use logical window size for WarpMouse (SDL events use window coords).
-  int win_w = wnd_width, win_h = wnd_height;
-
-  // If the window is too small to perform wrapping, bail out.
-  if (win_w <= margin * 2 || win_h <= margin * 2)
-    return false;
-
-  const int effective_w = win_w;
-  const int effective_h = win_h;
-
-  // Normalize x
-  while (mx < margin) {
-    mx += (effective_w - margin * 2);
-    loop = true;
-    // guard against pathological cases
-    if (mx < -1000000 || mx > 1000000) {
-      loop = false;
-      break;
-    }
-  }
-  while (mx >= effective_w - margin) {
-    mx -= (effective_w - margin * 2);
-    loop = true;
-    if (mx < -1000000 || mx > 1000000) {
-      loop = false;
-      break;
-    }
-  }
-
-  // Normalize y
-  while (my < margin) {
-    my += (effective_h - margin * 2);
-    loop = true;
-    if (my < -1000000 || my > 1000000) {
-      loop = false;
-      break;
-    }
-  }
-  while (my >= effective_h - margin) {
-    my -= (effective_h - margin * 2);
-    loop = true;
-    if (my < -1000000 || my > 1000000) {
-      loop = false;
-      break;
-    }
-  }
-
-  if (loop) {
-    // Warp the cursor to the computed logical position inside the window.
-    SDL_WarpMouseInWindow(window, mx, my);
-    mouse_x = static_cast<double>(mx);
-    mouse_y = static_cast<double>(my);
-    mouse_pos_init = false;
-  }
-
-  return loop;
 }
 
 void sdl_context::reset_wnd_drawable_size() {

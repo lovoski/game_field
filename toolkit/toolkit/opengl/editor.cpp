@@ -69,8 +69,6 @@ void editor::game_mode_main_loop() {
 
   transform_sys->update_transform(registry);
   render_sys->update_scene_buffers(registry);
-  if (editor_manipulate_camera)
-    active_camera_manipulate(dt);
 
   for (auto sys : systems)
     if (sys->active)
@@ -172,10 +170,13 @@ void editor::run() {
       render_sys->resize(g_instance.wnd_width, g_instance.wnd_height);
       in_game_mode = !in_game_mode;
     }
-    if (!in_game_mode)
+    if (!in_game_mode) {
+      SDL_SetRelativeMouseMode(SDL_FALSE);
       editor_mode_main_loop();
-    else
+    } else {
+      SDL_SetRelativeMouseMode(SDL_TRUE);
       game_mode_main_loop();
+    }
   });
 }
 
@@ -378,7 +379,11 @@ void editor::active_camera_manipulate(float dt) {
       math::vector2 mouse_offset =
           mouse_current_pos - cam_manip_data.mouse_last_pos;
       // free fps-style camera
-      if (press_mouse_right_btn) {
+      if (press_mouse_right_btn &&
+          (cursor_pos.x() > scene_wnd_pos.x() &&
+           cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
+           cursor_pos.y() > scene_wnd_pos.y() &&
+           cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y()))) {
         // modify the cameraPivot position to suite cursor movement
         if (mouse_offset.norm() > 1e-2f) {
           math::vector3 ray_o, ray_d;

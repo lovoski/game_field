@@ -115,7 +115,10 @@ public:
                         math::vector3 &d);
 
   bool editor_manipulate_camera = true;
+  entt::entity active_camera = entt::null;
   void active_camera_manipulate(float dt);
+
+  bool app_in_game_mode() const { return in_game_mode; }
 
 private:
   int gizmo_mode_idx = 0;
@@ -126,7 +129,6 @@ private:
 
   math::vector2 scene_wnd_size, scene_wnd_pos;
 
-  entt::entity active_camera = entt::null;
   active_camera_manipulate_data cam_manip_data;
 };
 

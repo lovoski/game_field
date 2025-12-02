@@ -103,19 +103,17 @@ public:
   bool is_mouse_button_untriggered(int key) const;
   bool is_mouse_button_pressed(int button) const;
 
-  bool loop_cursor_in_window();
-
   void set_window_title(std::string title = "app") {
     if (window)
       SDL_SetWindowTitle(window, title.c_str());
   }
 
   math::vector2 get_mouse_position() const { return {mouse_x, mouse_y}; }
+  math::vector2 get_mouse_delta_gamemode() const {
+    return {mouse_delta_x, mouse_delta_y};
+  }
 
   math::vector2 get_scroll_offsets() { return scroll_offset; }
-  math::vector2 get_mouse_offsets() {
-    return {mouse_x - mouse_last_x, mouse_y - mouse_last_y};
-  }
 
   math::vector2 get_window_size() const {
     return {static_cast<double>(wnd_width), static_cast<double>(wnd_height)};
@@ -155,8 +153,7 @@ private:
   std::unordered_map<int, bool> key_states;
   std::set<int> triggered_mouse_keys, untriggered_mouse_keys;
   std::unordered_map<int, bool> mouse_button_states;
-  bool mouse_pos_init = true;
-  double mouse_x, mouse_y, mouse_last_x, mouse_last_y;
+  double mouse_x, mouse_y, mouse_delta_x = 0.0, mouse_delta_y = 0.0;
   math::vector2 scroll_offset{0.0, 0.0};
 
   // It's possible that your drive override vsync operation for the program,
