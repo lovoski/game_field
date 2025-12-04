@@ -1,5 +1,4 @@
 #include "toolkit/transform.hpp"
-#include <spdlog/spdlog.h>
 
 namespace toolkit {
 

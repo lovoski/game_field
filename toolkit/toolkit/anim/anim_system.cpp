@@ -4,7 +4,6 @@
 #include "toolkit/anim/scripts/motion_player.hpp"
 #include "toolkit/anim/scripts/traj_tracking.hpp"
 #include "toolkit/anim/scripts/controller.hpp"
-#include <spdlog/spdlog.h>
 
 namespace toolkit::anim {
 
