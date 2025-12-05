@@ -917,6 +917,28 @@ void editor::draw_entity_components() {
     current_entity = selected_entity;
   ImGui::Separator();
 
+  // Entity name editor
+  if (registry.valid(current_entity)) {
+    auto &trans = registry.get<transform>(current_entity);
+    static std::array<char, 256> name_buffer;
+    static entt::entity last_edited_entity = entt::null;
+    
+    // Copy name to buffer when entity changes
+    if (last_edited_entity != current_entity) {
+      strncpy(name_buffer.data(), trans.name.c_str(), name_buffer.size() - 1);
+      name_buffer[name_buffer.size() - 1] = '\0';
+      last_edited_entity = current_entity;
+    }
+    
+    ImGui::Text("Entity Name:");
+    if (ImGui::InputText("##entity_name", name_buffer.data(), name_buffer.size(),
+                         ImGuiInputTextFlags_EnterReturnsTrue)) {
+      trans.name = std::string(name_buffer.data());
+      SDL_Log("Entity name changed to: %s", trans.name.c_str());
+    }
+    ImGui::Separator();
+  }
+
   if (registry.valid(current_entity)) {
     if (ImGui::Button("Add Component", {-1, 30})) {
       ImGui::OpenPopup("DrawEntityComponents_addcomponent");

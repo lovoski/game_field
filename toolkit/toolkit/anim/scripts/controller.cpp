@@ -21,6 +21,7 @@ void character_controller::draw_gui(entt::registry &registry,
                else if (index == 2)
                  fixed_interval = 1.0f / 120;
              });
+  ImGui::DragFloat("Cam Rotate Speed", &cam_move_speed, 0.001f, 0.0f, 1e9);
 }
 
 void character_controller::update(entt::registry &registry, float dt) {
@@ -31,7 +32,7 @@ void character_controller::update(entt::registry &registry, float dt) {
     cam_angle_horizontal -= dt * cam_move_speed * mouse_movement.x();
     cam_angle_vertical += dt * cam_move_speed * mouse_movement.y();
     cam_angle_vertical = std::clamp(cam_angle_vertical, -20.0f, 80.0f);
-    std::cout << cam_angle_horizontal << "," << cam_angle_vertical << std::endl;
+    // std::cout << cam_angle_horizontal << "," << cam_angle_vertical << std::endl;
     float cos_z = cos(math::deg_to_rad(cam_angle_vertical));
     math::vector3 cam_z =
         math::vector3(cos_z * sin(math::deg_to_rad(cam_angle_horizontal)),

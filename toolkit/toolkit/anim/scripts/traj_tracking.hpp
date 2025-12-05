@@ -9,15 +9,6 @@
 
 namespace toolkit::anim {
 
-struct mm_context {
-  math::vector3 root_world_pos = math::vector3::Zero(),
-                root_world_vel = math::vector3::Zero(),
-                root_world_acc = math::vector3::Zero(),
-                root_world_ang = math::vector3::Zero();
-  math::quat root_world_rot = math::quat::Identity();
-  std::array<math::vector3, 3> traj_world_pos, traj_world_dir;
-};
-
 class traj_tracking : public sub_system {
 public:
   void start(entt::registry &registry) override;

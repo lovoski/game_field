@@ -70,4 +70,35 @@ entt::entity create_bvh_actor(entt::registry &registry, std::string filepath);
 void create_bvh_actor(entt::registry &registry, assets::bvh_data &motion,
                       entt::entity container);
 
+std::tuple<math::vector3, math::vector3>
+spring_damper_position(math::vector3 x0, math::vector3 v0, math::vector3 xt,
+                       math::vector3 vt, float dt, float halflife);
+std::tuple<math::quat, math::vector3>
+spring_damper_rotation(math::quat q0, math::vector3 av0, math::quat qt,
+                       math::vector3 avt, float dt, float halflife);
+
+void inertialize_transition_position(std::vector<math::vector3> &off_pos,
+                                     std::vector<math::vector3> &off_vel,
+                                     std::vector<math::vector3> src_pos,
+                                     std::vector<math::vector3> src_vel,
+                                     std::vector<math::vector3> target_pos,
+                                     std::vector<math::vector3> target_vel);
+
+void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
+                                     std::vector<math::vector3> &off_ang,
+                                     std::vector<math::quat> src_rot,
+                                     std::vector<math::vector3> src_ang,
+                                     std::vector<math::quat> target_rot,
+                                     std::vector<math::vector3> target_ang);
+
+std::tuple<math::vector3, math::vector3, math::vector3, math::vector3>
+inertialize_update_position(math::vector3 off_pos, math::vector3 off_vel,
+                            math::vector3 in_pos, math::vector3 in_vel,
+                            float halflife, float dt);
+
+std::tuple<math::quat, math::vector3, math::quat, math::vector3>
+inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
+                            math::quat in_rot, math::vector3 in_ang,
+                            float halflife, float dt);
+
 }; // namespace toolkit::anim

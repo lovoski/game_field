@@ -15,36 +15,14 @@ namespace toolkit::anim {
 
 #define MM_FEATURE_DIM 27
 
-std::tuple<math::vector3, math::vector3>
-spring_damper_position(math::vector3 x0, math::vector3 v0, math::vector3 xt,
-                       math::vector3 vt, float dt, float halflife);
-std::tuple<math::quat, math::vector3>
-spring_damper_rotation(math::quat q0, math::vector3 av0, math::quat qt,
-                       math::vector3 avt, float dt, float halflife);
-
-void inertialize_transition_position(std::vector<math::vector3> &off_pos,
-                                     std::vector<math::vector3> &off_vel,
-                                     std::vector<math::vector3> src_pos,
-                                     std::vector<math::vector3> src_vel,
-                                     std::vector<math::vector3> target_pos,
-                                     std::vector<math::vector3> target_vel);
-
-void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
-                                     std::vector<math::vector3> &off_ang,
-                                     std::vector<math::quat> src_rot,
-                                     std::vector<math::vector3> src_ang,
-                                     std::vector<math::quat> target_rot,
-                                     std::vector<math::vector3> target_ang);
-
-std::tuple<math::vector3, math::vector3, math::vector3, math::vector3>
-inertialize_update_position(math::vector3 off_pos, math::vector3 off_vel,
-                            math::vector3 in_pos, math::vector3 in_vel,
-                            float halflife, float dt);
-
-std::tuple<math::quat, math::vector3, math::quat, math::vector3>
-inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
-                            math::quat in_rot, math::vector3 in_ang,
-                            float halflife, float dt);
+struct mm_context {
+  math::vector3 root_world_pos = math::vector3::Zero(),
+                root_world_vel = math::vector3::Zero(),
+                root_world_acc = math::vector3::Zero(),
+                root_world_ang = math::vector3::Zero();
+  math::quat root_world_rot = math::quat::Identity();
+  std::array<math::vector3, 3> traj_world_pos, traj_world_dir;
+};
 
 class motion_matching : public sub_system {
 public:
@@ -67,33 +45,20 @@ private:
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;
   float search_time = 0.25f, search_timer = search_time;
-  math::vector3 root_pos = math::vector3::Zero(),
-                root_vel = math::vector3::Zero(),
-                root_acc = math::vector3::Zero(),
-                root_ang = math::vector3::Zero();
-  // math::vector3 chara_pos = math::vector3::Zero(),
-  //               chara_vel = math::vector3::Zero();
-  math::quat root_rot = math::quat::Identity(),
-             desired_rot = math::quat::Identity();
+
+  float traj_sample_time = 0.33f;
+  mm_context context;
+
+  math::quat desired_rot = math::quat::Identity();
   math::vector3 desired_vel = math::vector3::Zero(),
                 desired_dir = math::vector3(0, 0, 1);
-
   math::quat db_start_rot = math::quat::Identity(),
              ent_start_rot = math::quat::Identity();
 
-  std::vector<math::quat> actor_bind_rot;
-  std::vector<math::vector3> actor_bind_pos, data_joints_world_pos;
-  std::vector<math::matrix4> actor_bind_mat;
-
-  std::vector<float> t_times = {20.0f / 60.0f, 40.0f / 60.0f, 60.0f / 60.0f};
-  std::vector<math::vector3> t_pos =
-      std::vector<math::vector3>(3, math::vector3::Zero());
-  std::vector<math::vector3> t_vel =
-      std::vector<math::vector3>(3, math::vector3::Zero());
-  std::vector<math::vector3> t_dir =
-      std::vector<math::vector3>(3, math::vector3(0, 0, 1));
-  std::vector<math::quat> t_rot =
-      std::vector<math::quat>(3, math::quat::Identity());
+  // std::vector<math::quat> actor_bind_rot;
+  // std::vector<math::vector3> actor_bind_pos;
+  // std::vector<math::matrix4> actor_bind_mat;
+  std::vector<math::vector3> data_joints_world_pos;
 
   int anim_range = 0, anim_frame = 0;
   int best_range = 0, best_frame = 0;
@@ -107,7 +72,8 @@ private:
   std::vector<std::vector<math::quat>> Yrot;
   std::vector<int> YrangeStarts, YrangeStops, parents;
   std::vector<std::string> names;
-  std::array<float, MM_FEATURE_DIM> compute_runtime_feature(int frame);
+  std::array<float, MM_FEATURE_DIM>
+  compute_runtime_feature(int frame, const mm_context &ctx);
   float feature_dist(std::array<float, MM_FEATURE_DIM> &feat0,
                      std::array<float, MM_FEATURE_DIM> &feat1);
 };

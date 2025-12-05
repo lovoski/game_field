@@ -280,4 +280,77 @@ std::string proxy_hierarchy_as_bvh_frame(entt::registry &registry,
   return result;
 }
 
+const float const_e = 2.71828f;
+
+std::tuple<math::vector3, math::vector3>
+spring_damper_position(math::vector3 x0, math::vector3 v0, math::vector3 xt,
+                       math::vector3 vt, float dt, float halflife) {
+  float lambda = log(2) / (halflife * log(const_e));
+  math::vector3 x = x0 - xt, v = v0 - vt;
+  auto x_prev = x;
+  x = (x_prev + (v + lambda * x_prev) * dt) * std::exp(-lambda * dt);
+  v = (v + lambda * x_prev) * std::exp(-lambda * dt) - lambda * x;
+  return {x + xt, v + vt};
+}
+
+std::tuple<math::quat, math::vector3>
+spring_damper_rotation(math::quat q0, math::vector3 av0, math::quat qt,
+                       math::vector3 avt, float dt, float halflife) {
+  float lambda = log(2) / (halflife * log(const_e));
+  if (q0.dot(qt) < 0.0f)
+    qt = math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
+  auto q = math::quat_to_rot_vec(q0 * qt.inverse());
+  math::vector3 av = av0 - avt;
+  auto q_prev = q;
+  q = (q_prev + (av + lambda * q_prev) * dt) * exp(-lambda * dt);
+  av = (av + lambda * q_prev) * exp(-lambda * dt) - lambda * q;
+  return {toolkit::math::rot_vec_to_quat(q) * qt, av + avt};
+}
+
+std::tuple<math::vector3, math::vector3, math::vector3, math::vector3>
+inertialize_update_position(math::vector3 off_pos, math::vector3 off_vel,
+                            math::vector3 in_pos, math::vector3 in_vel,
+                            float halflife, float dt) {
+  auto [op, ov] =
+      spring_damper_position(off_pos, off_vel, math::vector3::Zero(),
+                             math::vector3::Zero(), dt, halflife);
+  return {op, ov, in_pos + op, in_vel + ov};
+}
+
+std::tuple<math::quat, math::vector3, math::quat, math::vector3>
+inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
+                            math::quat in_rot, math::vector3 in_ang,
+                            float halflife, float dt) {
+  auto [ofr, oa] =
+      spring_damper_rotation(off_rot, off_ang, math::quat::Identity(),
+                             math::vector3::Zero(), dt, halflife);
+  return {ofr, oa, ofr * in_rot, in_ang + oa};
+}
+
+void inertialize_transition_position(std::vector<math::vector3> &off_pos,
+                                     std::vector<math::vector3> &off_vel,
+                                     std::vector<math::vector3> src_pos,
+                                     std::vector<math::vector3> src_vel,
+                                     std::vector<math::vector3> target_pos,
+                                     std::vector<math::vector3> target_vel) {
+  int num_joints = off_pos.size();
+  for (int i = 0; i < num_joints; i++) {
+    off_pos[i] = off_pos[i] + src_pos[i] - target_pos[i];
+    off_vel[i] = off_vel[i] + src_vel[i] - target_vel[i];
+  }
+}
+
+void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
+                                     std::vector<math::vector3> &off_ang,
+                                     std::vector<math::quat> src_rot,
+                                     std::vector<math::vector3> src_ang,
+                                     std::vector<math::quat> target_rot,
+                                     std::vector<math::vector3> target_ang) {
+  int num_joints = off_rot.size();
+  for (int i = 0; i < num_joints; i++) {
+    off_rot[i] = (off_rot[i] * src_rot[i]) * (target_rot[i].inverse());
+    off_ang[i] = off_ang[i] + src_ang[i] - target_ang[i];
+  }
+}
+
 }; // namespace toolkit::anim
