@@ -209,11 +209,18 @@ math::vector2 engine2d::screen_to_world(const math::vector2 &screen_pos) {
 }
 
 void engine2d::add_default_objects() {
-  auto ground = registry.create();
-  auto &ground_body = registry.emplace<body>(ground);
-  ground_body.setup(math::vector2(20.0f, 1.0f));
-  ground_body.position = math::vector2(0.0f, -1.0f);
-  ground_body.rotation = 0.1f;
+  auto ground0 = registry.create();
+  auto &ground_body0 = registry.emplace<body>(ground0);
+  ground_body0.setup(math::vector2(20.0f, 1.0f));
+  ground_body0.position = math::vector2(0.0f, -1.0f);
+  ground_body0.rotation = 0.1f;
+
+  auto ground1 = registry.create();
+  auto &ground_body1 = registry.emplace<body>(ground1);
+  ground_body1.setup(math::vector2(20.0f, 1.0f));
+  ground_body1.position = math::vector2(-10.0f, -2.0f);
+  ground_body1.rotation = -0.1f;
+
   for (int i = 0; i < 5; i++) {
     auto entity = registry.create();
     auto &body_comp = registry.emplace<body>(entity);
