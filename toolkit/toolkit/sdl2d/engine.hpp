@@ -1,3 +1,19 @@
+/**
+ * Internal coordinate system:
+ *          ^ y+
+ *          |
+ *          |
+ * x- <---- o ----> x+
+ *          |
+ *          |
+ *          v y-
+ * 
+ * Screen space coordinate system:
+ * o ----> x+
+ * |
+ * |
+ * v y+
+ */
 #pragma once
 
 #include "toolkit/sdl2d/header.hpp"
@@ -25,18 +41,47 @@ private:
   bool engine_vsync_on = true;
   bool engine_running = true, engine_play_mode = false;
 
+  int screen_width, screen_height;
+  float camera_rotation, camera_zoom;
+  math::vector2 camera_position;
+
+  math::vector2 mouse_screen_position, mouse_scroll_offset;
+
   // High resolution timer for delta time
   Uint64 perf_frequency = 0;
   Uint64 last_counter = 0;
   double delta_time = 0.0; // seconds
 
   void draw_editor_gui();
-  void draw_game_content();
 
   void add_default_objects();
 
+  bool caps_lock_on = false;
+  std::set<int> triggered_keys, untriggered_keys;
+  std::unordered_map<int, bool> key_states;
+  std::set<int> triggered_mouse_keys, untriggered_mouse_keys;
+  std::unordered_map<int, bool> mouse_button_states;
+  void handle_event_states();
+
+  void handle_game_logic_tick();
+  void handle_game_render_tick();
+
 public:
-  entt::registry registry;
+  math::vector2 world_to_screen(const math::vector2 &world_pos);
+  math::vector2 screen_to_world(const math::vector2 &screen_pos);
+
+  // If the specified `key` at pressed state at this frame
+  bool is_key_pressed(int key) const;
+  // The specified `key` went from unpressed to pressed at this frame
+  bool is_key_triggered(int key) const;
+  // The specified `key` went from pressed to unpressed at this frame
+  bool is_key_untriggered(int key) const;
+
+  // The specified `key` went from unpressed to pressed at this frame
+  bool is_mouse_button_triggered(int key) const;
+  // The specified `key` went from pressed to unpressed at this frame
+  bool is_mouse_button_untriggered(int key) const;
+  bool is_mouse_button_pressed(int button) const;
 
   // Return last frame delta in seconds
   double get_delta_time() const { return delta_time; }

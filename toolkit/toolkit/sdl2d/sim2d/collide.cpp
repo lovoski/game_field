@@ -47,16 +47,6 @@ void Flip(feature_pair &fp) {
   _Swap(fp.e.outEdge1, fp.e.outEdge2);
 }
 
-matrix2 from_angle(float angle) {
-  matrix2 m;
-  float c = std::cosf(angle), s = std::sinf(angle);
-  m.col(0).x() = c;
-  m.col(0).y() = s;
-  m.col(1).x() = -s;
-  m.col(1).y() = c;
-  return m;
-}
-
 inline vector2 abs(const vector2 &vec) {
   vector2 v = vec;
   v(0) = std::fabs(v(0));

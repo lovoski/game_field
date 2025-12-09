@@ -4,8 +4,6 @@
 
 namespace toolkit::sdl2d {
 
-math::matrix2 from_angle(float angle);
-
 struct body {
   body() { reset(); }
 
