@@ -82,12 +82,15 @@ void engine2d::run() {
     // ---------------------------
     // ImGui UI Example
     // ---------------------------
-    ImGui::Begin("Hello ImGui");
-    ImGui::Text("SDL2 + ImGui initialized!");
-    if (ImGui::Button("Quit")) {
-      engine_running = false;
+    {
+      ImGui::Begin("Hello ImGui");
+      ImGui::Text("SDL2 + ImGui initialized!");
+      if (ImGui::Button("Quit")) {
+        engine_running = false;
+      }
+      ImGui::End();
+      ImGui::ShowDemoWindow();
     }
-    ImGui::End();
 
     // Rendering
     ImGui::Render();
@@ -95,13 +98,9 @@ void engine2d::run() {
     SDL_RenderClear(renderer);
 
     // actual rendering
-    draw_line(10, 10, 200, 300);
+    {
 
-    draw_rectangle(200, 200, 30, 50, false);
-    draw_rectangle(200, 200, 50, 30, true, math::vector3(1, 0, 0));
-
-    draw_circle(300, 300, 10, false);
-    draw_circle(310, 300, 10, true, math::vector3(1, 0, 0));
+    }
 
     ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData());
     SDL_RenderPresent(renderer);
