@@ -7,7 +7,7 @@
  *          |
  *          |
  *          v y-
- * 
+ *
  * Screen space coordinate system:
  * o ----> x+
  * |
@@ -45,6 +45,7 @@ private:
   float camera_rotation, camera_zoom;
   math::vector2 camera_position;
 
+  math::vector2 mouse_screen_delta = math::vector2::Zero();
   math::vector2 mouse_screen_position, mouse_scroll_offset;
 
   // High resolution timer for delta time
@@ -87,19 +88,19 @@ public:
   double get_delta_time() const { return delta_time; }
 
   void ss_draw_point(int x, int y,
-                     const math::vector3 &color = math::vector3(1, 1, 1));
+                     const math::vector4 &color = math::vector4(1, 1, 1, 1));
   void ss_draw_line(int x1, int y1, int x2, int y2,
-                    const math::vector3 &color = math::vector3(1, 1, 1));
+                    const math::vector4 &color = math::vector4(1, 1, 1, 1));
   // Additional helper drawing functions
   void ss_draw_points(const std::vector<math::vector2> &points,
-                      const math::vector3 &color = math::vector3(1, 1, 1));
+                      const math::vector4 &color = math::vector4(1, 1, 1, 1));
   void ss_draw_lines(const std::vector<math::vector2> &points,
                      bool closed = false,
-                     const math::vector3 &color = math::vector3(1, 1, 1));
+                     const math::vector4 &color = math::vector4(1, 1, 1, 1));
   void ss_draw_rectangle(int x, int y, int w, int h, bool filled = false,
-                         const math::vector3 &color = math::vector3(1, 1, 1));
+                         const math::vector4 &color = math::vector4(1, 1, 1, 1));
   void ss_draw_circle(int x, int y, int radius, bool filled = false,
-                      const math::vector3 &color = math::vector3(1, 1, 1));
+                      const math::vector4 &color = math::vector4(1, 1, 1, 1));
 };
 
 }; // namespace toolkit::sdl2d

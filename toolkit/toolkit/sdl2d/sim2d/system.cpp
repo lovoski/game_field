@@ -133,6 +133,7 @@ void arbiter::apply_impulse() {
     math::vector2 dv = b2->linear_velocity + cross(b2->angular_velocity, c.r2) -
                        b1->linear_velocity - cross(b1->angular_velocity, c.r1);
     // compute normal impulse
+    // the normal impulse stop the two objects from penetration
     float vn = dv.dot(c.normal);
     float dPn = c.massNormal * (-vn + c.bias);
     if (sim_sys_2d::accumulate_impulses) {
@@ -148,14 +149,15 @@ void arbiter::apply_impulse() {
     b1->angular_velocity -= b1->inv_I * cross(c.r1, Pn);
     b2->linear_velocity += b2->inv_mass * Pn;
     b2->angular_velocity += b2->inv_I * cross(c.r2, Pn);
-    // relative velocity at contact
+
+    // recompute relative velocity at contact
     dv = b2->linear_velocity + cross(b2->angular_velocity, c.r2) -
          b1->linear_velocity - cross(b1->angular_velocity, c.r1);
     math::vector2 tangent = cross(c.normal, 1.0f);
     float vt = dv.dot(tangent);
     float dPt = c.massTangent * (-vt);
+    // compute friction impulse
     if (sim_sys_2d::accumulate_impulses) {
-      // compute friction impulse
       float maxPt = friction * c.Pn;
       // clamp friction
       float old_tangent_impulse = c.Pt;
@@ -165,7 +167,7 @@ void arbiter::apply_impulse() {
       float maxPt = friction * dPn;
       dPt = std::clamp(dPt, -maxPt, maxPt);
     }
-    // apply contact impulse
+    // apply friction impulse
     math::vector2 Pt = dPt * tangent;
     b1->linear_velocity -= b1->inv_mass * Pt;
     b1->angular_velocity -= b1->inv_I * cross(c.r1, Pt);
@@ -246,6 +248,7 @@ void sim_sys_2d::draw_menu_gui() {
   if (ImGui::InputInt("Num Sub Steps", &num_sub_steps)) {
     num_sub_steps = std::clamp(num_sub_steps, 1, 100);
   }
+  ImGui::DragFloat2("Gravity", gravity.data(), 0.01f, -100.0f, 100.0f);
 }
 
 void sim_sys_2d::update(entt::registry &registry, float dt) {

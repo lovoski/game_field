@@ -80,6 +80,11 @@ void engine2d::draw_editor_gui() {
       if (ImGui::Checkbox("VSync On", &engine_vsync_on)) {
         SDL_RenderSetVSync(renderer, engine_vsync_on ? 1 : 0);
       }
+      if (ImGui::Button("Reset Camera", {-1, 30})) {
+        camera_zoom = 20.0f;
+        camera_rotation = 0.0f;
+        camera_position = math::vector2::Zero();
+      }
       ImGui::EndMenu();
     }
 

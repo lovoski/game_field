@@ -108,7 +108,7 @@ private:
   float cur_time = 0.0f;
 
   bool fixed_timestep = true;
-  int num_sub_steps = 20, sim_fps = 60;
+  int num_sub_steps = 10, sim_fps = 60;
 
   std::vector<body *> bodies_cache;
   std::map<arbiter_key, arbiter> arbiters;

@@ -33,6 +33,8 @@ void engine2d::init(int width, int height) {
               << std::endl;
     return;
   }
+  // enable alpha blending for this renderer
+  SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
   // Initialize high-resolution performance counter for delta timing
   perf_frequency = SDL_GetPerformanceFrequency();
@@ -115,6 +117,7 @@ bool engine2d::is_mouse_button_pressed(int button) const {
 void engine2d::handle_event_states() {
   // clear states
   mouse_scroll_offset = math::vector2::Zero();
+  mouse_screen_delta = math::vector2::Zero();
   triggered_keys.clear();
   untriggered_keys.clear();
   triggered_mouse_keys.clear();
@@ -128,6 +131,8 @@ void engine2d::handle_event_states() {
     } else if (event.type == SDL_MOUSEMOTION) {
       mouse_screen_position.x() = static_cast<float>(event.motion.x);
       mouse_screen_position.y() = static_cast<float>(event.motion.y);
+      mouse_screen_delta.x() = static_cast<float>(event.motion.xrel);
+      mouse_screen_delta.y() = static_cast<float>(event.motion.yrel);
     } else if (event.type == SDL_MOUSEWHEEL) {
       mouse_scroll_offset.x() = static_cast<float>(event.wheel.x);
       mouse_scroll_offset.y() = static_cast<float>(event.wheel.y);
@@ -212,7 +217,7 @@ void engine2d::add_default_objects() {
   for (int i = 0; i < 5; i++) {
     auto entity = registry.create();
     auto &body_comp = registry.emplace<body>(entity);
-    body_comp.setup(math::vector2(1.0f, 1.0f+i), 1.0f);
+    body_comp.setup(math::vector2(1.0f, 1.0f + i), 1.0f);
     body_comp.position = math::vector2(0.0f, 1.0f + 5 * i);
   }
   for (int i = 0; i < 5; i++) {
@@ -246,40 +251,44 @@ void engine2d::handle_game_logic_tick() {
     if (sys->active)
       sys->lateupdate(registry, delta_time);
 
-  // auto mouse_world_position = screen_to_world(mouse_screen_position);
-  // std::cout << str_format("Mouse screen space position: (%.3f, %.3f), world "
-  //                         "position: (%.3f, %.3f)",
-  //                         mouse_screen_position.x(),
-  //                         mouse_screen_position.y(),
-  //                         mouse_world_position.x(), mouse_world_position.y())
-  //           << std::endl;
-  if (is_key_triggered(SDLK_a))
-    std::cout << "triggered key A" << std::endl;
-  if (is_key_untriggered(SDLK_a))
-    std::cout << "untriggered key A" << std::endl;
-  if (is_key_pressed(SDLK_a))
-    std::cout << "pressed key A" << std::endl;
-
-  if (is_mouse_button_triggered(SDL_BUTTON_LEFT))
-    std::cout << "triggered mouse left button" << std::endl;
-  if (is_mouse_button_untriggered(SDL_BUTTON_LEFT))
-    std::cout << "untriggered mouse left button" << std::endl;
+  if (!engine_play_mode) {
+    // editor exclusive logic
+    if (is_mouse_button_pressed(SDL_BUTTON_MIDDLE)) {
+      // move the camera when mouse middle button pressed
+      camera_position =
+          screen_to_world(0.5f * math::vector2(screen_width, screen_height) -
+                          mouse_screen_delta);
+    }
+  }
 }
 
 void engine2d::handle_game_render_tick() {
   registry.view<body>().each([&](entt::entity entity, body &body_comp) {
     auto rotation = from_angle(body_comp.rotation);
     std::vector<math::vector2> points{
-        rotation * math::vector2(0.5 * body_comp.size.x(), 0.5 * body_comp.size.y()) + body_comp.position,
-        rotation * math::vector2(-0.5 * body_comp.size.x(), 0.5 * body_comp.size.y()) + body_comp.position,
-        rotation * math::vector2(-0.5 * body_comp.size.x(), -0.5 * body_comp.size.y()) + body_comp.position,
-        rotation * math::vector2(0.5 * body_comp.size.x(), -0.5 * body_comp.size.y()) + body_comp.position,
-      };
+        rotation * math::vector2(0.5 * body_comp.size.x(),
+                                 0.5 * body_comp.size.y()) +
+            body_comp.position,
+        rotation * math::vector2(-0.5 * body_comp.size.x(),
+                                 0.5 * body_comp.size.y()) +
+            body_comp.position,
+        rotation * math::vector2(-0.5 * body_comp.size.x(),
+                                 -0.5 * body_comp.size.y()) +
+            body_comp.position,
+        rotation * math::vector2(0.5 * body_comp.size.x(),
+                                 -0.5 * body_comp.size.y()) +
+            body_comp.position,
+    };
     for (int i = 0; i < 4; i++) {
       points[i] = world_to_screen(points[i]);
     }
     ss_draw_lines(points, true);
   });
+
+  ss_draw_circle(100, 100, 20, true, math::vector4(1,0,0,0.5));
+  ss_draw_circle(140, 100, 50, true, math::vector4(1,1,0,0.5));
+  ss_draw_rectangle(100, 150, 20, 30, true, math::vector4(1,0,0,0.5));
+  ss_draw_rectangle(110, 170, 20, 30, true, math::vector4(1,1,0,0.5));
 }
 
 }; // namespace toolkit::sdl2d
