@@ -39,6 +39,7 @@ void body::setup(const math::vector2 &_size, float _m) {
     I = mass * (size.x() * size.x() + size.y() * size.y()) / 12.0f;
     inv_I = 1.0f / I;
   } else {
+    mass = std::numeric_limits<float>::max();
     inv_mass = 0.0f;
     I = std::numeric_limits<float>::max();
     inv_I = 0.0f;
@@ -179,7 +180,7 @@ void sim_sys_2d::broadphase(entt::registry &registry) {
     auto bi = bodies_cache[i];
     for (int j = i + 1; j < bodies_cache.size(); j++) {
       auto bj = bodies_cache[j];
-      if (bi->inv_mass == 0.0f || bj->inv_mass == 0.0f)
+      if (bi->inv_mass == 0.0f && bj->inv_mass == 0.0f)
         continue;
       arbiter new_arb(bi, bj);
       arbiter_key key(bi, bj);
@@ -188,7 +189,7 @@ void sim_sys_2d::broadphase(entt::registry &registry) {
         if (iter == arbiters.end()) {
           arbiters[key] = new_arb;
         } else {
-          (*iter).second.update(new_arb.contacts);
+          iter->second.update(new_arb.contacts);
         }
       } else {
         arbiters.erase(key);
@@ -217,14 +218,14 @@ void sim_sys_2d::step(entt::registry &registry, float dt) {
   }
 
   // perform pre-steps
-  for (auto &iter : arbiters) {
-    iter.second.prestep(inv_dt);
+  for (auto arb = arbiters.begin(); arb != arbiters.end(); arb++) {
+    arb->second.prestep(inv_dt);
   }
 
   // perform iterations
   for (int i = 0; i < num_sub_steps; i++) {
-    for (auto &iter : arbiters) {
-      iter.second.apply_impulse();
+    for (auto arb = arbiters.begin(); arb != arbiters.end(); arb++) {
+      arb->second.apply_impulse();
     }
   }
 

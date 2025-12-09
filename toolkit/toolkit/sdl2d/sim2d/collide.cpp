@@ -287,7 +287,7 @@ bool collide(std::vector<contact> &contacts, body *b1, body *b2) {
       new_contact.feature = clipPoints2[i].fp;
       if (axis == FACE_B_X || axis == FACE_B_Y)
         Flip(new_contact.feature);
-      contacts.emplace_back(new_contact);
+      contacts.push_back(new_contact);
     }
   }
   return true;

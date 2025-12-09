@@ -43,9 +43,9 @@ struct contact {
   math::vector2 r1, r2;
 
   float separation;
-  float Pn;  // accumulated normal impulse
-  float Pt;  // accumulated tangent impulse
-  float Pnb; // accumulated normal impulse for position bias
+  float Pn = 0.0f;  // accumulated normal impulse
+  float Pt = 0.0f;  // accumulated tangent impulse
+  float Pnb = 0.0f; // accumulated normal impulse for position bias
   float massNormal, massTangent;
   float bias;
   feature_pair feature;
@@ -98,7 +98,7 @@ public:
 
   std::string get_name() override { return "Physics System"; }
 
-  math::vector2 gravity = math::vector2(0.0f, 9.8f);
+  math::vector2 gravity = math::vector2(0.0f, -9.8f);
 
   inline static bool accumulate_impulses = true, warm_starting = true,
                      position_correction = true;

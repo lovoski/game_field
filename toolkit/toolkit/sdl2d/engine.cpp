@@ -131,9 +131,11 @@ void engine2d::handle_event_states() {
     } else if (event.type == SDL_MOUSEWHEEL) {
       mouse_scroll_offset.x() = static_cast<float>(event.wheel.x);
       mouse_scroll_offset.y() = static_cast<float>(event.wheel.y);
-    } else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
+    } else if (event.type == SDL_MOUSEBUTTONDOWN ||
+               event.type == SDL_MOUSEBUTTONUP) {
       int button = static_cast<int>(event.button.button);
-      bool curState = (event.type == SDL_MOUSEBUTTONDOWN); // true for DOWN, false for UP
+      bool curState =
+          (event.type == SDL_MOUSEBUTTONDOWN); // true for DOWN, false for UP
       if (mouse_button_states.count(button) == 0)
         mouse_button_states[button] = false;
       bool prevState = mouse_button_states[button];
@@ -201,7 +203,31 @@ math::vector2 engine2d::screen_to_world(const math::vector2 &screen_pos) {
   return world_pos;
 }
 
-void engine2d::add_default_objects() {}
+void engine2d::add_default_objects() {
+  auto ground = registry.create();
+  auto &ground_body = registry.emplace<body>(ground);
+  ground_body.setup(math::vector2(20.0f, 1.0f));
+  ground_body.position = math::vector2(0.0f, -1.0f);
+  ground_body.rotation = 0.1f;
+  for (int i = 0; i < 5; i++) {
+    auto entity = registry.create();
+    auto &body_comp = registry.emplace<body>(entity);
+    body_comp.setup(math::vector2(1.0f, 1.0f+i), 1.0f);
+    body_comp.position = math::vector2(0.0f, 1.0f + 5 * i);
+  }
+  for (int i = 0; i < 5; i++) {
+    auto entity = registry.create();
+    auto &body_comp = registry.emplace<body>(entity);
+    body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
+    body_comp.position = math::vector2(-1.0f, 1.0f + 5 * i);
+  }
+  for (int i = 0; i < 5; i++) {
+    auto entity = registry.create();
+    auto &body_comp = registry.emplace<body>(entity);
+    body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
+    body_comp.position = math::vector2(1.0f, 1.0f + 5 * i);
+  }
+}
 
 void engine2d::handle_game_logic_tick() {
   // Update high-resolution delta time at the start of the frame
@@ -223,7 +249,8 @@ void engine2d::handle_game_logic_tick() {
   // auto mouse_world_position = screen_to_world(mouse_screen_position);
   // std::cout << str_format("Mouse screen space position: (%.3f, %.3f), world "
   //                         "position: (%.3f, %.3f)",
-  //                         mouse_screen_position.x(), mouse_screen_position.y(),
+  //                         mouse_screen_position.x(),
+  //                         mouse_screen_position.y(),
   //                         mouse_world_position.x(), mouse_world_position.y())
   //           << std::endl;
   if (is_key_triggered(SDLK_a))
@@ -240,9 +267,19 @@ void engine2d::handle_game_logic_tick() {
 }
 
 void engine2d::handle_game_render_tick() {
-  // registry.view<body>().each([&](entt::entity entity, body &body_comp) {
-
-  // });
+  registry.view<body>().each([&](entt::entity entity, body &body_comp) {
+    auto rotation = from_angle(body_comp.rotation);
+    std::vector<math::vector2> points{
+        rotation * math::vector2(0.5 * body_comp.size.x(), 0.5 * body_comp.size.y()) + body_comp.position,
+        rotation * math::vector2(-0.5 * body_comp.size.x(), 0.5 * body_comp.size.y()) + body_comp.position,
+        rotation * math::vector2(-0.5 * body_comp.size.x(), -0.5 * body_comp.size.y()) + body_comp.position,
+        rotation * math::vector2(0.5 * body_comp.size.x(), -0.5 * body_comp.size.y()) + body_comp.position,
+      };
+    for (int i = 0; i < 4; i++) {
+      points[i] = world_to_screen(points[i]);
+    }
+    ss_draw_lines(points, true);
+  });
 }
 
 }; // namespace toolkit::sdl2d
