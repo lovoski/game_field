@@ -10,6 +10,9 @@ find_package(ZLIB REQUIRED)
 find_package(CGAL CONFIG REQUIRED)
 find_package(Bullet CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_image CONFIG REQUIRED)
+find_package(SDL2_mixer CONFIG REQUIRED)
+find_package(SDL2_ttf CONFIG REQUIRED)
 add_subdirectory("toolkit/deps/cnpy")
 add_subdirectory("toolkit/deps/tinyfd")
 add_subdirectory("toolkit/deps/ufbx")
@@ -24,7 +27,8 @@ set(
   "toolkit/sim" 
   "toolkit/bullet" 
   "toolkit/assets" 
-  "toolkit/common"
+  "toolkit/common" 
+  "toolkit/sdl2d"
 )
 set(LIB_LIST )
 file(GLOB SRC_FILES "toolkit/*.cpp")
@@ -49,6 +53,9 @@ target_link_libraries(
   CGAL::CGAL
   $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
   $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+  $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
+  $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>
+  $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
   BulletSoftBody
   BulletDynamics
   BulletInverseDynamics

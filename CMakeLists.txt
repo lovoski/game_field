@@ -40,5 +40,9 @@ add_subdirectory("toolkit")
 # endif()
 
 add_executable(engine main.cpp)
-target_link_libraries(engine PRIVATE toolkit ${ONNXRUNTIME_LIBRARY})
-target_include_directories(engine PRIVATE ${PROJECT_BINARY_DIR} ${ONNXRUNTIME_INCLUDE_DIR} ${PROJECT_SOURCE_DIR})
+target_link_libraries(engine PRIVATE toolkit)
+target_include_directories(engine PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+
+add_executable(engine2d main2d.cpp)
+target_link_libraries(engine2d PRIVATE toolkit)
+target_include_directories(engine2d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})

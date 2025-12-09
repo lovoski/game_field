@@ -24,5 +24,5 @@ After ensuring you have vcpkg repository cloned to your local directory, please 
 Finally you can execute the following commands to have vcpkg download and compile the external dependencies, affter a while, you can use cmake extension in your IDE to configure the entire project, or configure the project with cmake manually. I would recommend vscode+cmake extesion.
 
 ```cmd
-./vcpkg/vcpkg install assimp sdl2 glad zlib cgal bullet3
+./vcpkg/vcpkg install assimp glad zlib cgal bullet3 sdl2 sdl2-image sdl2-ttf sdl2-mixer
 ```
