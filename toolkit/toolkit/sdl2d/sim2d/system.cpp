@@ -197,7 +197,7 @@ void sim_sys_2d::broadphase(entt::registry &registry) {
   }
 }
 
-void sim_sys_2d::fixedupdate(entt::registry &registry, float dt) {
+void sim_sys_2d::step(entt::registry &registry, float dt) {
   float inv_dt = dt > 0.0f ? 1.0f / dt : 0.0f;
   bodies_cache.clear();
   registry.view<body>().each([&](entt::entity entity, body &body_comp) {
@@ -240,15 +240,25 @@ void sim_sys_2d::fixedupdate(entt::registry &registry, float dt) {
 
 void sim_sys_2d::draw_gui(entt::registry &registry, entt::entity entity) {}
 
-void sim_sys_2d::draw_menu_gui() {}
+void sim_sys_2d::draw_menu_gui() {
+  ImGui::Checkbox("Fixed Time Step", &fixed_timestep);
+  if (ImGui::InputInt("Num Sub Steps", &num_sub_steps)) {
+    num_sub_steps = std::clamp(num_sub_steps, 1, 100);
+  }
+}
 
 void sim_sys_2d::update(entt::registry &registry, float dt) {
   float fixed_interval = 1.0f / sim_fps;
-  float residual = cur_time - cur_exec_fixed * fixed_interval;
-  while (residual > fixed_interval) {
-    residual -= fixed_interval;
-    fixedupdate(registry, fixed_interval);
-    cur_exec_fixed += 1;
+  if (fixed_timestep) {
+    float residual = cur_time - cur_exec_fixed * fixed_interval;
+    while (residual > fixed_interval) {
+      residual -= fixed_interval;
+      step(registry, fixed_interval);
+      cur_exec_fixed += 1;
+    }
+  } else {
+    step(registry, dt);
+    cur_exec_fixed = cur_time / fixed_interval;
   }
   cur_time += dt;
 }

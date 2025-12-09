@@ -91,12 +91,14 @@ bool collide(std::vector<contact> &contacts, body *b1, body *b2);
 class sim_sys_2d : public isystem {
 public:
   void update(entt::registry &registry, float dt) override;
-  void fixedupdate(entt::registry &registry, float dt);
+  void step(entt::registry &registry, float dt);
 
   void draw_gui(entt::registry &registry, entt::entity entity) override;
   void draw_menu_gui() override;
 
   void broadphase(entt::registry &registry);
+
+  std::string get_name() override { return "Physics System"; }
 
   math::vector2 gravity = math::vector2(0.0f, 9.8f);
 
@@ -107,6 +109,7 @@ private:
   int cur_exec_fixed = 0;
   float cur_time = 0.0f;
 
+  bool fixed_timestep = true;
   int num_sub_steps = 20, sim_fps = 60;
 
   std::vector<body *> bodies_cache;
@@ -114,6 +117,6 @@ private:
 
   REFLECT_PRIVATE(sim_sys_2d)
 };
-DECLARE_SYSTEM(sim_sys_2d, num_sub_steps, sim_fps, gravity)
+DECLARE_SYSTEM(sim_sys_2d, num_sub_steps, gravity, fixed_timestep)
 
 }; // namespace toolkit::sdl2d
