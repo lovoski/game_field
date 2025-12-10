@@ -82,32 +82,4 @@
 //   gui::color_edit_3("Bone Color", bone_color);
 // }
 
-// void vis_skeleton::collect_skeleton_draw_queue(entt::registry &registry,
-//                                                actor &actor_comp) {
-//   draw_queue.clear();
-//   active_joint_entities.clear();
-//   for (int i = 0; i < actor_comp.joint_active.size(); i++)
-//     if (actor_comp.joint_active[i])
-//       active_joint_entities.insert(actor_comp.ordered_entities[i]);
-//   auto [parent, children, roots] =
-//       estimate_actor_bone_hierarchy(registry, actor_comp, true);
-//   for (auto root : roots) {
-//     std::queue<int> q;
-//     q.push(root);
-//     while (!q.empty()) {
-//       auto current = q.front();
-//       auto &current_trans =
-//           registry.get<transform>(actor_comp.ordered_entities[current]);
-//       q.pop();
-//       for (auto c : children[current]) {
-//         auto &child_trans =
-//             registry.get<transform>(actor_comp.ordered_entities[c]);
-//         draw_queue.emplace_back(
-//             std::make_pair(current_trans.world_pos(), child_trans.world_pos()));
-//         q.push(c);
-//       }
-//     }
-//   }
-// }
-
 // }; // namespace toolkit::anim

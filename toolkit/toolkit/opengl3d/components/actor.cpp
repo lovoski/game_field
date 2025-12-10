@@ -353,4 +353,94 @@ void inertialize_transition_rotation(std::vector<math::quat> &off_rot,
   }
 }
 
-}; // namespace toolkit::anim
+void collect_skeleton_draw_queue(
+    entt::registry &registry, actor &actor_comp,
+    std::vector<std::pair<math::vector3, math::vector3>> &draw_queue) {
+  std::set<entt::entity> active_joint_entities;
+  for (int i = 0; i < actor_comp.joint_active.size(); i++)
+    if (actor_comp.joint_active[i])
+      active_joint_entities.insert(actor_comp.ordered_entities[i]);
+  auto [parent, children, roots] =
+      estimate_actor_bone_hierarchy(registry, actor_comp, true);
+  for (auto root : roots) {
+    std::queue<int> q;
+    q.push(root);
+    while (!q.empty()) {
+      auto current = q.front();
+      auto &current_trans =
+          registry.get<transform>(actor_comp.ordered_entities[current]);
+      q.pop();
+      for (auto c : children[current]) {
+        auto &child_trans =
+            registry.get<transform>(actor_comp.ordered_entities[c]);
+        draw_queue.emplace_back(
+            std::make_pair(current_trans.world_pos(), child_trans.world_pos()));
+        q.push(c);
+      }
+    }
+  }
+}
+
+void actor::draw_gui(entt::registry &registry, entt::entity entity) {
+  int num_active_joints = 0, njoints = ordered_entities.size();
+  auto [parent, children, roots] =
+      estimate_actor_bone_hierarchy(registry, *this);
+  for (int i = 0; i < njoints; ++i)
+    num_active_joints += joint_active[i] ? 1 : 0;
+  ImGui::MenuItem(("Num Active Joints: " + std::to_string(num_active_joints)).c_str(),
+                  nullptr, nullptr, false);
+
+  if (ImGui::TreeNode("Skeleton Hierarchy")) {
+    ImGui::BeginChild("skeletonhierarchy", {-1, -1});
+    for (int i = 0; i < njoints; ++i) {
+      int depth = 1, cur = i;
+      while (parent[cur] != -1) {
+        cur = parent[cur];
+        depth++;
+      }
+      std::string depthHeader = "";
+      for (int j = 0; j < depth; ++j)
+        depthHeader.push_back('-');
+      depthHeader.push_back(':');
+      bool current_joint_status = joint_active[i];
+      if (ImGui::Checkbox(("##" + std::to_string(i)).c_str(),
+                          &current_joint_status)) {
+        if (!current_joint_status) {
+          // disable all children at the disable of parent
+          std::queue<int> q;
+          q.push(i);
+          while (!q.empty()) {
+            auto tmpCur = q.front();
+            joint_active[tmpCur] = false;
+            q.pop();
+            for (auto c : children[tmpCur])
+              q.push(c);
+          }
+        } else
+          joint_active[i] = true;
+      }
+      ImGui::SameLine();
+      ImGui::Text(
+          "%s %s", depthHeader.c_str(),
+          registry.get<transform>(ordered_entities[i]).name.c_str());
+    }
+    ImGui::EndChild();
+    ImGui::TreePop();
+  }
+  if (ImGui::Button("Export Proxy Pose", {-1, 30})) {
+    auto proxies = estimate_proxy_skeleton(registry, *this);
+    for (int i = 0; i < proxies.size(); i++) {
+      std::string save_filepath;
+      auto bvh_str = make_current_pose_bvh(registry, proxies[i]);
+      if (save_file_dialog(str_format("Save .bvh pose no.%d", i), {"*.bvh"},
+                           save_filepath)) {
+        std::ofstream output(save_filepath);
+        if (output.is_open())
+          output << bvh_str;
+        output.close();
+      }
+    }
+  }
+}
+
+}; // namespace toolkit::opengl3d

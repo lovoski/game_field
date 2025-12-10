@@ -4,6 +4,8 @@
 #include "toolkit/opengl3d/gui.hpp"
 #include "toolkit/opengl3d/rasterize/shaders.hpp"
 
+#include "toolkit/opengl3d/experiments/spring_damper.hpp"
+
 namespace toolkit::opengl3d {
 
 void engine3d::init(int width, int height, std::string title, int majorVersion,
@@ -363,6 +365,7 @@ void engine3d::late_deserialize(nlohmann::json &j) {
 
   transform_hierarchy_sys = register_sys<transform_system>();
   default_render_sys = register_sys<defered_render_system>();
+  ss_handler_system = register_sys<sub_system_handler>();
 }
 
 void engine3d::game_mode_main_loop() {
@@ -373,6 +376,8 @@ void engine3d::game_mode_main_loop() {
 
   transform_hierarchy_sys->update_transform(registry);
   default_render_sys->update_scene_buffers(registry);
+  default_render_sys->preupdate(registry);
+  ss_handler_system->proxy_update(registry, dt);
 
   if (wnd_resized) {
     scene_wnd_size.x() = wnd_width;
@@ -401,10 +406,11 @@ void engine3d::editor_mode_main_loop() {
 
   transform_hierarchy_sys->update_transform(registry);
   default_render_sys->update_scene_buffers(registry);
+  default_render_sys->preupdate(registry);
   if (editor_manipulate_camera)
     active_camera_manipulate(dt);
+  ss_handler_system->proxy_update(registry, dt);
 
-  default_render_sys->preupdate(registry);
   default_render_sys->render(registry, active_cam_trans, active_cam_comp);
 
   glClearColor(0, 0, 0, 1);
@@ -479,6 +485,7 @@ void engine3d::reset() {
   systems.clear();
   transform_hierarchy_sys = register_sys<transform_system>();
   default_render_sys = register_sys<defered_render_system>();
+  ss_handler_system = register_sys<sub_system_handler>();
 }
 
 void engine3d::add_default_objects() {

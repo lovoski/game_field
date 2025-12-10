@@ -43,8 +43,7 @@ void engine3d::active_camera_manipulate(float dt) {
   auto cursor_pos = mouse_screen_pos;
   if (auto cam_trans = registry.try_get<transform>(active_camera)) {
     // focus on selected entity if `F` is triggered
-    if (selected_entity != entt::null && is_key_triggered(SDLK_f))
-    {
+    if (selected_entity != entt::null && is_key_triggered(SDLK_f)) {
       SDL_Log("Focus camera \"{0}\" to selected entity \"{1}\"",
               registry.get<transform>(active_camera).name,
               registry.get<transform>(selected_entity).name);
@@ -69,20 +68,15 @@ void engine3d::active_camera_manipulate(float dt) {
         cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
       // check action queue for mouse scroll event
       cam_trans->set_world_pos(cam_trans->world_pos() -
-                               cam_trans->local_forward() * scroll_offset.y()
-                               *
+                               cam_trans->local_forward() * scroll_offset.y() *
                                    movement_delta);
     }
-    bool press_mouse_mid_btn =
-        is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
-    bool press_mouse_right_btn =
-        is_mouse_button_pressed(SDL_BUTTON_RIGHT);
+    bool press_mouse_mid_btn = is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
+    bool press_mouse_right_btn = is_mouse_button_pressed(SDL_BUTTON_RIGHT);
     // only handle mouse input when cursor in scene window
     if ((press_mouse_mid_btn || press_mouse_right_btn) &&
-        (mouse_screen_pos.x() > 0 &&
-         mouse_screen_pos.x() < wnd_width &&
-         mouse_screen_pos.y() > 0 &&
-         mouse_screen_pos.y() < wnd_width)) {
+        (mouse_screen_pos.x() > 0 && mouse_screen_pos.x() < wnd_width &&
+         mouse_screen_pos.y() > 0 && mouse_screen_pos.y() < wnd_width)) {
       // free fps-style camera
       if (press_mouse_right_btn &&
           (cursor_pos.x() > scene_wnd_pos.x() &&
@@ -92,26 +86,24 @@ void engine3d::active_camera_manipulate(float dt) {
         // modify the cameraPivot position to suite cursor movement
         if (mouse_screen_delta.norm() > 1e-2f) {
           math::vector3 ray_o, ray_d;
-          math::vector2 screen_pos =
-              math::vector2(scene_wnd_size.x() / 2.0f +
-                                mouse_screen_delta.x() * cam_manip_data.fps_speed,
-                            scene_wnd_size.y() / 2.0f -
-                                mouse_screen_delta.y() * cam_manip_data.fps_speed);
+          math::vector2 screen_pos = math::vector2(
+              scene_wnd_size.x() / 2.0f +
+                  mouse_screen_delta.x() * cam_manip_data.fps_speed,
+              scene_wnd_size.y() / 2.0f -
+                  mouse_screen_delta.y() * cam_manip_data.fps_speed);
           screen_pos.x() /= scene_wnd_size.x();
           screen_pos.y() /= scene_wnd_size.y();
           if (screen_query_ray(screen_pos, ray_o, ray_d)) {
             cam_manip_data.camera_pivot =
                 ray_o +
-                ray_d * (cam_manip_data.camera_pivot -
-                cam_trans->world_pos())
+                ray_d * (cam_manip_data.camera_pivot - cam_trans->world_pos())
                             .norm();
           }
         }
         // move camera position with wasd key board
         math::vector3 camera_movement = math::vector3::Zero();
         math::vector3 cam_vec =
-            (cam_trans->world_pos() -
-            cam_manip_data.camera_pivot).normalized();
+            (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
         if (is_key_pressed(SDLK_w))
           camera_movement -= cam_trans->local_forward();
         if (is_key_pressed(SDLK_s))
@@ -130,8 +122,8 @@ void engine3d::active_camera_manipulate(float dt) {
           if (mouse_screen_delta.norm() > 1e-2f) {
             math::vector2 scene_size = scene_wnd_size;
             math::vector4 nfcPos = {-mouse_screen_delta.x() / scene_size.x(),
-                                    mouse_screen_delta.y() / scene_size.y(), 1.0f,
-                                    1.0f};
+                                    mouse_screen_delta.y() / scene_size.y(),
+                                    1.0f, 1.0f};
             math::vector4 worldRayPos =
                 cam_comp.view.inverse() * cam_comp.proj.inverse() * nfcPos;
             worldRayPos /= worldRayPos.w();
@@ -143,8 +135,7 @@ void engine3d::active_camera_manipulate(float dt) {
             auto deltaPos =
                 worldRayDir.dot(cam_trans->local_right()) *
                     cam_trans->local_right() +
-                worldRayDir.dot(cam_trans->local_up()) *
-                cam_trans->local_up();
+                worldRayDir.dot(cam_trans->local_up()) * cam_trans->local_up();
             cam_manip_data.camera_pivot += deltaPos;
             cam_trans->set_world_pos(cam_trans->world_pos() + deltaPos);
           }
@@ -747,10 +738,12 @@ void engine3d::draw_components_gui(entt::entity current_entity) {
     if (ImGui::CollapsingHeader("Mesh"))
       mesh_comp->draw_gui(registry, current_entity);
   }
-  if (auto bundle_comp = registry.try_get<skinned_mesh_bundle>(current_entity)) {
+  if (auto bundle_comp =
+          registry.try_get<skinned_mesh_bundle>(current_entity)) {
     if (ImGui::CollapsingHeader("Skinned Mesh Bundle (Pannel)"))
       bundle_comp->draw_gui(registry, current_entity);
   }
+  ss_handler_system->proxy_draw_gui(registry, current_entity);
 }
 
 void engine3d::draw_systems_gui() {

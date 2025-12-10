@@ -1,8 +1,8 @@
 #pragma once
 
-#include "toolkit/anim/components/actor.hpp"
-#include "toolkit/opengl/editor.hpp"
-#include "toolkit/scriptable.hpp"
+#include "toolkit/opengl3d/components/actor.hpp"
+#include "toolkit/opengl3d/engine.hpp"
+#include "toolkit/opengl3d/native_subsys.hpp"
 #include "toolkit/system.hpp"
 
 float critical_spring_damper(float x0, float v0, float xt, float t,
@@ -21,7 +21,7 @@ float critical_spring_damper(float x0, float v0, float xt, float t,
   return xt - x;
 }
 
-class spring_damper : public toolkit::sub_system {
+class spring_damper : public toolkit::opengl3d::sub_system {
 public:
   void start(entt::registry &registry) override {
     if (target == entt::null) {
@@ -33,7 +33,7 @@ public:
       trans.set_world_rot(self_trans.world_rot());
     }
   }
-  void lateupdate(entt::registry &registry, float dt) override {
+  void update(entt::registry &registry, float dt) override {
     // update the transform of attached entity given target position and dt
     auto &self_trans = registry.get<toolkit::transform>(entity);
     auto &target_trans = registry.get<toolkit::transform>(target);
@@ -63,10 +63,26 @@ public:
   }
 
   void draw_to_scene(entt::registry &registry, toolkit::transform &cam_trans,
-                     toolkit::camera &cam_comp) override {
-    toolkit::opengl::draw_wire_sphere(
+                     toolkit::opengl3d::camera &cam_comp) override {
+    toolkit::opengl3d::draw_wire_sphere(
         registry.get<toolkit::transform>(target).world_pos(), cam_comp.vp,
         0.1f);
+
+    auto &object_trans = registry.get<toolkit::transform>(entity);
+    toolkit::opengl3d::draw_wire_sphere(object_trans.world_pos(), cam_comp.vp,
+                                        0.1f, toolkit::math::vector3(1, 0, 0));
+    toolkit::opengl3d::draw_arrow(object_trans.world_pos(),
+                                  object_trans.world_pos() +
+                                      object_trans.local_right(),
+                                  cam_comp.vp, toolkit::math::vector3(1, 0, 0));
+    toolkit::opengl3d::draw_arrow(object_trans.world_pos(),
+                                  object_trans.world_pos() +
+                                      object_trans.local_up(),
+                                  cam_comp.vp, toolkit::math::vector3(0, 1, 0));
+    toolkit::opengl3d::draw_arrow(object_trans.world_pos(),
+                                  object_trans.world_pos() +
+                                      object_trans.local_forward(),
+                                  cam_comp.vp, toolkit::math::vector3(0, 0, 1));
   }
   void draw_gui(entt::registry &registry, entt::entity entity) override {
     ImGui::Text("Velocity x=%.2f,y=%.2f,z=%.2f", velocity.x(), velocity.y(),
@@ -86,4 +102,4 @@ public:
   float damper_half_life = 0.5f;
   entt::entity target = entt::null;
 };
-DECLARE_SUB_SYSTEM(spring_damper, animation, target, damper_half_life)
+DECLARE_SUB_SYSTEM(spring_damper, target, damper_half_life)

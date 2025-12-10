@@ -11,6 +11,8 @@ struct actor : public icomponent {
   std::vector<bool> joint_active;
   std::vector<entt::entity> ordered_entities;
   std::map<std::string, entt::entity> name_to_entity;
+
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
 };
 DECLARE_COMPONENT(actor, animation, joint_active, ordered_entities,
                   name_to_entity)
@@ -44,6 +46,10 @@ std::string proxy_hierarchy_as_bvh_skel(entt::registry &registry,
                                         proxy_skeleton &skel);
 std::string proxy_hierarchy_as_bvh_frame(entt::registry &registry,
                                          proxy_skeleton &skel);
+
+void collect_skeleton_draw_queue(
+    entt::registry &registry, actor &actor_comp,
+    std::vector<std::pair<math::vector3, math::vector3>> &draw_queue);
 
 /**
  * We assume at default state, there's only one root node in the provided actor
@@ -101,4 +107,4 @@ inertialize_update_rotation(math::quat off_rot, math::vector3 off_ang,
                             math::quat in_rot, math::vector3 in_ang,
                             float halflife, float dt);
 
-}; // namespace toolkit::anim
+}; // namespace toolkit::opengl3d

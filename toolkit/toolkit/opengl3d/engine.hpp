@@ -50,6 +50,8 @@
 #include "toolkit/opengl3d/components/camera.hpp"
 #include "toolkit/opengl3d/rasterize/system.hpp"
 
+#include "toolkit/opengl3d/native_subsys.hpp"
+
 #include <ImGuizmo.h>
 
 namespace toolkit::opengl3d {
@@ -103,6 +105,7 @@ public:
 
   defered_render_system *default_render_sys = nullptr;
   transform_system *transform_hierarchy_sys = nullptr;
+  sub_system_handler *ss_handler_system = nullptr;
 
   float click_selection_max_sin = 2e-2f;
   std::vector<ray_query_data> selection_candidates;

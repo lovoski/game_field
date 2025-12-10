@@ -5,6 +5,8 @@
 #include "toolkit/opengl3d/rasterize/system.hpp"
 #include "toolkit/opengl3d/gui.hpp"
 
+#include "toolkit/opengl3d/native_subsys.hpp"
+
 namespace toolkit::opengl3d {
 
 struct _packed_vertex {
@@ -779,19 +781,15 @@ void defered_render_system::render(entt::registry &registry,
       glDisable(GL_BLEND);
     }
 
-    // // render debug ui from scripts
-    // if (should_draw_debug) {
-    //   glDisable(GL_DEPTH_TEST);
-    //   // debug rendering
-    //   if (auto app_ptr = registry.ctx().get<iapp *>()) {
-    //     auto ss_handler = app_ptr->get_sys<sub_system_handler>();
-    //     ss_handler->draw_to_scene(registry, cam_trans, cam_comp);
-
-    //     auto sim_sys = app_ptr->get_sys<sim::phy_system>();
-    //     sim_sys->draw_to_scene(registry, cam_trans, cam_comp);
-    //   }
-    //   glEnable(GL_DEPTH_TEST);
-    // }
+    // render debug ui from scripts
+    if (should_draw_debug) {
+      // glDisable(GL_DEPTH_TEST);
+      if (auto app_ptr = registry.ctx().get<iapp *>()) {
+        auto ss_handler = app_ptr->get_sys<sub_system_handler>();
+        ss_handler->proxy_draw_to_scene(registry, cam_trans, cam_comp);
+      }
+      // glEnable(GL_DEPTH_TEST);
+    }
 
     // ------------------- apply post processing -------------------
     glEnable(GL_BLEND);
