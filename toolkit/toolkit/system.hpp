@@ -5,6 +5,12 @@
 #include "toolkit/utils.hpp"
 #include <imgui.h>
 #include <iostream>
+#include <fstream>
+#include <queue>
+#include <stack>
+#include <array>
+#include <algorithm>
+#include <vector>
 #include <json.hpp>
 
 namespace toolkit {

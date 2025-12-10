@@ -22,13 +22,8 @@ add_subdirectory("toolkit/deps/imgui")
 set(
   SRC_DIR_LIST 
   "toolkit/loaders" 
-  "toolkit/opengl" 
-  "toolkit/anim" 
-  "toolkit/sim" 
-  "toolkit/bullet" 
-  "toolkit/assets" 
-  "toolkit/common" 
   "toolkit/sdl2d"
+  "toolkit/opengl3d" 
 )
 set(LIB_LIST )
 file(GLOB SRC_FILES "toolkit/*.cpp")

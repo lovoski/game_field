@@ -1,12 +1,8 @@
 #pragma once
 
 #include "entt/entity/registry.hpp"
-#include <algorithm>
-#include <queue>
-#include <stack>
 #include <toolkit/math.hpp>
 #include <toolkit/utils.hpp>
-#include <vector>
 
 #include <toolkit/reflect.hpp>
 #include <toolkit/system.hpp>

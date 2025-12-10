@@ -39,9 +39,9 @@ add_subdirectory("toolkit")
 #   message(STATUS "Found ONNX Runtime headers: ${ONNXRUNTIME_INCLUDE_DIR}")
 # endif()
 
-add_executable(engine main.cpp)
-target_link_libraries(engine PRIVATE toolkit)
-target_include_directories(engine PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+add_executable(engine3d main3d.cpp)
+target_link_libraries(engine3d PRIVATE toolkit)
+target_include_directories(engine3d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(engine2d main2d.cpp)
 target_link_libraries(engine2d PRIVATE toolkit)
