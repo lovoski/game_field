@@ -66,13 +66,9 @@ void engine2d::draw_editor_gui() {
     if (ImGui::BeginMenu("Settings")) {
       // system configuration
       ImGui::MenuItem("Configure Systems", nullptr, false, false);
-      for (auto &sys : systems) {
-        if (ImGui::BeginMenu(sys->get_name().c_str())) {
-          ImGui::Checkbox("Active", &(sys->active));
-          ImGui::Separator();
-          sys->draw_menu_gui();
-          ImGui::EndMenu();
-        }
+      if (ImGui::BeginMenu("Box2D Lite")) {
+        box2d_solver->draw_menu_gui();
+        ImGui::EndMenu();
       }
 
       ImGui::Separator();

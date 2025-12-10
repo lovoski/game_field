@@ -21,7 +21,7 @@ public:
   ~isystem() {}
 
   /**
-   * The function gets executed during add_sys and deserialize of iapp, no
+   * The function gets executed during register_sys and deserialize of iapp, no
    * entities or components are created at the deserialization stage when this
    * function gets called, you can set up some sink functions inside
    * entt::registry here.
@@ -34,15 +34,7 @@ public:
    */
   virtual void init1(entt::registry &registry) {}
 
-  virtual void preupdate(entt::registry &registry, float dt) {}
-  virtual void update(entt::registry &registry, float dt) {}
-  virtual void lateupdate(entt::registry &registry, float dt) {}
-
   virtual void draw_menu_gui() {}
-  virtual void draw_gui(entt::registry &registry, entt::entity entity) {}
-  virtual std::string get_name() { return typeid(*this).name(); }
-
-  bool active = true;
 };
 
 class iapp {
@@ -59,7 +51,7 @@ public:
     printf("Required system doesn't exists in app, returns nullptr instead.\n");
     return nullptr;
   }
-  template <typename SystemType> SystemType *add_sys() {
+  template <typename SystemType> SystemType *register_sys() {
     static_assert(std::is_base_of_v<isystem, SystemType>,
                   "SystemType should derive from isystem");
     for (auto &ptr : systems) {
@@ -73,13 +65,6 @@ public:
     systems[systems.size() - 1]->init0(registry);
     return static_cast<SystemType *>(systems[systems.size() - 1].get());
   }
-
-  template <typename T> void view_as(std::function<void(T *)> &&f) {
-    if (auto ptr = dynamic_cast<T *>(this))
-      f(ptr);
-  }
-
-  void update(float dt);
 
   virtual nlohmann::json serialize();
   virtual void late_serialize(nlohmann::json &j) {}
@@ -112,10 +97,6 @@ public:
 
   static inline std::map<entt::entity, entt::entity> __entity_mapping__;
 
-  static inline std::vector<
-      std::function<void(iapp *, entt::registry &, entt::entity)>>
-      __try_draw_gui_funcs__;
-
 protected:
   std::vector<std::shared_ptr<isystem>> systems;
 };
@@ -124,7 +105,6 @@ class icomponent {
 public:
   virtual void init1() {}
   virtual void draw_gui(entt::registry &registry, entt::entity entity) {}
-  virtual std::string get_name() { return typeid(*this).name(); }
 
   virtual nlohmann::json late_serialize(entt::registry &registry,
                                         entt::entity entity) {
@@ -162,13 +142,6 @@ public:
       return;                                                                  \
     registry.emplace<class_name>(entity);                                      \
   }                                                                            \
-  inline void __try_draw_gui_##class_name(                                     \
-      toolkit::iapp *app, entt::registry &registry, entt::entity entity) {     \
-    if (auto ptr = registry.try_get<class_name>(entity)) {                     \
-      if (ImGui::CollapsingHeader(ptr->get_name().c_str()))                    \
-        ptr->draw_gui(registry, entity);                                       \
-    }                                                                          \
-  }                                                                            \
   inline void __comp_init1_##class_name(entt::registry &registry,              \
                                         entt::entity entity) {                 \
     if (auto ptr = registry.try_get<class_name>(entity)) {                     \
@@ -190,8 +163,6 @@ public:
           std::make_pair(std::string(#class_name), __add_comp_##class_name));  \
       toolkit::iapp::__comp_init1_funcs__.insert(                              \
           std::make_pair(#class_name, __comp_init1_##class_name));             \
-      toolkit::iapp::__try_draw_gui_funcs__.push_back(                         \
-          __try_draw_gui_##class_name);                                        \
     }                                                                          \
   };                                                                           \
   static __register_funcs_##class_name                                         \
@@ -207,7 +178,7 @@ public:
   }                                                                            \
   inline void __sys_deserializer__##class_name(iapp *app, nlohmann::json &j) { \
     if (j.contains(#class_name)) {                                             \
-      auto sys = app->add_sys<class_name>();                                   \
+      auto sys = app->register_sys<class_name>();                                   \
       from_json(j[#class_name], *sys);                                         \
     }                                                                          \
   }                                                                            \

@@ -6,8 +6,6 @@ void bullet_physics::init0(entt::registry &registry) {}
 
 void bullet_physics::fixedupdate(entt::registry &registry, float dt) {}
 
-void bullet_physics::draw_gui(entt::registry &registry, entt::entity entity) {}
-
 void bullet_physics::draw_menu_gui() {}
 
 void bullet_physics::draw_to_scene(entt::registry &registry,

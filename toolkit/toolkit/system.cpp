@@ -123,16 +123,4 @@ void iapp::load_bundle(nlohmann::json &j) {
   }
 }
 
-void iapp::update(float dt) {
-  for (auto sys : systems)
-    if (sys->active)
-      sys->preupdate(registry, dt);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->update(registry, dt);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->lateupdate(registry, dt);
-}
-
 }; // namespace toolkit

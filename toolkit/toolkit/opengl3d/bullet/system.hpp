@@ -9,10 +9,9 @@ class bullet_physics : public isystem {
 public:
   void init0(entt::registry &registry) override;
 
-  void update(entt::registry &registry, float dt) override;
+  void update(entt::registry &registry, float dt);
   void fixedupdate(entt::registry &registry, float dt);
 
-  void draw_gui(entt::registry &registry, entt::entity entity) override;
   void draw_menu_gui() override;
 
   void draw_to_scene(entt::registry &registry, transform &cam_trans,

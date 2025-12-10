@@ -72,6 +72,8 @@ public:
 
   void force_update_hierarchy();
 
+  void draw_gui(entt::registry &registry, entt::entity entity);
+
 private:
   // ---------- cache data for faster reference ----------
   math::vector3 m_pos = math::vector3::Zero();
@@ -101,8 +103,6 @@ public:
     registry.on_destroy<transform>().connect<&on_transform_destroyed>();
   }
   void init1(entt::registry &registry) override {}
-
-  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   void update_transform(entt::registry &registry);
 

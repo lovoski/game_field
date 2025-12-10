@@ -8,7 +8,7 @@
  * of this software for any purpose.
  * It is provided "as is" without express or implied warranty.
  */
-#include "toolkit/sdl2d/sim2d/system.hpp"
+#include "toolkit/sdl2d/box2d_lite/system.hpp"
 
 // Box vertex and edge numbering:
 //
@@ -24,7 +24,7 @@
 
 using namespace toolkit::math;
 
-namespace toolkit::sdl2d {
+namespace toolkit::sdl2d::box2d {
 
 enum Axis { FACE_A_X, FACE_A_Y, FACE_B_X, FACE_B_Y };
 

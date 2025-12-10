@@ -97,22 +97,6 @@ void defered_render_system::draw_menu_gui() {
   //   resize_csm_buffer();
 }
 
-void defered_render_system::draw_gui(entt::registry &registry,
-                                     entt::entity entity) {
-  if (auto ptr = registry.try_get<camera>(entity)) {
-    if (ImGui::CollapsingHeader("Camera"))
-      ptr->draw_gui(registry, entity);
-  }
-  if (auto ptr = registry.try_get<mesh_data>(entity)) {
-    if (ImGui::CollapsingHeader("Mesh Data"))
-      ptr->draw_gui(registry, entity); // TODO: no need for mesh data component
-                                       // to access app settings
-  }
-
-  if (show_textures_wnd)
-    show_textures_wnd_func();
-}
-
 void defered_render_system::show_textures_wnd_func() {
   ImGui::Begin("mixed_rsys_tex_wnd", &show_textures_wnd);
   auto size = ImGui::GetWindowSize();
@@ -302,7 +286,7 @@ void defered_render_system::resize(int width, int height) {
   resize_csm_buffer();
 }
 
-void defered_render_system::preupdate(entt::registry &registry, float dt) {
+void defered_render_system::preupdate(entt::registry &registry) {
   // update vp matrices for cameras
   registry.view<camera>().each([&](entt::entity entity, camera &camera) {
     compute_vp_matrix(registry, entity, canvas_width, canvas_height);

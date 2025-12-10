@@ -130,6 +130,19 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
   imgui_io = &ImGui::GetIO();
   imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  imgui_io->IniFilename = "engine3d_layout.ini";
+
+  // load optional default font
+  if (std::filesystem::exists("font.ttf")) {
+    imgui_io->Fonts->AddFontFromFileTTF(
+        "font.ttf", 20.0f, nullptr,
+        imgui_io->Fonts->GetGlyphRangesChineseFull());
+    std::cout << "Default font loaded from ./font.ttf" << std::endl;
+  } else {
+    std::cout << "Default font not found at ./font.ttf, use imgui internal "
+                 "font without utf-8 support"
+              << std::endl;
+  }
 
   quad_program.compile_shader_from_source(quad_vs, R"(
 #version 430 core
@@ -233,9 +246,8 @@ engine3d::get_game_controller_analog_inputs(SDL_GameController *controller) {
 void engine3d::handle_input_events() {
   // reset per-frame transient states
   wnd_resized = false;
-  scroll_offset = math::vector2{0.0, 0.0};
-  mouse_delta_x = 0.0;
-  mouse_delta_y = 0.0;
+  scroll_offset = math::vector2::Zero();
+  mouse_screen_delta = math::vector2::Zero();
   triggered_keys.clear();
   untriggered_keys.clear();
   triggered_mouse_keys.clear();
@@ -302,16 +314,16 @@ void engine3d::handle_input_events() {
 
     case SDL_MOUSEMOTION: {
       // SDL provides high-precision positions
-      mouse_x = static_cast<double>(event.motion.x);
-      mouse_y = static_cast<double>(event.motion.y);
-      mouse_delta_x = static_cast<double>(event.motion.xrel);
-      mouse_delta_y = static_cast<double>(event.motion.yrel);
+      mouse_screen_pos.x() = static_cast<float>(event.motion.x);
+      mouse_screen_pos.y() = static_cast<float>(event.motion.y);
+      mouse_screen_delta.x() = static_cast<float>(event.motion.xrel);
+      mouse_screen_delta.y() = static_cast<float>(event.motion.yrel);
     } break;
 
     case SDL_MOUSEWHEEL: {
       // SDL mouse wheel: x,y for horizontal/vertical
-      scroll_offset.x() += static_cast<double>(event.wheel.x);
-      scroll_offset.y() += static_cast<double>(event.wheel.y);
+      scroll_offset.x() += static_cast<float>(event.wheel.x);
+      scroll_offset.y() += static_cast<float>(event.wheel.y);
     } break;
 
     default:
@@ -349,8 +361,8 @@ void engine3d::late_deserialize(nlohmann::json &j) {
       active_camera = *(cam_view.begin());
   }
 
-  transform_sys = get_sys<transform_system>();
-  render_sys = get_sys<defered_render_system>();
+  transform_hierarchy_sys = register_sys<transform_system>();
+  default_render_sys = register_sys<defered_render_system>();
 }
 
 void engine3d::game_mode_main_loop() {
@@ -359,25 +371,15 @@ void engine3d::game_mode_main_loop() {
   float dt = timer.elapse_s();
   timer.reset();
 
-  transform_sys->update_transform(registry);
-  render_sys->update_scene_buffers(registry);
-
-  for (auto sys : systems)
-    if (sys->active)
-      sys->preupdate(registry, dt);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->update(registry, dt);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->lateupdate(registry, dt);
+  transform_hierarchy_sys->update_transform(registry);
+  default_render_sys->update_scene_buffers(registry);
 
   if (wnd_resized) {
     scene_wnd_size.x() = wnd_width;
     scene_wnd_size.y() = wnd_height;
-    render_sys->resize(wnd_width, wnd_height);
+    default_render_sys->resize(wnd_width, wnd_height);
   }
-  render_sys->render(registry, active_cam_trans, active_cam_comp);
+  default_render_sys->render(registry, active_cam_trans, active_cam_comp);
 
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -385,7 +387,7 @@ void engine3d::game_mode_main_loop() {
 
   quad_program.use();
   quad_program.set_texture2d("scene_tex",
-                             render_sys->get_target_texture().get_handle(), 0);
+                             default_render_sys->get_target_texture().get_handle(), 0);
   quad_draw_call();
   if (window) {
     SDL_GL_SwapWindow(window);
@@ -397,22 +399,13 @@ void engine3d::editor_mode_main_loop() {
   float dt = timer.elapse_s();
   timer.reset();
 
-  transform_sys->update_transform(registry);
-  render_sys->update_scene_buffers(registry);
+  transform_hierarchy_sys->update_transform(registry);
+  default_render_sys->update_scene_buffers(registry);
   if (editor_manipulate_camera)
     active_camera_manipulate(dt);
 
-  for (auto sys : systems)
-    if (sys->active)
-      sys->preupdate(registry, dt);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->update(registry, dt);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->lateupdate(registry, dt);
-
-  render_sys->render(registry, active_cam_trans, active_cam_comp);
+  default_render_sys->preupdate(registry);
+  default_render_sys->render(registry, active_cam_trans, active_cam_comp);
 
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -430,22 +423,22 @@ void engine3d::editor_mode_main_loop() {
   scene_wnd_pos.x() = pos.x;
   scene_wnd_pos.y() = pos.y;
   ImGui::Image((void *)static_cast<std::uintptr_t>(
-                   render_sys->get_target_texture().get_handle()),
+                   default_render_sys->get_target_texture().get_handle()),
                {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
   if (scene_wnd_size.x() != size.x || scene_wnd_size.y() != size.y) {
     // resize sceneFBO
     scene_wnd_size.x() = size.x;
     scene_wnd_size.y() = size.y;
-    render_sys->resize(size.x, size.y);
-    render_sys->render(registry, active_cam_trans, active_cam_comp);
+    default_render_sys->resize(size.x, size.y);
+    default_render_sys->render(registry, active_cam_trans, active_cam_comp);
   }
   draw_gizmos();
   ImGui::EndChild();
   ImGui::End();
 
   draw_main_menubar();
-  draw_entity_hierarchy();
-  draw_entity_components();
+  draw_hierarchy_window();
+  draw_components_window();
   editor_shortkeys();
 
   ImGui::EndFrame();
@@ -468,7 +461,7 @@ void engine3d::run() {
     if (is_key_triggered(SDLK_0) && is_key_pressed(SDLK_LCTRL)) {
       scene_wnd_size.x() = wnd_width;
       scene_wnd_size.x() = wnd_height;
-      render_sys->resize(wnd_width, wnd_height);
+      default_render_sys->resize(wnd_width, wnd_height);
       in_game_mode = !in_game_mode;
     }
     if (!in_game_mode) {
@@ -484,9 +477,8 @@ void engine3d::run() {
 void engine3d::reset() {
   registry.clear();
   systems.clear();
-
-  transform_sys = add_sys<transform_system>();
-  render_sys = add_sys<defered_render_system>();
+  transform_hierarchy_sys = register_sys<transform_system>();
+  default_render_sys = register_sys<defered_render_system>();
 }
 
 void engine3d::add_default_objects() {

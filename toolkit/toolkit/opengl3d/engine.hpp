@@ -65,8 +65,6 @@ struct compare_ray_query_data {
   }
 };
 struct active_camera_manipulate_data {
-  bool mouse_first_move = true;
-  math::vector2 mouse_last_pos;
   math::vector3 camera_pivot{0.0, 0.0, 0.0};
   // Some parameter related to camera control
   float initial_factor = 0.6f;
@@ -103,8 +101,8 @@ public:
 
   entt::entity selected_entity = entt::null;
 
-  defered_render_system *render_sys = nullptr;
-  transform_system *transform_sys = nullptr;
+  defered_render_system *default_render_sys = nullptr;
+  transform_system *transform_hierarchy_sys = nullptr;
 
   float click_selection_max_sin = 2e-2f;
   std::vector<ray_query_data> selection_candidates;
@@ -113,9 +111,14 @@ public:
   void late_serialize(nlohmann::json &j) override;
 
   void draw_main_menubar();
-  void draw_entity_hierarchy();
-  void draw_entity_components();
+  void draw_hierarchy_window();
+  void draw_components_window();
   void draw_gizmos(bool enable = true);
+
+  // override this if there's more systems
+  void draw_components_gui(entt::entity current_entity);
+  // override this if there's more components
+  void draw_systems_gui();
 
   void game_mode_main_loop();
   void editor_mode_main_loop();
@@ -159,7 +162,10 @@ public:
   std::tuple<math::vector2, math::vector2, float, float>
   get_game_controller_analog_inputs(SDL_GameController *controller);
 
-private:
+  math::vector2 get_mouse_screen_pos() const { return mouse_screen_pos; }
+  math::vector2 get_mouse_screen_delta() const { return mouse_screen_delta; }
+
+protected:
   int gizmo_mode_idx = 0;
   bool in_game_mode = false;
   bool should_vsync = false;
@@ -169,7 +175,7 @@ private:
   std::unordered_map<int, bool> key_states;
   std::set<int> triggered_mouse_keys, untriggered_mouse_keys;
   std::unordered_map<int, bool> mouse_button_states;
-  double mouse_x, mouse_y, mouse_delta_x = 0.0, mouse_delta_y = 0.0;
+  math::vector2 mouse_screen_pos, mouse_screen_delta;
   math::vector2 scroll_offset{0.0, 0.0};
 
   SDL_Window *window = nullptr;

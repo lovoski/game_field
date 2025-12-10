@@ -2,7 +2,7 @@
 
 #include "toolkit/sdl2d/header.hpp"
 
-namespace toolkit::sdl2d {
+namespace toolkit::sdl2d::box2d {
 
 struct body {
   body() { reset(); }
@@ -86,17 +86,14 @@ inline bool operator<(const arbiter_key &a1, const arbiter_key &a2) {
 
 bool collide(std::vector<contact> &contacts, body *b1, body *b2);
 
-class sim_sys_2d : public isystem {
+class box2d_lite_world : public isystem {
 public:
-  void update(entt::registry &registry, float dt) override;
+  void update(entt::registry &registry, float dt);
   void step(entt::registry &registry, float dt);
 
-  void draw_gui(entt::registry &registry, entt::entity entity) override;
   void draw_menu_gui() override;
 
   void broadphase(entt::registry &registry);
-
-  std::string get_name() override { return "Physics System"; }
 
   math::vector2 gravity = math::vector2(0.0f, -9.8f);
 
@@ -113,8 +110,8 @@ private:
   std::vector<body *> bodies_cache;
   std::map<arbiter_key, arbiter> arbiters;
 
-  REFLECT_PRIVATE(sim_sys_2d)
+  REFLECT_PRIVATE(box2d_lite_world)
 };
-DECLARE_SYSTEM(sim_sys_2d, num_sub_steps, gravity, fixed_timestep)
+DECLARE_SYSTEM(box2d_lite_world, num_sub_steps, gravity, fixed_timestep)
 
 }; // namespace toolkit::sdl2d

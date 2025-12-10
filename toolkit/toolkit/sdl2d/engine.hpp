@@ -18,7 +18,7 @@
 
 #include "toolkit/sdl2d/header.hpp"
 
-#include "toolkit/sdl2d/sim2d/system.hpp"
+#include "toolkit/sdl2d/box2d_lite/system.hpp"
 
 namespace toolkit::sdl2d {
 
@@ -52,6 +52,8 @@ private:
   Uint64 perf_frequency = 0;
   Uint64 last_counter = 0;
   double delta_time = 0.0; // seconds
+
+  box2d::box2d_lite_world *box2d_solver;
 
   void draw_editor_gui();
 

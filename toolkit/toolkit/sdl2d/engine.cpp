@@ -46,6 +46,19 @@ void engine2d::init(int width, int height) {
   ImGuiIO &io = ImGui::GetIO();
   io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
   // io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  io.IniFilename = "engine2d_layout.ini";
+
+  // load optional default font
+  if (std::filesystem::exists("font.ttf")) {
+    io.Fonts->AddFontFromFileTTF("font.ttf", 20.0f, nullptr,
+                                 io.Fonts->GetGlyphRangesChineseFull());
+    std::cout << "Default font loaded from ./font.ttf" << std::endl;
+  } else {
+    std::cout << "Default font not found at ./font.ttf, use imgui internal "
+                 "font without utf-8 support"
+              << std::endl;
+  }
+
   // Backend bindings
   ImGui_ImplSDL2_InitForSDLRenderer(window, renderer);
   ImGui_ImplSDLRenderer2_Init(renderer);
@@ -179,7 +192,7 @@ void engine2d::reset() {
   registry.clear();
   systems.clear();
 
-  add_sys<sim_sys_2d>();
+  box2d_solver = register_sys<box2d::box2d_lite_world>();
 
   camera_zoom = 20.0f; // 1 unit in world space ---> 20 pixels
   camera_rotation = 0.0f;
@@ -210,32 +223,32 @@ math::vector2 engine2d::screen_to_world(const math::vector2 &screen_pos) {
 
 void engine2d::add_default_objects() {
   auto ground0 = registry.create();
-  auto &ground_body0 = registry.emplace<body>(ground0);
+  auto &ground_body0 = registry.emplace<box2d::body>(ground0);
   ground_body0.setup(math::vector2(20.0f, 1.0f));
   ground_body0.position = math::vector2(0.0f, -1.0f);
   ground_body0.rotation = 0.1f;
 
   auto ground1 = registry.create();
-  auto &ground_body1 = registry.emplace<body>(ground1);
+  auto &ground_body1 = registry.emplace<box2d::body>(ground1);
   ground_body1.setup(math::vector2(20.0f, 1.0f));
   ground_body1.position = math::vector2(-10.0f, -2.0f);
   ground_body1.rotation = -0.1f;
 
   for (int i = 0; i < 5; i++) {
     auto entity = registry.create();
-    auto &body_comp = registry.emplace<body>(entity);
+    auto &body_comp = registry.emplace<box2d::body>(entity);
     body_comp.setup(math::vector2(1.0f, 1.0f + i), 1.0f);
     body_comp.position = math::vector2(0.0f, 1.0f + 5 * i);
   }
   for (int i = 0; i < 5; i++) {
     auto entity = registry.create();
-    auto &body_comp = registry.emplace<body>(entity);
+    auto &body_comp = registry.emplace<box2d::body>(entity);
     body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
     body_comp.position = math::vector2(-1.0f, 1.0f + 5 * i);
   }
   for (int i = 0; i < 5; i++) {
     auto entity = registry.create();
-    auto &body_comp = registry.emplace<body>(entity);
+    auto &body_comp = registry.emplace<box2d::body>(entity);
     body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
     body_comp.position = math::vector2(1.0f, 1.0f + 5 * i);
   }
@@ -248,15 +261,7 @@ void engine2d::handle_game_logic_tick() {
                static_cast<float>(perf_frequency);
   last_counter = now_counter;
 
-  for (auto sys : systems)
-    if (sys->active)
-      sys->preupdate(registry, delta_time);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->update(registry, delta_time);
-  for (auto sys : systems)
-    if (sys->active)
-      sys->lateupdate(registry, delta_time);
+  box2d_solver->update(registry, delta_time);
 
   if (!engine_play_mode) {
     // editor exclusive logic
@@ -270,32 +275,33 @@ void engine2d::handle_game_logic_tick() {
 }
 
 void engine2d::handle_game_render_tick() {
-  registry.view<body>().each([&](entt::entity entity, body &body_comp) {
-    auto rotation = from_angle(body_comp.rotation);
-    std::vector<math::vector2> points{
-        rotation * math::vector2(0.5 * body_comp.size.x(),
-                                 0.5 * body_comp.size.y()) +
-            body_comp.position,
-        rotation * math::vector2(-0.5 * body_comp.size.x(),
-                                 0.5 * body_comp.size.y()) +
-            body_comp.position,
-        rotation * math::vector2(-0.5 * body_comp.size.x(),
-                                 -0.5 * body_comp.size.y()) +
-            body_comp.position,
-        rotation * math::vector2(0.5 * body_comp.size.x(),
-                                 -0.5 * body_comp.size.y()) +
-            body_comp.position,
-    };
-    for (int i = 0; i < 4; i++) {
-      points[i] = world_to_screen(points[i]);
-    }
-    ss_draw_lines(points, true);
-  });
+  registry.view<box2d::body>().each(
+      [&](entt::entity entity, box2d::body &body_comp) {
+        auto rotation = from_angle(body_comp.rotation);
+        std::vector<math::vector2> points{
+            rotation * math::vector2(0.5 * body_comp.size.x(),
+                                     0.5 * body_comp.size.y()) +
+                body_comp.position,
+            rotation * math::vector2(-0.5 * body_comp.size.x(),
+                                     0.5 * body_comp.size.y()) +
+                body_comp.position,
+            rotation * math::vector2(-0.5 * body_comp.size.x(),
+                                     -0.5 * body_comp.size.y()) +
+                body_comp.position,
+            rotation * math::vector2(0.5 * body_comp.size.x(),
+                                     -0.5 * body_comp.size.y()) +
+                body_comp.position,
+        };
+        for (int i = 0; i < 4; i++) {
+          points[i] = world_to_screen(points[i]);
+        }
+        ss_draw_lines(points, true);
+      });
 
-  ss_draw_circle(100, 100, 20, true, math::vector4(1,0,0,0.5));
-  ss_draw_circle(140, 100, 50, true, math::vector4(1,1,0,0.5));
-  ss_draw_rectangle(100, 150, 20, 30, true, math::vector4(1,0,0,0.5));
-  ss_draw_rectangle(110, 170, 20, 30, true, math::vector4(1,1,0,0.5));
+  ss_draw_circle(100, 100, 20, true, math::vector4(1, 0, 0, 0.5));
+  ss_draw_circle(140, 100, 50, true, math::vector4(1, 1, 0, 0.5));
+  ss_draw_rectangle(100, 150, 20, 30, true, math::vector4(1, 0, 0, 0.5));
+  ss_draw_rectangle(110, 170, 20, 30, true, math::vector4(1, 1, 0, 0.5));
 }
 
 }; // namespace toolkit::sdl2d

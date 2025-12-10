@@ -76,6 +76,10 @@ struct skinned_mesh_bundle : public icomponent {
   std::array<math::vector4, 6> vis_planes;
   void try_setup();
 
+  std::vector<std::pair<std::string, float>>
+      blendshape_weights; // temporary variable, no need for serialization
+  void draw_gui(entt::registry &registry, entt::entity entity) override;
+
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
   std::vector<entt::entity> bone_entities, mesh_entities;
 };
@@ -94,4 +98,4 @@ entt::entity create_sphere(entt::registry &registry,
 entt::entity create_cylinder(entt::registry &registry,
                              math::matrix4 t = math::matrix4::Identity());
 
-}; // namespace toolkit::opengl
+}; // namespace toolkit::opengl3d

@@ -1,6 +1,6 @@
-#include "toolkit/sdl2d/sim2d/system.hpp"
+#include "toolkit/sdl2d/box2d_lite/system.hpp"
 
-namespace toolkit::sdl2d {
+namespace toolkit::sdl2d::box2d {
 
 inline float cross(const math::vector2 &a, const math::vector2 &b) {
   return a.x() * b.y() - a.y() * b.x();
@@ -74,7 +74,7 @@ void arbiter::update(std::vector<contact> &_contacts) {
     if (k > -1) {
       auto &c_old = contacts[k];
       auto &c = merged_contacts[merged_contacts.size() - 1];
-      if (sim_sys_2d::warm_starting) {
+      if (box2d_lite_world::warm_starting) {
         c.Pn = c_old.Pn;
         c.Pt = c_old.Pt;
         c.Pnb = c_old.Pnb;
@@ -91,7 +91,7 @@ void arbiter::update(std::vector<contact> &_contacts) {
 void arbiter::prestep(float inv_dt) {
   const float k_allowed_penetration = 0.01f;
   float k_bias_factor =
-      sim_sys_2d::position_correction ? 0.2f : 0.0f; // TODO: what's this?
+      box2d_lite_world::position_correction ? 0.2f : 0.0f; // TODO: what's this?
   for (int i = 0; i < contacts.size(); i++) {
     auto &c = contacts[i];
     math::vector2 r1 = c.position - b1->position;
@@ -113,7 +113,7 @@ void arbiter::prestep(float inv_dt) {
     c.massTangent = 1.0f / k_tangent;
     c.bias = -k_bias_factor * inv_dt *
              std::min(0.0f, c.separation + k_allowed_penetration);
-    if (sim_sys_2d::accumulate_impulses) {
+    if (box2d_lite_world::accumulate_impulses) {
       // apply normal + friction impulse
       math::vector2 P = c.Pn * c.normal + c.Pt * tangent;
       b1->linear_velocity -= b1->inv_mass * P;
@@ -136,7 +136,7 @@ void arbiter::apply_impulse() {
     // the normal impulse stop the two objects from penetration
     float vn = dv.dot(c.normal);
     float dPn = c.massNormal * (-vn + c.bias);
-    if (sim_sys_2d::accumulate_impulses) {
+    if (box2d_lite_world::accumulate_impulses) {
       float Pn0 = c.Pn;
       c.Pn = std::max(Pn0 + dPn, 0.0f);
       dPn = c.Pn - Pn0;
@@ -157,7 +157,7 @@ void arbiter::apply_impulse() {
     float vt = dv.dot(tangent);
     float dPt = c.massTangent * (-vt);
     // compute friction impulse
-    if (sim_sys_2d::accumulate_impulses) {
+    if (box2d_lite_world::accumulate_impulses) {
       float maxPt = friction * c.Pn;
       // clamp friction
       float old_tangent_impulse = c.Pt;
@@ -176,7 +176,7 @@ void arbiter::apply_impulse() {
   }
 }
 
-void sim_sys_2d::broadphase(entt::registry &registry) {
+void box2d_lite_world::broadphase(entt::registry &registry) {
   // O(n^2)
   for (int i = 0; i < bodies_cache.size(); i++) {
     auto bi = bodies_cache[i];
@@ -200,7 +200,7 @@ void sim_sys_2d::broadphase(entt::registry &registry) {
   }
 }
 
-void sim_sys_2d::step(entt::registry &registry, float dt) {
+void box2d_lite_world::step(entt::registry &registry, float dt) {
   float inv_dt = dt > 0.0f ? 1.0f / dt : 0.0f;
   bodies_cache.clear();
   registry.view<body>().each([&](entt::entity entity, body &body_comp) {
@@ -241,9 +241,7 @@ void sim_sys_2d::step(entt::registry &registry, float dt) {
   }
 }
 
-void sim_sys_2d::draw_gui(entt::registry &registry, entt::entity entity) {}
-
-void sim_sys_2d::draw_menu_gui() {
+void box2d_lite_world::draw_menu_gui() {
   ImGui::Checkbox("Fixed Time Step", &fixed_timestep);
   if (ImGui::InputInt("Num Sub Steps", &num_sub_steps)) {
     num_sub_steps = std::clamp(num_sub_steps, 1, 100);
@@ -251,7 +249,7 @@ void sim_sys_2d::draw_menu_gui() {
   ImGui::DragFloat2("Gravity", gravity.data(), 0.01f, -100.0f, 100.0f);
 }
 
-void sim_sys_2d::update(entt::registry &registry, float dt) {
+void box2d_lite_world::update(entt::registry &registry, float dt) {
   float fixed_interval = 1.0f / sim_fps;
   if (fixed_timestep) {
     float residual = cur_time - cur_exec_fixed * fixed_interval;

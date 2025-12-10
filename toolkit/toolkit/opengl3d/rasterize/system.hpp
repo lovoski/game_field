@@ -19,7 +19,7 @@ public:
 
   void resize(int width, int height);
 
-  void preupdate(entt::registry &registry, float dt) override;
+  void preupdate(entt::registry &registry);
   void render(entt::registry &registry, transform &cam_trans, camera &cam_comp);
 
   void update_scene_buffers(entt::registry &registry);
@@ -27,8 +27,6 @@ public:
   void update_scene_data_structures(entt::registry &registry);
 
   texture get_target_texture() const { return color_tex; }
-
-  void draw_gui(entt::registry &registry, entt::entity entity) override;
 
   void draw_menu_gui() override;
 

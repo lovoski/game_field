@@ -292,20 +292,16 @@ void transform::force_update_hierarchy() {
   }
 }
 
-void transform_system::draw_gui(entt::registry &registry, entt::entity entity) {
-  if (auto trans = registry.try_get<transform>(entity)) {
-    if (ImGui::CollapsingHeader("Transform")) {
-      auto position = trans->world_pos();
-      auto localEuler = trans->local_euler_degrees();
-      auto scale = trans->world_scl();
-      if (ImGui::DragFloat3("World Pos.", position.data(), 0.01f))
-        trans->set_world_pos(position);
-      if (ImGui::DragFloat3("Local Rot.", localEuler.data(), 0.01f))
-        trans->set_local_euler_degrees(localEuler);
-      if (ImGui::DragFloat3("World Scl.", scale.data(), 0.01f))
-        trans->set_world_scale(scale);
-    }
-  }
+void transform::draw_gui(entt::registry &registry, entt::entity) {
+  auto __position = world_pos();
+  auto __localeuler = local_euler_degrees();
+  auto __scale = world_scl();
+  if (ImGui::DragFloat3("World Pos.", __position.data(), 0.01f))
+    set_world_pos(__position);
+  if (ImGui::DragFloat3("Local Rot.", __localeuler.data(), 0.01f))
+    set_local_euler_degrees(__localeuler);
+  if (ImGui::DragFloat3("World Scl.", __scale.data(), 0.01f))
+    set_world_scale(__scale);
 }
 
 void transform_system::update_transform(entt::registry &registry) {

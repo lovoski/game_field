@@ -40,247 +40,236 @@ bool engine3d::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
 }
 
 void engine3d::active_camera_manipulate(float dt) {
-  // auto cursor_pos = g_instance.get_mouse_position();
-  // if (auto cam_trans = registry.try_get<transform>(active_camera)) {
-  //   // focus on selected entity if `F` is triggered
-  //   if (selected_entity != entt::null && g_instance.is_key_triggered(SDLK_f))
-  //   {
-  //     SDL_Log("Focus camera \"{0}\" to selected entity \"{1}\"",
-  //             registry.get<transform>(active_camera).name,
-  //             registry.get<transform>(selected_entity).name);
-  //     cam_manip_data.camera_pivot =
-  //         registry.get<transform>(selected_entity).world_pos();
-  //   }
-  //   auto cam_comp = registry.get<camera>(active_camera);
-  //   auto cam_pos = cam_trans->world_pos();
-  //   if ((cam_pos - cam_manip_data.camera_pivot).norm() < 1e-9f) {
-  //     cam_manip_data.camera_pivot = cam_pos - cam_trans->local_forward();
-  //     SDL_Log("push pivot away from camera");
-  //   }
-  //   // scroll movement delta, scale with the distance to pivot
-  //   float movement_delta =
-  //       cam_manip_data.initial_factor * dt *
-  //       std::min(std::pow((cam_pos - cam_manip_data.camera_pivot).norm(),
-  //                         cam_manip_data.speed_pow),
-  //                cam_manip_data.max_speed);
-  //   if (cursor_pos.x() > scene_wnd_pos.x() &&
-  //       cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
-  //       cursor_pos.y() > scene_wnd_pos.y() &&
-  //       cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
-  //     // check action queue for mouse scroll event
-  //     math::vector2 scrollOffset = g_instance.get_scroll_offsets();
-  //     cam_trans->set_world_pos(cam_trans->world_pos() -
-  //                              cam_trans->local_forward() * scrollOffset.y()
-  //                              *
-  //                                  movement_delta);
-  //   }
-  //   bool press_mouse_mid_btn =
-  //       g_instance.is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
-  //   bool press_mouse_right_btn =
-  //       g_instance.is_mouse_button_pressed(SDL_BUTTON_RIGHT);
-  //   math::vector2 mouse_current_pos = g_instance.get_mouse_position();
-  //   // only handle mouse input when cursor in scene window
-  //   if ((press_mouse_mid_btn || press_mouse_right_btn) &&
-  //       (mouse_current_pos.x() > 0 &&
-  //        mouse_current_pos.x() < g_instance.wnd_width &&
-  //        mouse_current_pos.y() > 0 &&
-  //        mouse_current_pos.y() < g_instance.wnd_width)) {
-  //     if (cam_manip_data.mouse_first_move) {
-  //       cam_manip_data.mouse_last_pos = mouse_current_pos;
-  //       cam_manip_data.mouse_first_move = false;
-  //     }
-  //     math::vector2 mouse_offset =
-  //         mouse_current_pos - cam_manip_data.mouse_last_pos;
-  //     // free fps-style camera
-  //     if (press_mouse_right_btn &&
-  //         (cursor_pos.x() > scene_wnd_pos.x() &&
-  //          cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
-  //          cursor_pos.y() > scene_wnd_pos.y() &&
-  //          cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y()))) {
-  //       // modify the cameraPivot position to suite cursor movement
-  //       if (mouse_offset.norm() > 1e-2f) {
-  //         math::vector3 ray_o, ray_d;
-  //         math::vector2 screen_pos =
-  //             math::vector2(scene_wnd_size.x() / 2.0f +
-  //                               mouse_offset.x() * cam_manip_data.fps_speed,
-  //                           scene_wnd_size.y() / 2.0f -
-  //                               mouse_offset.y() * cam_manip_data.fps_speed);
-  //         screen_pos.x() /= scene_wnd_size.x();
-  //         screen_pos.y() /= scene_wnd_size.y();
-  //         if (screen_query_ray(screen_pos, ray_o, ray_d)) {
-  //           cam_manip_data.camera_pivot =
-  //               ray_o +
-  //               ray_d * (cam_manip_data.camera_pivot -
-  //               cam_trans->world_pos())
-  //                           .norm();
-  //         }
-  //       }
-  //       // move camera position with wasd key board
-  //       math::vector3 camera_movement = math::vector3::Zero();
-  //       math::vector3 cam_vec =
-  //           (cam_trans->world_pos() -
-  //           cam_manip_data.camera_pivot).normalized();
-  //       if (g_instance.is_key_pressed(SDLK_w))
-  //         camera_movement -= cam_trans->local_forward();
-  //       if (g_instance.is_key_pressed(SDLK_s))
-  //         camera_movement += cam_trans->local_forward();
-  //       if (g_instance.is_key_pressed(SDLK_a))
-  //         camera_movement -= cam_trans->local_right();
-  //       if (g_instance.is_key_pressed(SDLK_d))
-  //         camera_movement += cam_trans->local_right();
-  //       camera_movement *= (cam_manip_data.fps_camera_speed * dt);
-  //       cam_manip_data.camera_pivot += camera_movement;
-  //       cam_trans->set_world_pos(cam_trans->world_pos() + camera_movement);
-  //     } else if (press_mouse_mid_btn) {
-  //       // rotate the camera around the pivot, or translate the camera
-  //       if (g_instance.is_key_pressed(SDLK_LSHIFT)) {
-  //         // translate the camera according to nfc offset
-  //         if (mouse_offset.norm() > 1e-2f) {
-  //           math::vector2 scene_size = scene_wnd_size;
-  //           math::vector4 nfcPos = {-mouse_offset.x() / scene_size.x(),
-  //                                   mouse_offset.y() / scene_size.y(), 1.0f,
-  //                                   1.0f};
-  //           math::vector4 worldRayPos =
-  //               cam_comp.view.inverse() * cam_comp.proj.inverse() * nfcPos;
-  //           worldRayPos /= worldRayPos.w();
-  //           math::vector3 worldRayDir =
-  //               (worldRayPos.head<3>() - cam_pos).normalized();
-  //           worldRayDir =
-  //               worldRayDir.dot(cam_manip_data.camera_pivot - cam_pos) *
-  //               worldRayDir;
-  //           auto deltaPos =
-  //               worldRayDir.dot(cam_trans->local_right()) *
-  //                   cam_trans->local_right() +
-  //               worldRayDir.dot(cam_trans->local_up()) *
-  //               cam_trans->local_up();
-  //           cam_manip_data.camera_pivot += deltaPos;
-  //           cam_trans->set_world_pos(cam_trans->world_pos() + deltaPos);
-  //         }
-  //       } else {
-  //         // repose the camera
-  //         auto rotateOffset = mouse_offset * 0.1f;
-  //         math::vector3 posVector = cam_trans->world_pos();
-  //         math::vector3 newPos =
-  //             math::angle_axis(math::deg_to_rad(-rotateOffset.x()),
-  //                              math::world_up) *
-  //                 math::angle_axis(math::deg_to_rad(-rotateOffset.y()),
-  //                                  cam_trans->local_right()) *
-  //                 (posVector - cam_manip_data.camera_pivot) +
-  //             cam_manip_data.camera_pivot;
-  //         cam_trans->set_world_pos(newPos);
-  //       }
-  //     }
-  //     cam_manip_data.mouse_last_pos = mouse_current_pos;
-  //   } else
-  //     cam_manip_data.mouse_first_move = true;
+  auto cursor_pos = mouse_screen_pos;
+  if (auto cam_trans = registry.try_get<transform>(active_camera)) {
+    // focus on selected entity if `F` is triggered
+    if (selected_entity != entt::null && is_key_triggered(SDLK_f))
+    {
+      SDL_Log("Focus camera \"{0}\" to selected entity \"{1}\"",
+              registry.get<transform>(active_camera).name,
+              registry.get<transform>(selected_entity).name);
+      cam_manip_data.camera_pivot =
+          registry.get<transform>(selected_entity).world_pos();
+    }
+    auto cam_comp = registry.get<camera>(active_camera);
+    auto cam_pos = cam_trans->world_pos();
+    if ((cam_pos - cam_manip_data.camera_pivot).norm() < 1e-9f) {
+      cam_manip_data.camera_pivot = cam_pos - cam_trans->local_forward();
+      SDL_Log("push pivot away from camera");
+    }
+    // scroll movement delta, scale with the distance to pivot
+    float movement_delta =
+        cam_manip_data.initial_factor * dt *
+        std::min(std::pow((cam_pos - cam_manip_data.camera_pivot).norm(),
+                          cam_manip_data.speed_pow),
+                 cam_manip_data.max_speed);
+    if (cursor_pos.x() > scene_wnd_pos.x() &&
+        cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
+        cursor_pos.y() > scene_wnd_pos.y() &&
+        cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
+      // check action queue for mouse scroll event
+      cam_trans->set_world_pos(cam_trans->world_pos() -
+                               cam_trans->local_forward() * scroll_offset.y()
+                               *
+                                   movement_delta);
+    }
+    bool press_mouse_mid_btn =
+        is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
+    bool press_mouse_right_btn =
+        is_mouse_button_pressed(SDL_BUTTON_RIGHT);
+    // only handle mouse input when cursor in scene window
+    if ((press_mouse_mid_btn || press_mouse_right_btn) &&
+        (mouse_screen_pos.x() > 0 &&
+         mouse_screen_pos.x() < wnd_width &&
+         mouse_screen_pos.y() > 0 &&
+         mouse_screen_pos.y() < wnd_width)) {
+      // free fps-style camera
+      if (press_mouse_right_btn &&
+          (cursor_pos.x() > scene_wnd_pos.x() &&
+           cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
+           cursor_pos.y() > scene_wnd_pos.y() &&
+           cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y()))) {
+        // modify the cameraPivot position to suite cursor movement
+        if (mouse_screen_delta.norm() > 1e-2f) {
+          math::vector3 ray_o, ray_d;
+          math::vector2 screen_pos =
+              math::vector2(scene_wnd_size.x() / 2.0f +
+                                mouse_screen_delta.x() * cam_manip_data.fps_speed,
+                            scene_wnd_size.y() / 2.0f -
+                                mouse_screen_delta.y() * cam_manip_data.fps_speed);
+          screen_pos.x() /= scene_wnd_size.x();
+          screen_pos.y() /= scene_wnd_size.y();
+          if (screen_query_ray(screen_pos, ray_o, ray_d)) {
+            cam_manip_data.camera_pivot =
+                ray_o +
+                ray_d * (cam_manip_data.camera_pivot -
+                cam_trans->world_pos())
+                            .norm();
+          }
+        }
+        // move camera position with wasd key board
+        math::vector3 camera_movement = math::vector3::Zero();
+        math::vector3 cam_vec =
+            (cam_trans->world_pos() -
+            cam_manip_data.camera_pivot).normalized();
+        if (is_key_pressed(SDLK_w))
+          camera_movement -= cam_trans->local_forward();
+        if (is_key_pressed(SDLK_s))
+          camera_movement += cam_trans->local_forward();
+        if (is_key_pressed(SDLK_a))
+          camera_movement -= cam_trans->local_right();
+        if (is_key_pressed(SDLK_d))
+          camera_movement += cam_trans->local_right();
+        camera_movement *= (cam_manip_data.fps_camera_speed * dt);
+        cam_manip_data.camera_pivot += camera_movement;
+        cam_trans->set_world_pos(cam_trans->world_pos() + camera_movement);
+      } else if (press_mouse_mid_btn) {
+        // rotate the camera around the pivot, or translate the camera
+        if (is_key_pressed(SDLK_LSHIFT)) {
+          // translate the camera according to nfc offset
+          if (mouse_screen_delta.norm() > 1e-2f) {
+            math::vector2 scene_size = scene_wnd_size;
+            math::vector4 nfcPos = {-mouse_screen_delta.x() / scene_size.x(),
+                                    mouse_screen_delta.y() / scene_size.y(), 1.0f,
+                                    1.0f};
+            math::vector4 worldRayPos =
+                cam_comp.view.inverse() * cam_comp.proj.inverse() * nfcPos;
+            worldRayPos /= worldRayPos.w();
+            math::vector3 worldRayDir =
+                (worldRayPos.head<3>() - cam_pos).normalized();
+            worldRayDir =
+                worldRayDir.dot(cam_manip_data.camera_pivot - cam_pos) *
+                worldRayDir;
+            auto deltaPos =
+                worldRayDir.dot(cam_trans->local_right()) *
+                    cam_trans->local_right() +
+                worldRayDir.dot(cam_trans->local_up()) *
+                cam_trans->local_up();
+            cam_manip_data.camera_pivot += deltaPos;
+            cam_trans->set_world_pos(cam_trans->world_pos() + deltaPos);
+          }
+        } else {
+          // repose the camera
+          auto rotateOffset = mouse_screen_delta * 0.1f;
+          math::vector3 posVector = cam_trans->world_pos();
+          math::vector3 newPos =
+              math::angle_axis(math::deg_to_rad(-rotateOffset.x()),
+                               math::world_up) *
+                  math::angle_axis(math::deg_to_rad(-rotateOffset.y()),
+                                   cam_trans->local_right()) *
+                  (posVector - cam_manip_data.camera_pivot) +
+              cam_manip_data.camera_pivot;
+          cam_trans->set_world_pos(newPos);
+        }
+      }
+    }
 
-  //   math::vector3 lastLeft = cam_trans->local_right();
-  //   math::vector3 forward =
-  //       (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
-  //   math::vector3 up = math::world_up;
-  //   math::vector3 left = up.cross(forward).normalized();
-  //   // flip left if non-consistent
-  //   if (lastLeft.dot(left) < 0.0f)
-  //     left *= -1;
-  //   up = (forward.cross(left)).normalized();
-  //   math::matrix3 rot;
-  //   rot << left, up, forward;
-  //   cam_trans->set_world_rot(math::quat(rot));
-  // }
+    math::vector3 lastLeft = cam_trans->local_right();
+    math::vector3 forward =
+        (cam_trans->world_pos() - cam_manip_data.camera_pivot).normalized();
+    math::vector3 up = math::world_up;
+    math::vector3 left = up.cross(forward).normalized();
+    // flip left if non-consistent
+    if (lastLeft.dot(left) < 0.0f)
+      left *= -1;
+    up = (forward.cross(left)).normalized();
+    math::matrix3 rot;
+    rot << left, up, forward;
+    cam_trans->set_world_rot(math::quat(rot));
+  }
 }
 
 void engine3d::editor_shortkeys() {
-  // auto &g_instance = sdl_context::get_instance();
-  // auto cursor_pos = g_instance.get_mouse_position();
-  // if (cursor_pos.x() > scene_wnd_pos.x() &&
-  //     cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
-  //     cursor_pos.y() > scene_wnd_pos.y() &&
-  //     cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
-  //   // only change the gizmo operation mode
-  //   // if the cursor is inside scene window
-  //   if (g_instance.is_key_pressed(SDLK_1)) {
-  //     with_translate = true;
-  //     with_rotate = false;
-  //     with_scale = false;
-  //   }
-  //   if (g_instance.is_key_pressed(SDLK_2)) {
-  //     with_translate = false;
-  //     with_rotate = true;
-  //     with_scale = false;
-  //   }
-  //   if (g_instance.is_key_pressed(SDLK_3)) {
-  //     with_translate = false;
-  //     with_rotate = false;
-  //     with_scale = true;
-  //   }
+  auto cursor_pos = mouse_screen_pos;
+  if (cursor_pos.x() > scene_wnd_pos.x() &&
+      cursor_pos.x() < (scene_wnd_pos.x() + scene_wnd_size.x()) &&
+      cursor_pos.y() > scene_wnd_pos.y() &&
+      cursor_pos.y() < (scene_wnd_pos.y() + scene_wnd_size.y())) {
+    // only change the gizmo operation mode
+    // if the cursor is inside scene window
+    if (is_key_pressed(SDLK_1)) {
+      with_translate = true;
+      with_rotate = false;
+      with_scale = false;
+    }
+    if (is_key_pressed(SDLK_2)) {
+      with_translate = false;
+      with_rotate = true;
+      with_scale = false;
+    }
+    if (is_key_pressed(SDLK_3)) {
+      with_translate = false;
+      with_rotate = false;
+      with_scale = true;
+    }
 
-  //   // detect mouse click selection
-  //   if (g_instance.is_key_pressed(SDLK_LCTRL) &&
-  //       g_instance.is_mouse_button_triggered(SDL_BUTTON_LEFT)) {
-  //     math::vector3 ray_o, ray_d;
-  //     if (mouse_query_ray(ray_o, ray_d)) {
-  //       std::priority_queue<ray_query_data, std::vector<ray_query_data>,
-  //                           compare_ray_query_data>
-  //           q;
-  //       registry.view<entt::entity, transform>().each(
-  //           [&](entt::entity entity, transform &trans) {
-  //             if (entity == active_camera)
-  //               return;
-  //             ray_query_data data;
-  //             data.entity = entity;
-  //             data.dist = (trans.world_pos() - ray_o).norm();
-  //             auto h = (trans.world_pos() - ray_o).dot(ray_d) * ray_d;
-  //             data.pdist = ((trans.world_pos() - ray_o) - h).norm();
-  //             q.emplace(data);
-  //           });
-  //       if (!q.empty()) {
-  //         auto selection = q.top();
-  //         SDL_Log("Click selection nearest, "
-  //                 "name:\"{0}\",pdist:{1},dist:{2},sin:{3}",
-  //                 registry.get<transform>(selection.entity).name,
-  //                 selection.pdist, selection.dist,
-  //                 selection.pdist / selection.dist);
-  //         if (selection.pdist / selection.dist <= click_selection_max_sin) {
-  //           q.pop();
-  //           selection_candidates.clear();
-  //           selection_candidates.push_back(selection);
-  //           int counter = 0;
-  //           while (!q.empty() && counter < 3) {
-  //             auto cand = q.top();
-  //             q.pop();
-  //             if (cand.pdist / cand.dist <= click_selection_max_sin)
-  //               selection_candidates.push_back(cand);
-  //             counter++;
-  //           }
+    // detect mouse click selection
+    if (is_key_pressed(SDLK_LCTRL) &&
+        is_mouse_button_triggered(SDL_BUTTON_LEFT)) {
+      math::vector3 ray_o, ray_d;
+      if (mouse_query_ray(ray_o, ray_d)) {
+        std::priority_queue<ray_query_data, std::vector<ray_query_data>,
+                            compare_ray_query_data>
+            q;
+        registry.view<entt::entity, transform>().each(
+            [&](entt::entity entity, transform &trans) {
+              if (entity == active_camera)
+                return;
+              ray_query_data data;
+              data.entity = entity;
+              data.dist = (trans.world_pos() - ray_o).norm();
+              auto h = (trans.world_pos() - ray_o).dot(ray_d) * ray_d;
+              data.pdist = ((trans.world_pos() - ray_o) - h).norm();
+              q.emplace(data);
+            });
+        if (!q.empty()) {
+          auto selection = q.top();
+          SDL_Log("Click selection nearest, "
+                  "name:\"{0}\",pdist:{1},dist:{2},sin:{3}",
+                  registry.get<transform>(selection.entity).name,
+                  selection.pdist, selection.dist,
+                  selection.pdist / selection.dist);
+          if (selection.pdist / selection.dist <= click_selection_max_sin) {
+            q.pop();
+            selection_candidates.clear();
+            selection_candidates.push_back(selection);
+            int counter = 0;
+            while (!q.empty() && counter < 3) {
+              auto cand = q.top();
+              q.pop();
+              if (cand.pdist / cand.dist <= click_selection_max_sin)
+                selection_candidates.push_back(cand);
+              counter++;
+            }
 
-  //           if (selection_candidates.size() <= 1) {
-  //             selected_entity = selection.entity;
-  //           } else {
-  //             // open a popup to select all potential candidates
-  //             ImGui::OpenPopup("clickselectioncandidates");
-  //           }
-  //         } else {
-  //           SDL_Log("Nearest selection too far, set selection to null");
-  //           selected_entity = entt::null;
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
-  // if (selection_candidates.size() > 0 &&
-  //     ImGui::BeginPopup("clickselectioncandidates")) {
-  //   ImGui::MenuItem("Selection candidates", nullptr, nullptr, false);
-  //   ImGui::Separator();
-  //   for (int i = 0; i < selection_candidates.size(); i++) {
-  //     if (ImGui::Selectable(
-  //             registry.get<transform>(selection_candidates[i].entity)
-  //                 .name.c_str())) {
-  //       selected_entity = selection_candidates[i].entity;
-  //       ImGui::CloseCurrentPopup();
-  //     }
-  //   }
-  //   ImGui::EndPopup();
-  // }
+            if (selection_candidates.size() <= 1) {
+              selected_entity = selection.entity;
+            } else {
+              // open a popup to select all potential candidates
+              ImGui::OpenPopup("clickselectioncandidates");
+            }
+          } else {
+            SDL_Log("Nearest selection too far, set selection to null");
+            selected_entity = entt::null;
+          }
+        }
+      }
+    }
+  }
+  if (selection_candidates.size() > 0 &&
+      ImGui::BeginPopup("clickselectioncandidates")) {
+    ImGui::MenuItem("Selection candidates", nullptr, nullptr, false);
+    ImGui::Separator();
+    for (int i = 0; i < selection_candidates.size(); i++) {
+      if (ImGui::Selectable(
+              registry.get<transform>(selection_candidates[i].entity)
+                  .name.c_str())) {
+        selected_entity = selection_candidates[i].entity;
+        ImGui::CloseCurrentPopup();
+      }
+    }
+    ImGui::EndPopup();
+  }
 }
 
 void engine3d::draw_gizmos(bool enable) {
@@ -423,7 +412,8 @@ void engine3d::draw_main_menubar() {
                   auto &mesh_trans = registry.emplace<transform>(mesh_entity);
                   root_trans.add_child(mesh_entity);
                   mesh_trans.name = loaded_meshes[i].name;
-                  auto &mesh_data_comp = registry.emplace<mesh_data>(mesh_entity);
+                  auto &mesh_data_comp =
+                      registry.emplace<mesh_data>(mesh_entity);
                   mesh_data_comp.mesh_name = loaded_meshes[i].name;
                   mesh_data_comp.vertices = loaded_meshes[i].vertices;
                   mesh_data_comp.indices = loaded_meshes[i].indices;
@@ -446,41 +436,13 @@ void engine3d::draw_main_menubar() {
           }
         }
       }
-      // if (ImGui::MenuItem("Import BVH")) {
-      //   std::string filepath;
-      //   if (open_file_dialog("Import .bvh motion file", {"*.bvh", "*.BVH"},
-      //                        filepath)) {
-      //     SDL_Log("Load motion file %s", filepath.c_str());
-      //     auto container = registry.create();
-      //     auto &container_trans = registry.emplace<transform>(container);
-      //     container_trans.name =
-      //         std::filesystem::path(filepath).filename().string();
-      //     auto &motion_player =
-      //         registry.emplace<anim::bvh_motion_player>(container);
-      //     motion_player.load_motion(registry, filepath);
-      //   }
-      // }
-      // if (ImGui::MenuItem("Import All BVH")) {
-      //   std::string dirpath;
-      //   if (open_folder_dialog("Import folder containing .bvh files",
-      //                          dirpath)) {
-      //     SDL_Log("Load all .bvh motion files under %s", dirpath.c_str());
-      //     anim::import_all_bvh_motion(registry, dirpath);
-      //   }
-      // }
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Settings")) {
       // system configuration
       ImGui::MenuItem("Configure Systems", nullptr, false, false);
-      for (auto &sys : systems) {
-        if (ImGui::BeginMenu(sys->get_name().c_str())) {
-          ImGui::Checkbox("Active", &(sys->active));
-          ImGui::Separator();
-          sys->draw_menu_gui();
-          ImGui::EndMenu();
-        }
-      }
+      // TODO: Extend this if there's further systems
+      draw_systems_gui();
 
       ImGui::Separator();
       ImGui::MenuItem("Editor Settings", nullptr, false, false);
@@ -603,7 +565,7 @@ void draw_entity_hierarchy_recursive(
   }
 }
 
-void engine3d::draw_entity_hierarchy() {
+void engine3d::draw_hierarchy_window() {
   static ImGuiTreeNodeFlags guiTreeNodeFlags =
       ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
       ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -628,25 +590,15 @@ void engine3d::draw_entity_hierarchy() {
         trans.name = str_format("new entity: %d", entt::to_integral(ent));
       }
 
-      ImGui::Separator();
-      if (ImGui::MenuItem("New Cube"))
-        create_cube(registry);
-      if (ImGui::MenuItem("New Sphere"))
-        create_sphere(registry);
-      if (ImGui::MenuItem("New Cylinder"))
-        create_cylinder(registry);
-      if (ImGui::MenuItem("New Plane"))
-        create_plane(registry);
-
-      ImGui::Separator();
-      // if (ImGui::MenuItem("New Point Light")) {
-      //   auto ent = registry.create();
-      //   auto &trans = registry.emplace<transform>(ent);
-      //   auto number = registry.view<point_light>().size();
-      //   trans.name = str_format("Point Light (%d)", number);
-      //   auto &light = registry.emplace<point_light>(ent);
-      // }
-
+      // ImGui::Separator();
+      // if (ImGui::MenuItem("New Cube"))
+      //   create_cube(registry);
+      // if (ImGui::MenuItem("New Sphere"))
+      //   create_sphere(registry);
+      // if (ImGui::MenuItem("New Cylinder"))
+      //   create_cylinder(registry);
+      // if (ImGui::MenuItem("New Plane"))
+      //   create_plane(registry);
       ImGui::EndMenu();
     }
   };
@@ -697,14 +649,14 @@ void engine3d::draw_entity_hierarchy() {
   // ---------------------- Entity list ----------------------
   ImGui::BeginChild("DrawEntityHierarchy_entityhierarchy",
                     ImGui::GetContentRegionAvail());
-  for (auto ent : transform_sys->root_entities)
+  for (auto ent : transform_hierarchy_sys->root_entities)
     draw_entity_hierarchy_recursive(registry, selected_entity, ent,
                                     guiTreeNodeFlags, right_click_entity);
   ImGui::EndChild();
   ImGui::End();
 }
 
-void engine3d::draw_entity_components() {
+void engine3d::draw_components_window() {
   ImGui::Begin("Components");
   static char headerBuffer[200] = {0};
   static entt::entity current_entity = entt::null;
@@ -736,6 +688,7 @@ void engine3d::draw_entity_components() {
     }
 
     ImGui::Text("Entity Name:");
+    ImGui::SetNextItemWidth(-1);
     if (ImGui::InputText("##entity_name", name_buffer.data(),
                          name_buffer.size(),
                          ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -768,12 +721,47 @@ void engine3d::draw_entity_components() {
     }
     ImGui::Separator();
 
-    for (auto &sys : systems)
-      sys->draw_gui(registry, current_entity);
+    // TODO: manually modify or extend this field for further usage
+    draw_components_gui(current_entity);
+
   } else
     current_entity = entt::null;
 
   ImGui::End();
+}
+
+void engine3d::draw_components_gui(entt::entity current_entity) {
+  if (auto trans_comp = registry.try_get<transform>(current_entity)) {
+    if (ImGui::CollapsingHeader("Transform"))
+      trans_comp->draw_gui(registry, current_entity);
+  }
+  if (auto cam_comp = registry.try_get<camera>(current_entity)) {
+    if (ImGui::CollapsingHeader("Camera"))
+      cam_comp->draw_gui(registry, current_entity);
+  }
+  if (auto actor_comp = registry.try_get<actor>(current_entity)) {
+    if (ImGui::CollapsingHeader("Actor"))
+      actor_comp->draw_gui(registry, current_entity);
+  }
+  if (auto mesh_comp = registry.try_get<mesh_data>(current_entity)) {
+    if (ImGui::CollapsingHeader("Mesh"))
+      mesh_comp->draw_gui(registry, current_entity);
+  }
+  if (auto bundle_comp = registry.try_get<skinned_mesh_bundle>(current_entity)) {
+    if (ImGui::CollapsingHeader("Skinned Mesh Bundle (Pannel)"))
+      bundle_comp->draw_gui(registry, current_entity);
+  }
+}
+
+void engine3d::draw_systems_gui() {
+  if (ImGui::BeginMenu("Built-in Render System")) {
+    default_render_sys->draw_menu_gui();
+    ImGui::EndMenu();
+  }
+  if (ImGui::BeginMenu("Transform Hierarchy System")) {
+    transform_hierarchy_sys->draw_menu_gui();
+    ImGui::EndMenu();
+  }
 }
 
 }; // namespace toolkit::opengl3d
