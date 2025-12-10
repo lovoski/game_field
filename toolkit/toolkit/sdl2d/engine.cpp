@@ -222,35 +222,48 @@ math::vector2 engine2d::screen_to_world(const math::vector2 &screen_pos) {
 }
 
 void engine2d::add_default_objects() {
+  // auto ground0 = registry.create();
+  // auto &ground_body0 = registry.emplace<box2d::body>(ground0);
+  // ground_body0.setup(math::vector2(20.0f, 1.0f));
+  // ground_body0.position = math::vector2(0.0f, -1.0f);
+  // ground_body0.rotation = 0.1f;
+
+  // auto ground1 = registry.create();
+  // auto &ground_body1 = registry.emplace<box2d::body>(ground1);
+  // ground_body1.setup(math::vector2(20.0f, 1.0f));
+  // ground_body1.position = math::vector2(-10.0f, -2.0f);
+  // ground_body1.rotation = -0.1f;
+
+  // for (int i = 0; i < 5; i++) {
+  //   auto entity = registry.create();
+  //   auto &body_comp = registry.emplace<box2d::body>(entity);
+  //   body_comp.setup(math::vector2(1.0f, 1.0f + i), 1.0f);
+  //   body_comp.position = math::vector2(0.0f, 1.0f + 5 * i);
+  // }
+  // for (int i = 0; i < 5; i++) {
+  //   auto entity = registry.create();
+  //   auto &body_comp = registry.emplace<box2d::body>(entity);
+  //   body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
+  //   body_comp.position = math::vector2(-1.0f, 1.0f + 5 * i);
+  // }
+  // for (int i = 0; i < 5; i++) {
+  //   auto entity = registry.create();
+  //   auto &body_comp = registry.emplace<box2d::body>(entity);
+  //   body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
+  //   body_comp.position = math::vector2(1.0f, 1.0f + 5 * i);
+  // }
+
   auto ground0 = registry.create();
   auto &ground_body0 = registry.emplace<box2d::body>(ground0);
   ground_body0.setup(math::vector2(20.0f, 1.0f));
   ground_body0.position = math::vector2(0.0f, -1.0f);
-  ground_body0.rotation = 0.1f;
+  ground_body0.rotation = 0.0f;
 
-  auto ground1 = registry.create();
-  auto &ground_body1 = registry.emplace<box2d::body>(ground1);
-  ground_body1.setup(math::vector2(20.0f, 1.0f));
-  ground_body1.position = math::vector2(-10.0f, -2.0f);
-  ground_body1.rotation = -0.1f;
-
-  for (int i = 0; i < 5; i++) {
-    auto entity = registry.create();
-    auto &body_comp = registry.emplace<box2d::body>(entity);
-    body_comp.setup(math::vector2(1.0f, 1.0f + i), 1.0f);
-    body_comp.position = math::vector2(0.0f, 1.0f + 5 * i);
-  }
-  for (int i = 0; i < 5; i++) {
+  for (int i = 0; i < 10; i++) {
     auto entity = registry.create();
     auto &body_comp = registry.emplace<box2d::body>(entity);
     body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
-    body_comp.position = math::vector2(-1.0f, 1.0f + 5 * i);
-  }
-  for (int i = 0; i < 5; i++) {
-    auto entity = registry.create();
-    auto &body_comp = registry.emplace<box2d::body>(entity);
-    body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
-    body_comp.position = math::vector2(1.0f, 1.0f + 5 * i);
+    body_comp.position = math::vector2(0.0f, 1.0f + 2 * i);
   }
 }
 

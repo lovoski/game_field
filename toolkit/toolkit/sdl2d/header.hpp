@@ -2,6 +2,7 @@
 
 #include "toolkit/system.hpp"
 #include "toolkit/utils.hpp"
+#include "toolkit/math.hpp"
 
 #include <SDL_image.h>
 #include <SDL_mixer.h>

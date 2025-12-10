@@ -7,6 +7,8 @@
 
 #include <json.hpp>
 
+#include "toolkit/utils.hpp"
+
 #ifdef _WIN32
 
 #ifndef NOMINMAX
@@ -86,13 +88,15 @@ matrix4 ortho(float left, float right, float top, float bottom, float zNear,
 /**
  * Convert rotation matrix to angle-axis representation (matrix logarithm).
  * @param R Input 3x3 rotation matrix
- * @return vector3 where direction is the axis and magnitude is the angle in radians
+ * @return vector3 where direction is the axis and magnitude is the angle in
+ * radians
  */
 vector3 mat_log(matrix3 R);
 
 /**
  * Convert angle-axis to rotation matrix (matrix exponential).
- * @param v Input vector where direction is the axis and magnitude is the angle in radians
+ * @param v Input vector where direction is the axis and magnitude is the angle
+ * in radians
  * @return 3x3 rotation matrix
  */
 matrix3 mat_exp(vector3 v);
@@ -100,6 +104,7 @@ matrix3 mat_exp(vector3 v);
 }; // namespace toolkit::math
 
 namespace nlohmann {
+
 template <typename Scalar, int Rows, int Cols, int Options, int MaxRows,
           int MaxCols>
 struct adl_serializer<
@@ -107,65 +112,102 @@ struct adl_serializer<
   static void to_json(
       nlohmann::json &j,
       const Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols> &mat) {
-    if (Rows == Eigen::Dynamic || Cols == Eigen::Dynamic) {
-      j["rows"] = mat.rows();
-      j["cols"] = mat.cols();
-    }
+    const bool is_row_major = static_cast<bool>(Options & Eigen::RowMajor);
+    const int rows =
+        (Rows == Eigen::Dynamic || Cols == Eigen::Dynamic) ? mat.rows() : Rows;
+    const int cols =
+        (Rows == Eigen::Dynamic || Cols == Eigen::Dynamic) ? mat.cols() : Cols;
 
-    nlohmann::json data = nlohmann::json::array();
-    if (Options & Eigen::RowMajor) {
-      for (int i = 0; i < mat.rows(); ++i) {
-        for (int k = 0; k < mat.cols(); ++k) {
-          data.push_back(mat(i, k));
-        }
-      }
-    } else {
-      for (int k = 0; k < mat.cols(); ++k) {
-        for (int i = 0; i < mat.rows(); ++i) {
-          data.push_back(mat(i, k));
-        }
-      }
-    }
-    j["data"] = data;
+    const size_t byte_count = static_cast<size_t>(mat.size()) * sizeof(Scalar);
+    const char *raw = reinterpret_cast<const char *>(mat.data());
+
+    j = nlohmann::json{
+        {"rows", rows},
+        {"cols", cols},
+        {"row_major", is_row_major},
+        {"scalar_size", sizeof(Scalar)},
+        {"data_b64", base64::to_base64(std::string_view(raw, byte_count))}};
   }
 
   static void
   from_json(const nlohmann::json &j,
             Eigen::Matrix<Scalar, Rows, Cols, Options, MaxRows, MaxCols> &mat) {
-    if (Rows == Eigen::Dynamic || Cols == Eigen::Dynamic) {
-      const int rows = j["rows"].get<int>();
-      const int cols = j["cols"].get<int>();
-      mat.resize(rows, cols);
+    const int rows = j.at("rows").get<int>();
+    const int cols = j.at("cols").get<int>();
+    const bool src_row_major = j.at("row_major").get<bool>();
+    const size_t scalar_size = j.at("scalar_size").get<size_t>();
+
+    if (scalar_size != sizeof(Scalar)) {
+      throw std::runtime_error("Scalar size mismatch in Eigen deserialization");
     }
 
-    const auto &data = j["data"];
-    int index = 0;
-    if (Options & Eigen::RowMajor) {
-      for (int i = 0; i < mat.rows(); ++i) {
-        for (int k = 0; k < mat.cols(); ++k) {
-          mat(i, k) = data[index++].get<Scalar>();
-        }
-      }
+    if (Rows == Eigen::Dynamic || Cols == Eigen::Dynamic) {
+      mat.resize(rows, cols);
+    } else if (rows != Rows || cols != Cols) {
+      throw std::runtime_error("Fixed-size Eigen matrix dimension mismatch");
+    }
+
+    const auto decoded =
+        base64::from_base64(j.at("data_b64").get<std::string>());
+    const size_t expected_bytes =
+        static_cast<size_t>(rows * cols) * sizeof(Scalar);
+    if (decoded.size() != expected_bytes) {
+      throw std::runtime_error("Byte count mismatch in Eigen deserialization");
+    }
+
+    const bool dst_row_major = static_cast<bool>(Options & Eigen::RowMajor);
+    const Scalar *src = reinterpret_cast<const Scalar *>(decoded.data());
+
+    if (src_row_major == dst_row_major) {
+      std::memcpy(mat.data(), decoded.data(), expected_bytes);
     } else {
-      for (int k = 0; k < mat.cols(); ++k) {
-        for (int i = 0; i < mat.rows(); ++i) {
-          mat(i, k) = data[index++].get<Scalar>();
-        }
+      // Layout differs: copy element-wise
+      if (src_row_major) {
+        for (int r = 0; r < rows; ++r)
+          for (int c = 0; c < cols; ++c)
+            mat(r, c) = src[r * cols + c];
+      } else {
+        for (int c = 0; c < cols; ++c)
+          for (int r = 0; r < rows; ++r)
+            mat(r, c) = src[c * rows + r];
       }
     }
   }
 };
+
 template <typename Scalar> struct adl_serializer<Eigen::Quaternion<Scalar>> {
   static void to_json(nlohmann::json &j, const Eigen::Quaternion<Scalar> &q) {
-    j = nlohmann::json{{"w", q.w()}, {"x", q.x()}, {"y", q.y()}, {"z", q.z()}};
+    // Pack w,x,y,z contiguously as raw bytes
+    Scalar elems[4] = {q.w(), q.x(), q.y(), q.z()};
+    const size_t byte_count = sizeof(elems);
+    j = nlohmann::json{
+        {"scalar_size", sizeof(Scalar)},
+        {"data_b64", base64::to_base64(std::string_view(
+                         reinterpret_cast<const char *>(elems), byte_count))},
+    };
   }
 
   static void from_json(const nlohmann::json &j, Eigen::Quaternion<Scalar> &q) {
-    q.w() = j["w"].get<Scalar>();
-    q.x() = j["x"].get<Scalar>();
-    q.y() = j["y"].get<Scalar>();
-    q.z() = j["z"].get<Scalar>();
-    q.normalize();
+    const size_t scalar_size = j.at("scalar_size").get<size_t>();
+    if (scalar_size != sizeof(Scalar)) {
+      throw std::runtime_error(
+          "Scalar size mismatch in Eigen quaternion deserialization");
+    }
+
+    const auto decoded =
+        base64::from_base64(j.at("data_b64").get<std::string>());
+    if (decoded.size() != 4 * sizeof(Scalar)) {
+      throw std::runtime_error(
+          "Byte count mismatch in Eigen quaternion deserialization");
+    }
+
+    const Scalar *elems = reinterpret_cast<const Scalar *>(decoded.data());
+    q.w() = elems[0];
+    q.x() = elems[1];
+    q.y() = elems[2];
+    q.z() = elems[3];
+    q.normalize(); // keep unit quaternion
   }
 };
+
 } // namespace nlohmann

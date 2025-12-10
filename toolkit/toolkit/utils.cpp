@@ -1,4 +1,5 @@
 #include "toolkit/utils.hpp"
+#include "toolkit/math.hpp"
 #include <cctype>
 #include <cstdarg>
 #include <fstream>
@@ -431,68 +432,6 @@ std::vector<char> decompress_bytes(const char *data, size_t size) {
 
   inflateEnd(&strm);
   return decompressed;
-}
-
-std::string base64_encode(const char *data, size_t len) {
-  static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                              "abcdefghijklmnopqrstuvwxyz"
-                              "0123456789+/";
-
-  std::string encoded;
-  encoded.reserve(((len + 2) / 3) * 4);
-
-  for (size_t i = 0; i < len;) {
-    uint32_t octet_a = i < len ? static_cast<unsigned char>(data[i++]) : 0;
-    uint32_t octet_b = i < len ? static_cast<unsigned char>(data[i++]) : 0;
-    uint32_t octet_c = i < len ? static_cast<unsigned char>(data[i++]) : 0;
-
-    uint32_t triple = (octet_a << 16) | (octet_b << 8) | octet_c;
-
-    encoded.push_back(table[(triple >> 18) & 0x3F]);
-    encoded.push_back(table[(triple >> 12) & 0x3F]);
-    encoded.push_back(i > len + 1 ? '=' : table[(triple >> 6) & 0x3F]);
-    encoded.push_back(i > len ? '=' : table[triple & 0x3F]);
-  }
-
-  return encoded;
-}
-
-std::vector<char> base64_decode(const std::string &input) {
-  static const int table[256] = {
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //   0-9
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //  10-19
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //  20-29
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, //  30-39
-      -1, -1, -1, 62, -1, -1, -1, 63, 52, 53, //  40-49   '+'=43 '/'=47 '0'-'9'
-      54, 55, 56, 57, 58, 59, 60, 61, -1, -1, //  50-59
-      -1, -1, -1, -1, -1, 0,  1,  2,  3,  4,  //  60-69   'A'-'Z'
-      5,  6,  7,  8,  9,  10, 11, 12, 13, 14, //  70-79
-      15, 16, 17, 18, 19, 20, 21, 22, 23, 24, //  80-89
-      25, -1, -1, -1, -1, -1, -1, 26, 27, 28, //  90-99   'a'-'z'
-      29, 30, 31, 32, 33, 34, 35, 36, 37, 38, // 100-109
-      39, 40, 41, 42, 43, 44, 45, 46, 47, 48, // 110-119
-      49, 50, 51, -1, -1, -1, -1, -1          // 120-127
-                                              // rest default -1
-  };
-
-  std::vector<char> decoded;
-  decoded.reserve((input.size() / 4) * 3);
-
-  int val = 0, valb = -8;
-  for (unsigned char c : input) {
-    if (c == '=')
-      break;
-    if (c > 127 || table[c] == -1)
-      throw std::runtime_error("Invalid base64 character");
-    val = (val << 6) + table[c];
-    valb += 6;
-    if (valb >= 0) {
-      decoded.push_back(char((val >> valb) & 0xFF));
-      valb -= 8;
-    }
-  }
-
-  return decoded;
 }
 
 }; // namespace toolkit

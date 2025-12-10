@@ -175,9 +175,9 @@ void mesh_data::draw_gui(entt::registry &registry, entt::entity entity) {
   if (ImGui::TreeNode("Material Settings")) {
     int material_type_index = static_cast<int>(material.type);
     combo("type", material_type_index,
-               {"OPAQUE_LIT", "OPAQUE_UNLIT", "TRANSPARENT"}, [&](int index) {
-                 material.type = static_cast<material_type>(index);
-               });
+          {"OPAQUE_LIT", "OPAQUE_UNLIT", "TRANSPARENT"}, [&](int index) {
+            material.type = static_cast<material_type>(index);
+          });
 
     color_edit_3("albedo", material.albedo);
     ImGui::Checkbox("wireframe", &material.wireframe);
@@ -218,9 +218,12 @@ nlohmann::json mesh_data::late_serialize(entt::registry &registry,
   auto ss1_compressed = compress_bytes(ss1_str.data(), ss1_size);
   auto ss2_compressed = compress_bytes(ss2_str.data(), ss2_size);
 
-  auto ss0_base64 = base64_encode(ss0_compressed.data(), ss0_compressed.size());
-  auto ss1_base64 = base64_encode(ss1_compressed.data(), ss1_compressed.size());
-  auto ss2_base64 = base64_encode(ss2_compressed.data(), ss2_compressed.size());
+  auto ss0_base64 = base64::to_base64(
+      std::string_view(ss0_compressed.data(), ss0_compressed.size()));
+  auto ss1_base64 = base64::to_base64(
+      std::string_view(ss1_compressed.data(), ss1_compressed.size()));
+  auto ss2_base64 = base64::to_base64(
+      std::string_view(ss2_compressed.data(), ss2_compressed.size()));
 
   data["vertices"] = ss0_base64;
   data["indices"] = ss1_base64;
@@ -236,9 +239,9 @@ void mesh_data::late_deserialize(entt::registry &registry, entt::entity entity,
     std::string ss1_base64 = data["indices"];
     std::string ss2_base64 = data["blendshapes"];
 
-    auto ss0_base64_decode = base64_decode(ss0_base64);
-    auto ss1_base64_decode = base64_decode(ss1_base64);
-    auto ss2_base64_decode = base64_decode(ss2_base64);
+    auto ss0_base64_decode = base64::from_base64(ss0_base64);
+    auto ss1_base64_decode = base64::from_base64(ss1_base64);
+    auto ss2_base64_decode = base64::from_base64(ss2_base64);
 
     auto ss0_decompressed =
         decompress_bytes(ss0_base64_decode.data(), ss0_base64_decode.size());
@@ -311,7 +314,8 @@ void mesh_data::late_deserialize(entt::registry &registry, entt::entity entity,
              {GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE}});
       } else {
         material.albedo_tex_filepath = "";
-        std::cout << "Albedo texture filepath " << material.albedo_tex_filepath << " doesn't exist" << std::endl;
+        std::cout << "Albedo texture filepath " << material.albedo_tex_filepath
+                  << " doesn't exist" << std::endl;
       }
     }
   } else {
@@ -421,7 +425,8 @@ entt::entity create_plane(entt::registry &registry, math::matrix4 t) {
   // for (int i = 0; i < plane_nvertices; i++) {
   //   mesh.vertices[i].position << plane_positions[i * 3],
   //       plane_positions[i * 3 + 1], plane_positions[i * 3 + 2], 1.0;
-  //   mesh.vertices[i].normal << plane_normals[i * 3], plane_normals[i * 3 + 1],
+  //   mesh.vertices[i].normal << plane_normals[i * 3], plane_normals[i * 3 +
+  //   1],
   //       plane_normals[i * 3 + 2], 0.0;
   // }
   // init_opengl_buffers(mesh);
@@ -442,7 +447,8 @@ entt::entity create_sphere(entt::registry &registry, math::matrix4 t) {
   // for (int i = 0; i < sphere_nvertices; i++) {
   //   mesh.vertices[i].position << sphere_positions[i * 3],
   //       sphere_positions[i * 3 + 1], sphere_positions[i * 3 + 2], 1.0;
-  //   mesh.vertices[i].normal << sphere_normals[i * 3], sphere_normals[i * 3 + 1],
+  //   mesh.vertices[i].normal << sphere_normals[i * 3], sphere_normals[i * 3 +
+  //   1],
   //       sphere_normals[i * 3 + 2], 0.0;
   // }
   // init_opengl_buffers(mesh);
@@ -488,17 +494,20 @@ void skinned_mesh_bundle::try_setup() {
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
     if (!shadowmap_fb.check_status())
-      std::cout << "skinned mesh bundle shadow buffer not complete!" << std::endl;
+      std::cout << "skinned mesh bundle shadow buffer not complete!"
+                << std::endl;
     shadowmap_fb.unbind();
     gl_initialized = true;
   }
 }
 
-void skinned_mesh_bundle::draw_gui(entt::registry &registry, entt::entity entity) {
+void skinned_mesh_bundle::draw_gui(entt::registry &registry,
+                                   entt::entity entity) {
   // ImGui::SeparatorText("Drop here to add entity");
   // entt::entity added_entity = entt::null, removed_entity = entt::null;
   // if (ImGui::BeginDragDropTarget()) {
-  //   if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY")) {
+  //   if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY"))
+  //   {
   //     added_entity = *(entt::entity *)payload->Data;
   //   }
   //   ImGui::EndDragDropTarget();
@@ -555,7 +564,8 @@ void skinned_mesh_bundle::draw_gui(entt::registry &registry, entt::entity entity
       }
     }
     for (auto &[blend_name, weight] : blendshape_weights) {
-      if (ImGui::DragFloat(blend_name.c_str(), &weight, 0.001f, -10.0f, 10.0f)) {
+      if (ImGui::DragFloat(blend_name.c_str(), &weight, 0.001f, -10.0f,
+                           10.0f)) {
         for (int i = 0; i < mesh_entities.size(); i++) {
           if (mesh_datas[i] == nullptr)
             continue;
@@ -573,4 +583,4 @@ void skinned_mesh_bundle::draw_gui(entt::registry &registry, entt::entity entity
   }
 }
 
-}; // namespace toolkit::opengl
+}; // namespace toolkit::opengl3d

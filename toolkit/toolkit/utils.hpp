@@ -1,10 +1,11 @@
 #pragma once
 
-#include "toolkit/math.hpp"
 #include <chrono>
 #include <filesystem>
+#include <functional>
 #include <random>
 #include <zlib.h>
+#include <base64.hpp>
 
 namespace toolkit {
 
@@ -73,10 +74,6 @@ std::vector<char> compress_bytes(const char *data, size_t size,
                                  int level = Z_BEST_COMPRESSION);
 // Decompress with unknown size using streaming inflate
 std::vector<char> decompress_bytes(const char *data, size_t size);
-// Encode a byte array into base64 string
-std::string base64_encode(const char *data, size_t len);
-// Decode base64 string into byte array (vector<char>)
-std::vector<char> base64_decode(const std::string &input);
 
 std::wstring string_to_wstring(const std::string &str);
 
