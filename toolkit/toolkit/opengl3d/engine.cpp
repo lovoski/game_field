@@ -368,94 +368,6 @@ void engine3d::late_deserialize(nlohmann::json &j) {
   ss_handler_system = register_sys<sub_system_handler>();
 }
 
-void engine3d::game_mode_main_loop() {
-  auto &active_cam_trans = registry.get<transform>(active_camera);
-  auto &active_cam_comp = registry.get<camera>(active_camera);
-  float dt = timer.elapse_s();
-  timer.reset();
-
-  transform_hierarchy_sys->update_transform(registry);
-  default_render_sys->update_scene_buffers(registry);
-  default_render_sys->preupdate(registry);
-  ss_handler_system->proxy_update(registry, dt);
-
-  if (wnd_resized) {
-    scene_wnd_size.x() = wnd_width;
-    scene_wnd_size.y() = wnd_height;
-    default_render_sys->resize(wnd_width, wnd_height);
-  }
-  default_render_sys->render(registry, active_cam_trans, active_cam_comp);
-
-  glClearColor(0, 0, 0, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glViewport(0, 0, wnd_width, wnd_height);
-
-  quad_program.use();
-  quad_program.set_texture2d("scene_tex",
-                             default_render_sys->get_target_texture().get_handle(), 0);
-  quad_draw_call();
-  if (window) {
-    SDL_GL_SwapWindow(window);
-  }
-}
-void engine3d::editor_mode_main_loop() {
-  auto &active_cam_trans = registry.get<transform>(active_camera);
-  auto &active_cam_comp = registry.get<camera>(active_camera);
-  float dt = timer.elapse_s();
-  timer.reset();
-
-  transform_hierarchy_sys->update_transform(registry);
-  default_render_sys->update_scene_buffers(registry);
-  default_render_sys->preupdate(registry);
-  if (editor_manipulate_camera)
-    active_camera_manipulate(dt);
-  ss_handler_system->proxy_update(registry, dt);
-
-  default_render_sys->render(registry, active_cam_trans, active_cam_comp);
-
-  glClearColor(0, 0, 0, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glViewport(0, 0, wnd_width, wnd_height);
-
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplSDL2_NewFrame();
-  ImGui::NewFrame();
-
-  ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
-  ImGui::Begin("Scene");
-  ImGui::BeginChild("GameRenderer");
-  auto size = ImGui::GetContentRegionAvail();
-  auto pos = ImGui::GetWindowPos();
-  scene_wnd_pos.x() = pos.x;
-  scene_wnd_pos.y() = pos.y;
-  ImGui::Image((void *)static_cast<std::uintptr_t>(
-                   default_render_sys->get_target_texture().get_handle()),
-               {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
-  if (scene_wnd_size.x() != size.x || scene_wnd_size.y() != size.y) {
-    // resize sceneFBO
-    scene_wnd_size.x() = size.x;
-    scene_wnd_size.y() = size.y;
-    default_render_sys->resize(size.x, size.y);
-    default_render_sys->render(registry, active_cam_trans, active_cam_comp);
-  }
-  draw_gizmos();
-  ImGui::EndChild();
-  ImGui::End();
-
-  draw_main_menubar();
-  draw_hierarchy_window();
-  draw_components_window();
-  editor_shortkeys();
-
-  ImGui::EndFrame();
-  ImGui::Render();
-  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-  if (window) {
-    SDL_GL_SwapWindow(window);
-  }
-}
-
 void engine3d::run() {
   bool running = true;
   timer.reset();
@@ -470,12 +382,72 @@ void engine3d::run() {
       default_render_sys->resize(wnd_width, wnd_height);
       in_game_mode = !in_game_mode;
     }
-    if (!in_game_mode) {
-      SDL_SetRelativeMouseMode(SDL_FALSE);
-      editor_mode_main_loop();
+    SDL_SetRelativeMouseMode(in_game_mode ? SDL_TRUE : SDL_FALSE);
+
+    auto &active_cam_trans = registry.get<transform>(active_camera);
+    auto &active_cam_comp = registry.get<camera>(active_camera);
+    float dt = timer.elapse_s();
+    timer.reset();
+
+    transform_hierarchy_sys->update_transform(registry);
+    default_render_sys->update_scene_buffers(registry);
+    default_render_sys->preupdate(registry);
+    if (!in_game_mode)
+      active_camera_manipulate(dt);
+    ss_handler_system->proxy_update(registry, dt);
+
+    handle_game_logic_tick();
+
+    default_render_sys->render(registry, active_cam_trans, active_cam_comp);
+
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, wnd_width, wnd_height);
+
+    if (in_game_mode) {
+      quad_program.use();
+      quad_program.set_texture2d(
+          "scene_tex", default_render_sys->get_target_texture().get_handle(),
+          0);
+      quad_draw_call();
     } else {
-      SDL_SetRelativeMouseMode(SDL_TRUE);
-      game_mode_main_loop();
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplSDL2_NewFrame();
+      ImGui::NewFrame();
+
+      ImGui::DockSpaceOverViewport(ImGui::GetMainViewport());
+      ImGui::Begin("Scene");
+      ImGui::BeginChild("GameRenderer");
+      auto size = ImGui::GetContentRegionAvail();
+      auto pos = ImGui::GetWindowPos();
+      scene_wnd_pos.x() = pos.x;
+      scene_wnd_pos.y() = pos.y;
+      ImGui::Image((void *)static_cast<std::uintptr_t>(
+                       default_render_sys->get_target_texture().get_handle()),
+                   {size.x, size.y}, ImVec2(0, 1), ImVec2(1, 0));
+      if (scene_wnd_size.x() != size.x || scene_wnd_size.y() != size.y) {
+        // resize sceneFBO
+        scene_wnd_size.x() = size.x;
+        scene_wnd_size.y() = size.y;
+        default_render_sys->resize(size.x, size.y);
+        default_render_sys->render(registry, active_cam_trans, active_cam_comp);
+      }
+      draw_gizmos();
+      ImGui::EndChild();
+      ImGui::End();
+
+      draw_main_menubar();
+      draw_hierarchy_window();
+      draw_components_window();
+      editor_shortkeys();
+
+      ImGui::EndFrame();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    }
+
+    if (window) {
+      SDL_GL_SwapWindow(window);
     }
   }
 }

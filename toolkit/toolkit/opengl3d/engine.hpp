@@ -123,8 +123,8 @@ public:
   // override this if there's more components
   void draw_systems_gui();
 
-  void game_mode_main_loop();
-  void editor_mode_main_loop();
+  // this function can be override to create custom logic
+  virtual void handle_game_logic_tick() {}
 
   /**
    * Handle keyboard short cut inputs, modify editor states

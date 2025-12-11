@@ -20,7 +20,6 @@ bool engine3d::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o,
         math::vector3(p0.x() / p0.w(), p0.y() / p0.w(), p0.z() / p0.w());
     o = cam_trans.world_pos();
     d = (world_pos - o).normalized();
-
     return true;
   } else {
     SDL_Log("Scene active camera don't possess a camera component, "
@@ -30,13 +29,12 @@ bool engine3d::screen_query_ray(math::vector2 scrn_pos, math::vector3 &o,
 }
 
 bool engine3d::mouse_query_ray(math::vector3 &o, math::vector3 &d) {
-  // auto scrn_pos = sdl_context::get_instance().get_mouse_position();
-  // scrn_pos.x() -= scene_wnd_pos.x();
-  // scrn_pos.y() = scene_wnd_size.y() - scrn_pos.y() + scene_wnd_pos.y();
-  // scrn_pos.x() /= scene_wnd_size.x();
-  // scrn_pos.y() /= scene_wnd_size.y();
-  // return screen_query_ray(scrn_pos, o, d);
-  return false;
+  auto scrn_pos = mouse_screen_pos;
+  scrn_pos.x() -= scene_wnd_pos.x();
+  scrn_pos.y() = scene_wnd_size.y() - scrn_pos.y() + scene_wnd_pos.y();
+  scrn_pos.x() /= scene_wnd_size.x();
+  scrn_pos.y() /= scene_wnd_size.y();
+  return screen_query_ray(scrn_pos, o, d);
 }
 
 void engine3d::active_camera_manipulate(float dt) {
