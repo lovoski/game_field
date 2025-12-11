@@ -4,6 +4,48 @@ using namespace toolkit::math;
 
 namespace toolkit::opengl3d {
 
+// Helper struct to manage rendering state (alpha blending and depth testing)
+struct RenderState {
+  GLint blend_enabled;
+  GLint src_blend_func;
+  GLint dst_blend_func;
+  GLint depth_test_enabled;
+  
+  RenderState() {
+    glGetIntegerv(GL_BLEND, &blend_enabled);
+    glGetIntegerv(GL_BLEND_SRC, &src_blend_func);
+    glGetIntegerv(GL_BLEND_DST, &dst_blend_func);
+    glGetIntegerv(GL_DEPTH_TEST, &depth_test_enabled);
+  }
+  
+  void enable_blending() {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  }
+  
+  void set_depth_test(bool enable) {
+    if (enable) {
+      glEnable(GL_DEPTH_TEST);
+    } else {
+      glDisable(GL_DEPTH_TEST);
+    }
+  }
+  
+  void restore() {
+    if (blend_enabled) {
+      glEnable(GL_BLEND);
+      glBlendFunc(src_blend_func, dst_blend_func);
+    } else {
+      glDisable(GL_BLEND);
+    }
+    if (depth_test_enabled) {
+      glEnable(GL_DEPTH_TEST);
+    } else {
+      glDisable(GL_DEPTH_TEST);
+    }
+  }
+};
+
 const std::string line_vs = R"(
 #version 330 core
 layout (location = 0) in vec3 pos;
@@ -15,14 +57,15 @@ void main() {
 const std::string line_fs = R"(
 #version 330 core
 uniform vec3 color;
+uniform float alpha;
 out vec4 FragColor;
 void main() {
-  FragColor = vec4(color, 1.0);
+  FragColor = vec4(color, alpha);
 }
 )";
 
 void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
-                vector3 color) {
+                vector3 color, float alpha, bool enable_depth_test) {
   static bool initialized = false;
   static shader shader;
   static vao vao;
@@ -33,6 +76,11 @@ void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
     shader.compile_shader_from_source(line_vs, line_fs);
     initialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   vao.bind();
   std::vector<vector3> points;
   for (auto &p : lines) {
@@ -44,9 +92,12 @@ void draw_lines(std::vector<std::pair<vector3, vector3>> &lines, matrix4 vp,
   shader.use();
   shader.set_mat4("vp", vp);
   shader.set_vec3("color", color);
+  shader.set_float("alpha", alpha);
   glDrawArrays(GL_LINES, 0, points.size());
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
+  
+  render_state.restore();
 }
 const std::string capsule_vs = R"(
 #version 330 core
@@ -107,7 +158,8 @@ void main() {
 )";
 void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
                    math::matrix4 vp, math::vector3 color, bool wireframe,
-                   float column_radius, float cap_height) {
+                   float column_radius, float cap_height, float alpha,
+                   bool enable_depth_test) {
   static bool initialized = false;
   static shader solid_shader, wireframe_shader;
   static vao vao;
@@ -121,6 +173,11 @@ void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
         capsule_vs, line_fs, str_format(capsule_gs.c_str(), "line_strip"));
     initialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   vao.bind();
   std::vector<vector3> points;
   for (auto &p : lines) {
@@ -133,22 +190,26 @@ void draw_capsules(std::vector<std::pair<math::vector3, math::vector3>> &lines,
     wireframe_shader.use();
     wireframe_shader.set_mat4("vp", vp);
     wireframe_shader.set_vec3("color", color);
+    wireframe_shader.set_float("alpha", alpha);
     wireframe_shader.set_float("column_radius", column_radius);
     wireframe_shader.set_float("cap_height", cap_height);
   } else {
     solid_shader.use();
     solid_shader.set_mat4("vp", vp);
     solid_shader.set_vec3("color", color);
+    solid_shader.set_float("alpha", alpha);
     solid_shader.set_float("column_radius", column_radius);
     solid_shader.set_float("cap_height", cap_height);
   }
   glDrawArrays(GL_LINES, 0, points.size());
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
+  
+  render_state.restore();
 }
 
 void draw_linestrip(std::vector<vector3> &lineStrip, matrix4 vp,
-                    vector3 color) {
+                    vector3 color, float alpha, bool enable_depth_test) {
   static bool initialized = false;
   static shader shader;
   static vao vao;
@@ -159,15 +220,23 @@ void draw_linestrip(std::vector<vector3> &lineStrip, matrix4 vp,
     shader.compile_shader_from_source(line_vs, line_fs);
     initialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   vao.bind();
   vbo.set_data_as(GL_ARRAY_BUFFER, lineStrip);
   vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
   shader.use();
   shader.set_mat4("vp", vp);
   shader.set_vec3("color", color);
+  shader.set_float("alpha", alpha);
   glDrawArrays(GL_LINE_STRIP, 0, lineStrip.size());
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
+  
+  render_state.restore();
 }
 template <typename T> struct PlainVertex {
   T x, y, z;
@@ -176,7 +245,8 @@ template <typename T> struct PlainVertex {
 using PlainVertexi = PlainVertex<int>;
 using PlainVertexf = PlainVertex<float>;
 void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
-               math::matrix4 mvp, math::vector3 color) {
+               math::matrix4 mvp, math::vector3 color, float alpha,
+               bool enable_depth_test) {
   static vao vao;
   static buffer vbo;
   static int savedGridSize = -1, savedGridSpacing = -1;
@@ -189,6 +259,11 @@ void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
     lineShader.compile_shader_from_source(line_vs, line_fs);
     lineShaderLoaded = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   if (savedGridSize != gridSize || savedGridSpacing != gridSpacing) {
     // reallocate the data if grid size changes
     int current = gridSize;
@@ -221,6 +296,7 @@ void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
   }
   lineShader.use();
   lineShader.set_vec3("color", 0.5 * color);
+  lineShader.set_float("alpha", alpha);
   lineShader.set_mat4("vp", mvp);
   vao.bind();
   // draw the normal grid lines
@@ -229,10 +305,13 @@ void draw_grid(unsigned int gridSize, unsigned int gridSpacing,
   lineShader.set_vec3("color", color);
   glDrawArrays(GL_LINES, points.size() - 4, 4);
   vao.unbind();
+  
+  render_state.restore();
 }
 
 void draw_wire_sphere(math::vector3 position, math::matrix4 vp, float radius,
-                      math::vector3 color, unsigned int segs) {
+                      math::vector3 color, unsigned int segs, float alpha,
+                      bool enable_depth_test) {
   math::vector3 walkDir1 = math::vector3(1.0f, 0.0f, 0.0f);
   math::vector3 walkDir2 = math::vector3(0.0f, 1.0f, 0.0f);
   math::vector3 walkDir3 = math::vector3(0.0f, 0.0f, 1.0f);
@@ -254,13 +333,14 @@ void draw_wire_sphere(math::vector3 position, math::matrix4 vp, float radius,
     strip2.push_back(position + walkDir2 * radius);
     strip3.push_back(position + walkDir3 * radius);
   }
-  draw_linestrip(strip1, vp, color);
-  draw_linestrip(strip2, vp, color);
-  draw_linestrip(strip3, vp, color);
+  draw_linestrip(strip1, vp, color, alpha, enable_depth_test);
+  draw_linestrip(strip2, vp, color, alpha, enable_depth_test);
+  draw_linestrip(strip3, vp, color, alpha, enable_depth_test);
 }
 
 void draw_arrow(math::vector3 start, math::vector3 end, math::matrix4 vp,
-                math::vector3 color, float size) {
+                math::vector3 color, float size, float alpha,
+                bool enable_depth_test) {
   static int segs = 12;
   math::vector3 dir = (end - start).normalized();
   math::vector3 normal =
@@ -278,13 +358,14 @@ void draw_arrow(math::vector3 start, math::vector3 end, math::matrix4 vp,
     strip2.push_back(end + walkDir * size);
     lastWalkDir = walkDir;
   }
-  draw_linestrip(strip1, vp, color);
-  draw_linestrip(strip2, vp, color);
+  draw_linestrip(strip1, vp, color, alpha, enable_depth_test);
+  draw_linestrip(strip2, vp, color, alpha, enable_depth_test);
 }
 
 void draw_cube(math::vector3 position, math::vector3 forward,
                math::vector3 left, math::vector3 up, math::matrix4 vp,
-               math::vector3 size, math::vector3 color) {
+               math::vector3 size, math::vector3 color, float alpha,
+               bool enable_depth_test) {
   float fd = size.z(), ld = size.x(), ud = size.y();
   std::vector<math::vector3> strip1{position,
                                     position + left * ld,
@@ -303,8 +384,8 @@ void draw_cube(math::vector3 position, math::vector3 forward,
       position + left * ld,
       position + left * ld + forward * fd,
       position + left * ld + forward * fd + up * ud};
-  draw_linestrip(strip1, vp, color);
-  draw_linestrip(strip2, vp, color);
+  draw_linestrip(strip1, vp, color, alpha, enable_depth_test);
+  draw_linestrip(strip2, vp, color, alpha, enable_depth_test);
 }
 
 std::string bone_vs = R"(
@@ -372,14 +453,16 @@ std::string bone_fs = R"(
 #version 330 core
 out vec4 FragColor;
 
-uniform vec3 color; // Color of the wireframe
+uniform vec3 color;
+uniform float alpha;
 
 void main() {
-    FragColor = vec4(color, 1.0);
+    FragColor = vec4(color, alpha);
 }
 )";
 void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
-                math::matrix4 vp, math::vector3 color) {
+                math::matrix4 vp, math::vector3 color, float alpha,
+                bool enable_depth_test) {
   static vao vao;
   static buffer vbo;
   static shader boneShader;
@@ -390,6 +473,11 @@ void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
     boneShader.compile_shader_from_source(bone_vs, bone_fs, bone_gs);
     shaderInitialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   // initialize vbo with `bones`
   vao.bind();
   std::vector<math::vector3> buffer;
@@ -403,12 +491,15 @@ void draw_bones(std::vector<std::pair<math::vector3, math::vector3>> &bones,
 
   boneShader.set_float("radius", 0.1f);
   boneShader.set_vec3("color", color);
+  boneShader.set_float("alpha", alpha);
   boneShader.set_mat4("mvp", vp);
 
   glDrawArrays(GL_LINES, 0, buffer.size());
 
   vao.unbind();
   vbo.unbind_as(GL_ARRAY_BUFFER);
+  
+  render_state.restore();
 }
 
 struct _planevertex {
@@ -490,15 +581,16 @@ std::string quad_fs = R"(
 #version 330 core
 out vec4 FragColor;
 
-uniform vec3 color; // Color of the wireframe
+uniform vec3 color;
+uniform float alpha;
 
 void main() {
-  FragColor = vec4(color, 1.0);
+  FragColor = vec4(color, alpha);
 }
 )";
 void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
                 math::vector3 up, math::matrix4 vp, float size,
-                math::vector3 color) {
+                math::vector3 color, float alpha, bool enable_depth_test) {
   static vao vao;
   static buffer vbo;
   static shader program;
@@ -509,6 +601,11 @@ void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
     program.compile_shader_from_source(quad_vs, quad_fs, quad_gs);
     shaderInitialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   // initialize vbo with `bones`
   vao.bind();
   vbo.set_data_as(GL_ARRAY_BUFFER, positions);
@@ -517,6 +614,7 @@ void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
 
   program.set_float("size", size);
   program.set_vec3("color", color);
+  program.set_float("alpha", alpha);
   program.set_vec3("right", right);
   program.set_vec3("up", up);
   program.set_mat4("mvp", vp);
@@ -525,6 +623,8 @@ void draw_quads(std::vector<math::vector3> positions, math::vector3 right,
 
   vao.unbind();
   vbo.unbind_as(GL_ARRAY_BUFFER);
+  
+  render_state.restore();
 }
 
 // taken form: https://theorangeduck.com/page/debug-draw-text-lines
@@ -649,7 +749,7 @@ static const int consolines_lines[596] = {
 void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
                  math::matrix4 vp, math::vector3 color, float thick,
                  float scale, float width, float height, float spacing,
-                 float lineheight) {
+                 float lineheight, float alpha, bool enable_depth_test) {
   int slen = text.size();
 
   float xOffset = 0.0;
@@ -707,7 +807,7 @@ void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
     }
   }
   if (thick == 0.0f)
-    draw_lines(start_ends, vp, color);
+    draw_lines(start_ends, vp, color, alpha, enable_depth_test);
   else {
     thick = std::clamp(thick, 0.0f, 1.0f);
     thick = 0.032 * thick * scale;
@@ -718,7 +818,8 @@ void draw_text3d(std::string text, math::vector3 location, math::quat rotation,
       line.second -= 0.7 * cap_height * dir;
       line.first += 0.7 * cap_height * dir;
     }
-    draw_capsules(start_ends, vp, color, column_radius, cap_height);
+    draw_capsules(start_ends, vp, color, false, column_radius, cap_height, alpha,
+                  enable_depth_test);
   }
 }
 
@@ -907,7 +1008,8 @@ void main() {
 }
 )";
 void draw_wire_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
-                       float radius, math::vector3 color) {
+                       float radius, math::vector3 color, float alpha,
+                       bool enable_depth_test) {
   static vao vao;
   static buffer vbo;
   static shader program;
@@ -918,6 +1020,11 @@ void draw_wire_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
     program.compile_shader_from_source(quad_vs, line_fs, wire_sphere_gs);
     shaderInitialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   // initialize vbo with `bones`
   vao.bind();
   vbo.set_data_as(GL_ARRAY_BUFFER, positions);
@@ -926,12 +1033,15 @@ void draw_wire_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
 
   program.set_float("radius", radius);
   program.set_vec3("color", color);
+  program.set_float("alpha", alpha);
   program.set_mat4("mvp", vp);
 
   glDrawArrays(GL_POINTS, 0, positions.size());
 
   vao.unbind();
   vbo.unbind_as(GL_ARRAY_BUFFER);
+  
+  render_state.restore();
 }
 
 std::string arrows_gs = R"(
@@ -988,7 +1098,8 @@ void main() {
 )";
 void draw_arrows(
     std::vector<std::pair<math::vector3, math::vector3>> start_end_pairs,
-    math::matrix4 vp, math::vector3 color, float size) {
+    math::matrix4 vp, math::vector3 color, float size, float alpha,
+    bool enable_depth_test) {
   static vao vao;
   static buffer vbo;
   static shader program;
@@ -999,6 +1110,11 @@ void draw_arrows(
     program.compile_shader_from_source(bone_vs, bone_fs, arrows_gs);
     shaderInitialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   // initialize vbo with `bones`
   vao.bind();
   std::vector<math::vector3> buffer;
@@ -1012,12 +1128,15 @@ void draw_arrows(
 
   program.set_float("size", size);
   program.set_vec3("color", color);
+  program.set_float("alpha", alpha);
   program.set_mat4("mvp", vp);
 
   glDrawArrays(GL_LINES, 0, buffer.size());
 
   vao.unbind();
   vbo.unbind_as(GL_ARRAY_BUFFER);
+  
+  render_state.restore();
 }
 const std::string solid_sphere_vs = R"(
 #version 330 core
@@ -1073,7 +1192,8 @@ void main() {
 }
 )";
 void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
-                  float radius, math::vector3 color, bool wireframe) {
+                  float radius, math::vector3 color, bool wireframe, float alpha,
+                  bool enable_depth_test) {
   static bool initialized = false;
   static shader solid_shader, wireframe_shader;
   static vao vao;
@@ -1089,6 +1209,11 @@ void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
         str_format(solid_sphere_gs.c_str(), "line_strip"));
     initialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   vao.bind();
   vbo.set_data_as(GL_ARRAY_BUFFER, positions);
   vao.link_attribute(vbo, 0, 3, GL_FLOAT, 3 * sizeof(float), (void *)0);
@@ -1096,16 +1221,20 @@ void draw_spheres(std::vector<math::vector3> &positions, math::matrix4 vp,
     wireframe_shader.use();
     wireframe_shader.set_mat4("vp", vp);
     wireframe_shader.set_vec3("color", color);
+    wireframe_shader.set_float("alpha", alpha);
     wireframe_shader.set_float("radius", radius);
   } else {
     solid_shader.use();
     solid_shader.set_mat4("vp", vp);
     solid_shader.set_vec3("color", color);
+    solid_shader.set_float("alpha", alpha);
     solid_shader.set_float("radius", radius);
   }
   glDrawArrays(GL_POINTS, 0, positions.size());
   vbo.unbind_as(GL_ARRAY_BUFFER);
   vao.unbind();
+  
+  render_state.restore();
 }
 
 const std::string mesh_vs = R"(
@@ -1124,16 +1253,17 @@ void main() {
 const std::string mesh_fs = R"(
 #version 330 core
 uniform vec3 color;
+uniform float alpha;
 out vec4 FragColor;
 
 void main() {
-    FragColor = vec4(color, 1.0);
+    FragColor = vec4(color, alpha);
 }
 )";
 
 void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
                std::vector<std::uint32_t> &indices, math::matrix4 &vp,
-               math::vector3 color) {
+               math::vector3 color, float alpha, bool enable_depth_test) {
   static bool initialized = false;
   static shader shader;
   static vao vao;
@@ -1146,6 +1276,11 @@ void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
     shader.compile_shader_from_source(mesh_vs, mesh_fs);
     initialized = true;
   }
+  
+  RenderState render_state;
+  render_state.enable_blending();
+  render_state.set_depth_test(enable_depth_test);
+  
   vao.bind();
 
   vbo.set_data_as(GL_ARRAY_BUFFER, vertices);
@@ -1159,6 +1294,7 @@ void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
   shader.use();
   shader.set_mat4("vp", vp);
   shader.set_vec3("color", color);
+  shader.set_float("alpha", alpha);
 
   // Enable wireframe mode
   glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -1171,6 +1307,8 @@ void draw_mesh(std::vector<assets::mesh_vertex> &vertices,
   vbo.unbind_as(GL_ARRAY_BUFFER);
   ebo.unbind_as(GL_ELEMENT_ARRAY_BUFFER);
   vao.unbind();
+  
+  render_state.restore();
 }
 
 void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale) {
@@ -1192,25 +1330,27 @@ void draw_trans(transform &trans, math::matrix4 &vp, bool with_scale) {
 }
 
 void draw_line(math::vector3 start, math::vector3 end, math::matrix4 vp,
-               math::vector3 color) {
+               math::vector3 color, float alpha, bool enable_depth_test) {
   std::vector<std::pair<math::vector3, math::vector3>> lines;
   lines.push_back(std::make_pair(start, end));
-  draw_lines(lines, vp, color);
+  draw_lines(lines, vp, color, alpha, enable_depth_test);
 }
 
 void draw_capsule(math::vector3 start, math::vector3 end, math::matrix4 vp,
                   math::vector3 color, bool wireframe, float column_radius,
-                  float cap_height) {
+                  float cap_height, float alpha, bool enable_depth_test) {
   std::vector<std::pair<math::vector3, math::vector3>> lines;
   lines.push_back(std::make_pair(start, end));
-  draw_capsules(lines, vp, color, wireframe, column_radius, cap_height);
+  draw_capsules(lines, vp, color, wireframe, column_radius, cap_height, alpha,
+                enable_depth_test);
 }
 
 void draw_sphere(math::vector3 center, math::matrix4 vp, float radius,
-                 math::vector3 color, bool wireframe) {
+                 math::vector3 color, bool wireframe, float alpha,
+                 bool enable_depth_test) {
   std::vector<math::vector3> positions;
   positions.push_back(center);
-  draw_spheres(positions, vp, radius, color, wireframe);
+  draw_spheres(positions, vp, radius, color, wireframe, alpha, enable_depth_test);
 }
 
 }; // namespace toolkit::opengl

@@ -64,25 +64,26 @@ public:
 
   void draw_to_scene(entt::registry &registry, toolkit::transform &cam_trans,
                      toolkit::opengl3d::camera &cam_comp) override {
-    toolkit::opengl3d::draw_wire_sphere(
-        registry.get<toolkit::transform>(target).world_pos(), cam_comp.vp,
-        0.1f);
+    toolkit::opengl3d::draw_sphere(
+        registry.get<toolkit::transform>(target).world_pos(), cam_comp.vp, 0.1f,
+        toolkit::math::vector3(1, 1, 1), false, 0.9f, false);
 
     auto &object_trans = registry.get<toolkit::transform>(entity);
-    toolkit::opengl3d::draw_wire_sphere(object_trans.world_pos(), cam_comp.vp,
-                                        0.1f, toolkit::math::vector3(1, 0, 0));
-    toolkit::opengl3d::draw_arrow(object_trans.world_pos(),
-                                  object_trans.world_pos() +
-                                      object_trans.local_right(),
-                                  cam_comp.vp, toolkit::math::vector3(1, 0, 0));
-    toolkit::opengl3d::draw_arrow(object_trans.world_pos(),
-                                  object_trans.world_pos() +
-                                      object_trans.local_up(),
-                                  cam_comp.vp, toolkit::math::vector3(0, 1, 0));
-    toolkit::opengl3d::draw_arrow(object_trans.world_pos(),
-                                  object_trans.world_pos() +
-                                      object_trans.local_forward(),
-                                  cam_comp.vp, toolkit::math::vector3(0, 0, 1));
+    toolkit::opengl3d::draw_sphere(object_trans.world_pos(), cam_comp.vp, 0.1f,
+                                   toolkit::math::vector3(1, 0, 0), false, 0.5f,
+                                   false);
+    toolkit::opengl3d::draw_arrow(
+        object_trans.world_pos(),
+        object_trans.world_pos() + object_trans.local_right(), cam_comp.vp,
+        toolkit::math::vector3(1, 0, 0), 0.2f, 0.5f, false);
+    toolkit::opengl3d::draw_arrow(
+        object_trans.world_pos(),
+        object_trans.world_pos() + object_trans.local_up(), cam_comp.vp,
+        toolkit::math::vector3(0, 1, 0), 0.2f, 0.5f, false);
+    toolkit::opengl3d::draw_arrow(
+        object_trans.world_pos(),
+        object_trans.world_pos() + object_trans.local_forward(), cam_comp.vp,
+        toolkit::math::vector3(0, 0, 1), 0.2f, 0.5f, false);
   }
   void draw_gui(entt::registry &registry, entt::entity entity) override {
     ImGui::Text("Velocity x=%.2f,y=%.2f,z=%.2f", velocity.x(), velocity.y(),
