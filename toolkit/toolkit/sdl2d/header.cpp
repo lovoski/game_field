@@ -1,6 +1,6 @@
 #include "toolkit/sdl2d/header.hpp"
 
-namespace toolkit::sdl2d {
+namespace toolkit::math {
 
 math::matrix2 from_angle(float angle) {
   math::matrix2 m;
@@ -12,10 +12,4 @@ math::matrix2 from_angle(float angle) {
   return m;
 }
 
-void transform2d::reset() {
-  position = math::vector2::Zero();
-  scale = math::vector2(1.0f, 1.0f);
-  rotation = 0.0f;
-}
-
-}; // namespace toolkit::sdl2d
+}; // namespace toolkit::math

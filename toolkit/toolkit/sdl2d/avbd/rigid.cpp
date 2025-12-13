@@ -11,7 +11,11 @@
 
 #include "solver.h"
 
-Rigid::Rigid(Solver* solver, float2 size, float density, float friction, float3 position, float3 velocity)
+using namespace toolkit::math;
+
+namespace toolkit::avbd {
+
+Rigid::Rigid(Solver* solver, vector2 size, float density, float friction, vector3 position, vector3 velocity)
     : solver(solver), forces(0), next(0), position(position), velocity(velocity), prevVelocity(velocity), size(size), friction(friction)
 {
     // Add to linked list
@@ -19,9 +23,9 @@ Rigid::Rigid(Solver* solver, float2 size, float density, float friction, float3 
     solver->bodies = this;
 
     // Compute mass properties and bounding radius
-    mass = size.x * size.y * density;
-    moment = mass * dot(size, size) / 12.0f;
-    radius = length(size * 0.5f);
+    mass = size.x() * size.y() * density;
+    moment = mass * size.dot(size) / 12.0f;
+    radius = (0.5f * size).norm();
 }
 
 Rigid::~Rigid()
@@ -44,25 +48,27 @@ bool Rigid::constrainedTo(Rigid* other) const
 
 void Rigid::draw()
 {
-    float2x2 R = rotation(position.z);
-    float2 v0 = R * float2{ -size.x * 0.5f, -size.y * 0.5f } + position.xy();
-    float2 v1 = R * float2{ size.x * 0.5f, -size.y * 0.5f } + position.xy();
-    float2 v2 = R * float2{ size.x * 0.5f, size.y * 0.5f } + position.xy();
-    float2 v3 = R * float2{ -size.x * 0.5f, size.y * 0.5f } + position.xy();
+    // matrix2 R = from_angle(position.z());
+    // float2 v0 = R * float2{ -size.x() * 0.5f, -size.y * 0.5f } + position.xy();
+    // float2 v1 = R * float2{ size.x * 0.5f, -size.y * 0.5f } + position.xy();
+    // float2 v2 = R * float2{ size.x * 0.5f, size.y * 0.5f } + position.xy();
+    // float2 v3 = R * float2{ -size.x * 0.5f, size.y * 0.5f } + position.xy();
 
-    glColor3f(0.6f, 0.6f, 0.6f);
-    glBegin(GL_QUADS);
-    glVertex2f(v0.x, v0.y);
-    glVertex2f(v1.x, v1.y);
-    glVertex2f(v2.x, v2.y);
-    glVertex2f(v3.x, v3.y);
-    glEnd();
+    // glColor3f(0.6f, 0.6f, 0.6f);
+    // glBegin(GL_QUADS);
+    // glVertex2f(v0.x, v0.y);
+    // glVertex2f(v1.x, v1.y);
+    // glVertex2f(v2.x, v2.y);
+    // glVertex2f(v3.x, v3.y);
+    // glEnd();
 
-    glColor3f(0, 0, 0);
-    glBegin(GL_LINE_LOOP);
-    glVertex2f(v0.x, v0.y);
-    glVertex2f(v1.x, v1.y);
-    glVertex2f(v2.x, v2.y);
-    glVertex2f(v3.x, v3.y);
-    glEnd();
+    // glColor3f(0, 0, 0);
+    // glBegin(GL_LINE_LOOP);
+    // glVertex2f(v0.x, v0.y);
+    // glVertex2f(v1.x, v1.y);
+    // glVertex2f(v2.x, v2.y);
+    // glVertex2f(v3.x, v3.y);
+    // glEnd();
 }
+
+};

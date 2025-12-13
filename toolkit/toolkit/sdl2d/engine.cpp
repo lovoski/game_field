@@ -194,7 +194,7 @@ void engine2d::reset() {
 
   box2d_solver = register_sys<box2d::box2d_lite_world>();
 
-  camera_zoom = 20.0f; // 1 unit in world space ---> 20 pixels
+  camera_zoom = 32.0f; // 1 unit in world space ---> 32 pixels
   camera_rotation = 0.0f;
   camera_position = math::vector2::Zero();
 }
@@ -265,56 +265,6 @@ void engine2d::add_default_objects() {
     body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
     body_comp.position = math::vector2(0.0f, 1.0f + 2 * i);
   }
-}
-
-void engine2d::handle_game_logic_tick() {
-  // Update high-resolution delta time at the start of the frame
-  Uint64 now_counter = SDL_GetPerformanceCounter();
-  delta_time = static_cast<float>(now_counter - last_counter) /
-               static_cast<float>(perf_frequency);
-  last_counter = now_counter;
-
-  box2d_solver->update(registry, delta_time);
-
-  if (!engine_play_mode) {
-    // editor exclusive logic
-    if (is_mouse_button_pressed(SDL_BUTTON_MIDDLE)) {
-      // move the camera when mouse middle button pressed
-      camera_position =
-          screen_to_world(0.5f * math::vector2(screen_width, screen_height) -
-                          mouse_screen_delta);
-    }
-  }
-}
-
-void engine2d::handle_game_render_tick() {
-  registry.view<box2d::body>().each(
-      [&](entt::entity entity, box2d::body &body_comp) {
-        auto rotation = from_angle(body_comp.rotation);
-        std::vector<math::vector2> points{
-            rotation * math::vector2(0.5 * body_comp.size.x(),
-                                     0.5 * body_comp.size.y()) +
-                body_comp.position,
-            rotation * math::vector2(-0.5 * body_comp.size.x(),
-                                     0.5 * body_comp.size.y()) +
-                body_comp.position,
-            rotation * math::vector2(-0.5 * body_comp.size.x(),
-                                     -0.5 * body_comp.size.y()) +
-                body_comp.position,
-            rotation * math::vector2(0.5 * body_comp.size.x(),
-                                     -0.5 * body_comp.size.y()) +
-                body_comp.position,
-        };
-        for (int i = 0; i < 4; i++) {
-          points[i] = world_to_screen(points[i]);
-        }
-        ss_draw_lines(points, true);
-      });
-
-  ss_draw_circle(100, 100, 20, true, math::vector4(1, 0, 0, 0.5));
-  ss_draw_circle(140, 100, 50, true, math::vector4(1, 1, 0, 0.5));
-  ss_draw_rectangle(100, 150, 20, 30, true, math::vector4(1, 0, 0, 0.5));
-  ss_draw_rectangle(110, 170, 20, 30, true, math::vector4(1, 1, 0, 0.5));
 }
 
 }; // namespace toolkit::sdl2d

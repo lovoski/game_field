@@ -24,7 +24,7 @@ namespace toolkit::sdl2d {
 
 class engine2d : public iapp {
 public:
-  void init(int width = 1280, int height = 720);
+  void init(int width = 1920, int height = 1080);
   void run();
   void shutdown();
 
