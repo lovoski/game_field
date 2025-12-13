@@ -67,7 +67,7 @@ void engine2d::draw_editor_gui() {
       // system configuration
       ImGui::MenuItem("Configure Systems", nullptr, false, false);
       if (ImGui::BeginMenu("Box2D Lite")) {
-        box2d_solver->draw_menu_gui();
+        // box2d_solver->draw_menu_gui();
         ImGui::EndMenu();
       }
 

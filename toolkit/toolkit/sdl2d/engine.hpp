@@ -18,7 +18,7 @@
 
 #include "toolkit/sdl2d/header.hpp"
 
-#include "toolkit/sdl2d/box2d_lite/system.hpp"
+#include "toolkit/sdl2d/avbd/solver.h"
 
 namespace toolkit::sdl2d {
 
@@ -53,7 +53,8 @@ private:
   Uint64 last_counter = 0;
   double delta_time = 0.0; // seconds
 
-  box2d::box2d_lite_world *box2d_solver;
+  // box2d::box2d_lite_world *box2d_solver;
+  avbd::Solver avbd_solver;
 
   void draw_editor_gui();
 

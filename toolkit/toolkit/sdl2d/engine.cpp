@@ -1,4 +1,5 @@
 #include "toolkit/sdl2d/engine.hpp"
+#include "toolkit/sdl2d/avbd/scenes.h"
 
 namespace toolkit::sdl2d {
 
@@ -192,7 +193,7 @@ void engine2d::reset() {
   registry.clear();
   systems.clear();
 
-  box2d_solver = register_sys<box2d::box2d_lite_world>();
+  // box2d_solver = register_sys<box2d::box2d_lite_world>();
 
   camera_zoom = 32.0f; // 1 unit in world space ---> 32 pixels
   camera_rotation = 0.0f;
@@ -253,18 +254,20 @@ void engine2d::add_default_objects() {
   //   body_comp.position = math::vector2(1.0f, 1.0f + 5 * i);
   // }
 
-  auto ground0 = registry.create();
-  auto &ground_body0 = registry.emplace<box2d::body>(ground0);
-  ground_body0.setup(math::vector2(20.0f, 1.0f));
-  ground_body0.position = math::vector2(0.0f, -1.0f);
-  ground_body0.rotation = 0.0f;
+  // auto ground0 = registry.create();
+  // auto &ground_body0 = registry.emplace<box2d::body>(ground0);
+  // ground_body0.setup(math::vector2(20.0f, 1.0f));
+  // ground_body0.position = math::vector2(0.0f, -1.0f);
+  // ground_body0.rotation = 0.0f;
 
-  for (int i = 0; i < 20; i++) {
-    auto entity = registry.create();
-    auto &body_comp = registry.emplace<box2d::body>(entity);
-    body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
-    body_comp.position = math::vector2(0.0f, 1.0f + 2 * i);
-  }
+  // for (int i = 0; i < 20; i++) {
+  //   auto entity = registry.create();
+  //   auto &body_comp = registry.emplace<box2d::body>(entity);
+  //   body_comp.setup(math::vector2(1.0f, 1.0f), 1.0f);
+  //   body_comp.position = math::vector2(0.0f, 1.0f + 2 * i);
+  // }
+
+  avbd::scenes[18](&avbd_solver);
 }
 
 }; // namespace toolkit::sdl2d

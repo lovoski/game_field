@@ -9,7 +9,8 @@ void engine2d::handle_game_logic_tick() {
                static_cast<float>(perf_frequency);
   last_counter = now_counter;
 
-  box2d_solver->update(registry, delta_time);
+  // box2d_solver->update(registry, delta_time);
+  avbd_solver.update(delta_time);
 
   if (!engine_play_mode) {
     // editor exclusive logic

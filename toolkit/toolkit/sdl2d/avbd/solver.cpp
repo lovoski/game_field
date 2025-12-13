@@ -161,9 +161,9 @@ void Solver::step() {
 
       // Initialize left and right hand sides of the linear system (Eqs. 5, 6)
       matrix3 M = matrix3::Zero();
-      M(0,0) = body->mass;
-      M(1,1) = body->mass;
-      M(2,2) = body->moment;
+      M(0, 0) = body->mass;
+      M(1, 1) = body->mass;
+      M(2, 2) = body->moment;
       matrix3 lhs = M / (dt * dt);
       vector3 rhs = M / (dt * dt) * (body->position - body->inertial);
 
@@ -184,9 +184,9 @@ void Solver::step() {
 
           // Compute the diagonally lumped geometric stiffness term (Sec 3.5)
           matrix3 G = matrix3::Zero();
-          G(0,0) = (force->H[i].col(0)).norm();
-          G(1,1) = (force->H[i].col(1)).norm();
-          G(2,2) = (force->H[i].col(2)).norm();
+          G(0, 0) = (force->H[i].col(0)).norm();
+          G(1, 1) = (force->H[i].col(1)).norm();
+          G(2, 2) = (force->H[i].col(2)).norm();
           G *= abs(f);
 
           // Accumulate force (Eq. 13) and hessian (Eq. 17)
@@ -245,9 +245,20 @@ void Solver::step() {
   }
 }
 
-void Solver::draw() {
+void Solver::update(float timestep) {
+  // float residual = cur_time - cur_exec_fixed * dt;
+  // while (residual > dt) {
+  //   residual -= dt;
+  //   step();
+  //   cur_exec_fixed += 1;
+  // }
+  // cur_time += timestep;
+  step();
+}
+
+void Solver::debug_draw(sdl2d::engine2d *engine) {
   for (Rigid *body = bodies; body != 0; body = body->next)
-    body->draw();
+    body->debug_draw(engine);
   for (Force *force = forces; force != 0; force = force->next)
     force->draw();
 }

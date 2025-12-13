@@ -69,6 +69,6 @@ matrix2 rotation(float angle) {
 
 vector2 rotate(float angle, vector2 v) { return rotation(angle) * v; }
 
-vector2 transform(vector3 q, vector2 v) { return rotation(q.z()) * v + q.head<2>(); }
+vector2 transform_position(vector3 q, vector2 v) { return rotation(q.z()) * v + q.head<2>(); }
 
 }; // namespace toolkit::math

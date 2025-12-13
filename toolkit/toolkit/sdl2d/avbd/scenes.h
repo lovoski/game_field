@@ -154,7 +154,7 @@ static void sceneRod(Solver *solver) {
 
 static void sceneSoftBody(Solver *solver) {
   solver->clear();
-  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, 0.0f});
+  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, 0.0f, 0.0f});
 
   const float Klin = 1000.0f;
   const float Kang = 100.0f;
@@ -220,7 +220,7 @@ static void sceneNet(Solver *solver) {
   const int N = 40;
 
   solver->clear();
-  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, 0.0f});
+  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, 0.0f, 0.0f});
 
   Rigid *prev = 0;
   for (int i = 0; i < N; i++) {
@@ -241,7 +241,7 @@ static void sceneNet(Solver *solver) {
 
 static void sceneMotor(Solver *solver) {
   solver->clear();
-  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, -10.0f});
+  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, -10.0f, 0.0f});
 
   Rigid *a0 = new Rigid(solver, {5, 0.5f}, 1.0f, 0.5f, {0.0f, 0.0f, 0.0f});
   new Joint(solver, 0, a0, {0, 0}, {0, 0}, {INFINITY, INFINITY, 0.0f});
@@ -253,7 +253,7 @@ static void sceneFracture(Solver *solver) {
   const int M = 15;
 
   solver->clear();
-  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, 0.0f});
+  new Rigid(solver, {100, 0.5f}, 0.0f, 0.5f, {0.0f, 0.0f, 0.0f});
 
   Rigid *prev = 0;
   for (int i = 0; i <= N; i++) {

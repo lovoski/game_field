@@ -14,6 +14,10 @@
 #include "toolkit/sdl2d/header.hpp"
 #include "toolkit/sdl2d/avbd/utils.hpp"
 
+namespace toolkit::sdl2d {
+class engine2d;
+};
+
 namespace toolkit::avbd {
 
 struct Rigid;
@@ -53,11 +57,15 @@ struct Solver {
   Solver();
   ~Solver();
 
+  int cur_exec_fixed = 0;
+  float cur_time = 0.0f;
+  void update(float timestep);
+
   Rigid *pick(math::vector2 at, math::vector2 &local);
   void clear();
   void defaultParams();
   void step();
-  void draw();
+  void debug_draw(sdl2d::engine2d *engine);
 };
 
 // Holds all the state for a single rigid body that is needed by AVBD
@@ -82,7 +90,7 @@ struct Rigid {
   ~Rigid();
 
   bool constrainedTo(Rigid *other) const;
-  void draw();
+  void debug_draw(sdl2d::engine2d *engine);
 };
 
 // Holds all user defined and derived constraint parameters, and provides a

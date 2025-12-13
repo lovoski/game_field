@@ -17,7 +17,7 @@ vector2 abs_vec2(vector2 v);
 matrix2 abs_mat2(matrix2 a);
 
 matrix2 rotation(float angle);
-inline vector2 rotate(float angle, vector2 v);
+vector2 rotate(float angle, vector2 v);
 
 vector2 transform_position(vector3 q, vector2 v);
 
