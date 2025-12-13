@@ -2,12 +2,11 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "build_win_dbg",
+      "name": "build_win",
       "binaryDir": "${sourceDir}/build_win",
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "VCPKG_TARGET_TRIPLET": "x64-windows",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
       }
     },
     {
@@ -23,7 +22,13 @@
   "buildPresets": [
     {
       "name": "build_win_dbg",
-      "configurePreset": "build_win_dbg"
+      "configurePreset": "build_win",
+      "configuration": "Debug"
+    },
+    {
+      "name": "build_win_rel",
+      "configurePreset": "build_win",
+      "configuration": "Release"
     },
     {
       "name": "build_linux_dbg",

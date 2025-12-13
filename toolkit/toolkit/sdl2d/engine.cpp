@@ -267,7 +267,7 @@ void engine2d::add_default_objects() {
   //   body_comp.position = math::vector2(0.0f, 1.0f + 2 * i);
   // }
 
-  avbd::scenes[18](&avbd_solver);
+  avbd::scenes[current_avbd_scene](&avbd_solver);
 }
 
 }; // namespace toolkit::sdl2d

@@ -1,4 +1,5 @@
 #include "toolkit/sdl2d/engine.hpp"
+#include "toolkit/sdl2d/avbd/scenes.h"
 
 namespace toolkit::sdl2d {
 
@@ -66,8 +67,23 @@ void engine2d::draw_editor_gui() {
     if (ImGui::BeginMenu("Settings")) {
       // system configuration
       ImGui::MenuItem("Configure Systems", nullptr, false, false);
-      if (ImGui::BeginMenu("Box2D Lite")) {
-        // box2d_solver->draw_menu_gui();
+      if (ImGui::BeginMenu("AVBD Physics")) {
+
+        if (current_avbd_scene < 0 || current_avbd_scene >= 19)
+          current_avbd_scene = 0;
+        if (ImGui::BeginCombo("Current Scene", avbd::sceneNames[current_avbd_scene])) {
+          for (int comboIndex = 0; comboIndex < 19; ++comboIndex) {
+            bool isSelected = (current_avbd_scene == comboIndex);
+            if (ImGui::Selectable(avbd::sceneNames[comboIndex], isSelected)) {
+              current_avbd_scene = comboIndex;
+              avbd::scenes[current_avbd_scene](&avbd_solver);
+            }
+            if (isSelected)
+              ImGui::SetItemDefaultFocus();
+          }
+          ImGui::EndCombo();
+        }
+
         ImGui::EndMenu();
       }
 

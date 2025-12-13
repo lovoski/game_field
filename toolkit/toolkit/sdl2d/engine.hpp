@@ -54,6 +54,7 @@ private:
   double delta_time = 0.0; // seconds
 
   // box2d::box2d_lite_world *box2d_solver;
+  int current_avbd_scene = 0;
   avbd::Solver avbd_solver;
 
   void draw_editor_gui();
