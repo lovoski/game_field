@@ -106,6 +106,7 @@ public:
   defered_render_system *default_render_sys = nullptr;
   transform_system *transform_hierarchy_sys = nullptr;
   sub_system_handler *ss_handler_system = nullptr;
+  bullet::bullet_physics_system *physics_system = nullptr;
 
   float click_selection_max_sin = 2e-2f;
   std::vector<ray_query_data> selection_candidates;
@@ -168,6 +169,9 @@ public:
   math::vector2 get_mouse_screen_pos() const { return mouse_screen_pos; }
   math::vector2 get_mouse_screen_delta() const { return mouse_screen_delta; }
 
+  // default generated assets
+  texture white_tex, black_tex, checkerboard_tex;
+
 protected:
   int gizmo_mode_idx = 0;
   bool in_game_mode = false;
@@ -187,9 +191,6 @@ protected:
 
   bool caps_lock_on = false;
   bool wnd_resized = false;
-
-  // default generated assets
-  texture white_tex, black_tex, checkerboard_tex;
 
   shader quad_program;
 

@@ -5,19 +5,17 @@
 
 namespace toolkit::bullet {
 
-class bullet_physics : public isystem {
+class bullet_physics_system : public isystem {
 public:
   void init0(entt::registry &registry) override;
 
   void update(entt::registry &registry, float dt);
-  void fixedupdate(entt::registry &registry, float dt);
 
   void draw_menu_gui() override;
 
   void draw_to_scene(entt::registry &registry, transform &cam_trans,
                      opengl3d::camera &cam_comp);
 
-  void stepSimulation(float deltaTime);
   void updateTransforms(entt::registry &registry);
   void setRigidBodyTransform(entt::registry &registry, entt::entity entity,
                              const math::vector3 &position,
@@ -26,10 +24,6 @@ public:
   btDiscreteDynamicsWorld *getDynamicsWorld() { return dynamic_world; }
 
 private:
-  int cur_exec_fixed = 0;
-  float cur_time = 0.0f;
-
-  int sim_fps = 60;
   math::vector3 gravity = math::vector3(0.0, -9.8, 0.0);
 
   btDefaultCollisionConfiguration *collision_config;
@@ -52,8 +46,8 @@ private:
   void setupRigidBody(entt::entity entity, rigid_body_component &rb,
                       const transform &trans);
 
-  REFLECT_PRIVATE(bullet_physics)
+  REFLECT_PRIVATE(bullet_physics_system)
 };
-DECLARE_SYSTEM(bullet_physics, gravity, sim_fps)
+DECLARE_SYSTEM(bullet_physics_system, gravity)
 
 }; // namespace toolkit::bullet

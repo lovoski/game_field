@@ -362,10 +362,6 @@ void engine3d::late_deserialize(nlohmann::json &j) {
     else
       active_camera = *(cam_view.begin());
   }
-
-  transform_hierarchy_sys = register_sys<transform_system>();
-  default_render_sys = register_sys<defered_render_system>();
-  ss_handler_system = register_sys<sub_system_handler>();
 }
 
 void engine3d::run() {
@@ -395,6 +391,7 @@ void engine3d::run() {
     if (!in_game_mode)
       active_camera_manipulate(dt);
     ss_handler_system->proxy_update(registry, dt);
+    // physics_system->update(registry, dt);
 
     handle_game_logic_tick();
 
@@ -458,6 +455,7 @@ void engine3d::reset() {
   transform_hierarchy_sys = register_sys<transform_system>();
   default_render_sys = register_sys<defered_render_system>();
   ss_handler_system = register_sys<sub_system_handler>();
+  physics_system = register_sys<bullet::bullet_physics_system>();
 }
 
 void engine3d::add_default_objects() {

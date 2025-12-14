@@ -753,6 +753,10 @@ void engine3d::draw_systems_gui() {
     transform_hierarchy_sys->draw_menu_gui();
     ImGui::EndMenu();
   }
+  if (ImGui::BeginMenu("Bullet Physics System")) {
+    physics_system->draw_menu_gui();
+    ImGui::EndMenu();
+  }
 }
 
 }; // namespace toolkit::opengl3d

@@ -2,21 +2,15 @@
 
 namespace toolkit::bullet {
 
-void bullet_physics::init0(entt::registry &registry) {}
+void bullet_physics_system::init0(entt::registry &registry) {}
 
-void bullet_physics::fixedupdate(entt::registry &registry, float dt) {}
+void bullet_physics_system::draw_menu_gui() {}
 
-void bullet_physics::draw_menu_gui() {}
-
-void bullet_physics::draw_to_scene(entt::registry &registry,
+void bullet_physics_system::draw_to_scene(entt::registry &registry,
                                    transform &cam_trans,
                                    opengl3d::camera &cam_comp) {}
 
-void bullet_physics::stepSimulation(float deltaTime) {
-  dynamic_world->stepSimulation(deltaTime);
-}
-
-void bullet_physics::updateTransforms(entt::registry &registry) {
+void bullet_physics_system::updateTransforms(entt::registry &registry) {
   registry.view<transform, rigid_body_component>().each(
       [&](entt::entity entity, transform &trans, rigid_body_component &rb) {
         if (rb.rigid_body && rb.rigid_body->getMotionState()) {
@@ -35,7 +29,7 @@ void bullet_physics::updateTransforms(entt::registry &registry) {
       });
 }
 
-void bullet_physics::setRigidBodyTransform(entt::registry &registry,
+void bullet_physics_system::setRigidBodyTransform(entt::registry &registry,
                                            entt::entity entity,
                                            const math::vector3 &position,
                                            const math::quat &rotation) {
@@ -54,31 +48,24 @@ void bullet_physics::setRigidBodyTransform(entt::registry &registry,
   }
 }
 
-void bullet_physics::update(entt::registry &registry, float dt) {
-  float fixed_interval = 1.0f / sim_fps;
-  float residual = cur_time - cur_exec_fixed * fixed_interval;
-  while (residual > fixed_interval) {
-    residual -= fixed_interval;
-    fixedupdate(registry, fixed_interval);
-    cur_exec_fixed += 1;
-  }
-  cur_time += dt;
+void bullet_physics_system::update(entt::registry &registry, float dt) {
+  dynamic_world->stepSimulation(dt);
 }
 
-void bullet_physics::setupEventHandlers(entt::registry &registry) {
+void bullet_physics_system::setupEventHandlers(entt::registry &registry) {
   // When an entity is destroyed, clean up its physics body
   registry.on_destroy<rigid_body_component>()
-      .connect<&bullet_physics::onRigidBodyDestroyed>(this);
+      .connect<&bullet_physics_system::onRigidBodyDestroyed>(this);
   // When components are added, set up physics bodies
   registry.on_construct<sphere_collider>()
-      .connect<&bullet_physics::onColliderAdded>(this);
+      .connect<&bullet_physics_system::onColliderAdded>(this);
   registry.on_construct<capsule_collider>()
-      .connect<&bullet_physics::onColliderAdded>(this);
+      .connect<&bullet_physics_system::onColliderAdded>(this);
   registry.on_construct<convex_hull_collider>()
-      .connect<&bullet_physics::onColliderAdded>(this);
+      .connect<&bullet_physics_system::onColliderAdded>(this);
 }
 
-void bullet_physics::onRigidBodyDestroyed(entt::registry &reg,
+void bullet_physics_system::onRigidBodyDestroyed(entt::registry &reg,
                                           entt::entity entity) {
   auto &rb = reg.get<rigid_body_component>(entity);
   if (rb.rigid_body) {
@@ -86,7 +73,7 @@ void bullet_physics::onRigidBodyDestroyed(entt::registry &reg,
   }
 }
 
-void bullet_physics::onColliderAdded(entt::registry &reg, entt::entity entity) {
+void bullet_physics_system::onColliderAdded(entt::registry &reg, entt::entity entity) {
   // Only create physics body if we have a transform and don't already have a
   // rigid body
   if (!reg.all_of<transform>(entity) ||
@@ -105,7 +92,7 @@ void bullet_physics::onColliderAdded(entt::registry &reg, entt::entity entity) {
     createConvexHullRigidBody(reg, entity, trans);
   }
 }
-void bullet_physics::createSphereRigidBody(entt::registry &registry,
+void bullet_physics_system::createSphereRigidBody(entt::registry &registry,
                                            entt::entity entity,
                                            const transform &trans) {
   auto &sphere = registry.get<sphere_collider>(entity);
@@ -118,7 +105,7 @@ void bullet_physics::createSphereRigidBody(entt::registry &registry,
 
   setupRigidBody(entity, rb, trans);
 }
-void bullet_physics::createCapsuleRigidBody(entt::registry &registry,
+void bullet_physics_system::createCapsuleRigidBody(entt::registry &registry,
                                             entt::entity entity,
                                             const transform &trans) {
   auto &capsule = registry.get<capsule_collider>(entity);
@@ -131,7 +118,7 @@ void bullet_physics::createCapsuleRigidBody(entt::registry &registry,
 
   setupRigidBody(entity, rb, trans);
 }
-void bullet_physics::createConvexHullRigidBody(entt::registry &registry,
+void bullet_physics_system::createConvexHullRigidBody(entt::registry &registry,
                                                entt::entity entity,
                                                const transform &trans) {
   auto &convexHull = registry.get<convex_hull_collider>(entity);
@@ -150,7 +137,7 @@ void bullet_physics::createConvexHullRigidBody(entt::registry &registry,
 
   setupRigidBody(entity, rb, trans);
 }
-void bullet_physics::setupRigidBody(entt::entity entity,
+void bullet_physics_system::setupRigidBody(entt::entity entity,
                                     rigid_body_component &rb,
                                     const transform &trans) {
   // Create initial transform
