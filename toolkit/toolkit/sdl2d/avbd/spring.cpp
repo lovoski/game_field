@@ -11,6 +11,8 @@
 
 #include "solver.h"
 
+#include "toolkit/sdl2d/engine.hpp"
+
 using namespace toolkit::math;
 
 namespace toolkit::avbd {
@@ -80,15 +82,11 @@ void Spring::computeDerivatives(Rigid *body) {
   }
 }
 
-void Spring::draw() const {
-  //   float2 v0 = transform(bodyA->position, rA);
-  //   float2 v1 = transform(bodyB->position, rB);
-
-  //   glColor3f(0.75f, 0.0f, 0.0f);
-  //   glBegin(GL_LINES);
-  //   glVertex2f(v0.x, v0.y);
-  //   glVertex2f(v1.x, v1.y);
-  //   glEnd();
+void Spring::debug_draw(sdl2d::engine2d *engine) const {
+  vector2 v0 = engine->world_to_screen(transform_position(bodyA->position, rA));
+  vector2 v1 = engine->world_to_screen(transform_position(bodyB->position, rB));
+  engine->ss_draw_line(v0.x(), v0.y(), v1.x(), v1.y(),
+                       vector4(0.75f, 0.0f, 0.0f, 1.0f));
 }
 
 }; // namespace toolkit::avbd

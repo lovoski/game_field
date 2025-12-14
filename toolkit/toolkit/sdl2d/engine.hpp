@@ -29,6 +29,7 @@ public:
   void shutdown();
 
   void reset();
+  void reset_camera();
 
   void late_deserialize(nlohmann::json &j) override;
   void late_serialize(nlohmann::json &j) override;
@@ -51,7 +52,7 @@ private:
   // High resolution timer for delta time
   Uint64 perf_frequency = 0;
   Uint64 last_counter = 0;
-  double delta_time = 0.0; // seconds
+  double deltatime = 0.0; // seconds
 
   // box2d::box2d_lite_world *box2d_solver;
   int current_avbd_scene = 0;
@@ -89,7 +90,7 @@ public:
   bool is_mouse_button_pressed(int button) const;
 
   // Return last frame delta in seconds
-  double get_delta_time() const { return delta_time; }
+  double get_delta_time() const { return deltatime; }
 
   void ss_draw_point(int x, int y,
                      const math::vector4 &color = math::vector4(1, 1, 1, 1));

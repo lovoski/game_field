@@ -70,7 +70,7 @@ void Solver::defaultParams() {
   postStabilize = true;
 }
 
-void Solver::step() {
+void Solver::collision_step() {
   // Perform broadphase collision detection
   // This is a naive O(n^2) approach, but it is sufficient for small numbers of
   // bodies in this sample.
@@ -82,7 +82,9 @@ void Solver::step() {
         new Manifold(this, bodyA, bodyB);
     }
   }
+}
 
+void Solver::simulation_step() {
   // Initialize and warmstart forces
   for (Force *force = forces; force != 0;) {
     // Initialization can including caching anything that is constant over the
@@ -245,6 +247,11 @@ void Solver::step() {
   }
 }
 
+void Solver::step() {
+  collision_step();
+  simulation_step();
+}
+
 void Solver::update(float timestep) {
   // float residual = cur_time - cur_exec_fixed * dt;
   // while (residual > dt) {
@@ -260,7 +267,7 @@ void Solver::debug_draw(sdl2d::engine2d *engine) {
   for (Rigid *body = bodies; body != 0; body = body->next)
     body->debug_draw(engine);
   for (Force *force = forces; force != 0; force = force->next)
-    force->draw();
+    force->debug_draw(engine);
 }
 
 }; // namespace toolkit::avbd

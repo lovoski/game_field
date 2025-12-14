@@ -189,15 +189,18 @@ void engine2d::handle_event_states() {
 void engine2d::late_deserialize(nlohmann::json &j) {}
 void engine2d::late_serialize(nlohmann::json &j) {}
 
+void engine2d::reset_camera() {
+  camera_zoom = 32.0f; // 1 unit in world space ---> 32 pixels
+  camera_rotation = 0.0f;
+  camera_position = math::vector2::Zero();
+}
+
 void engine2d::reset() {
   registry.clear();
   systems.clear();
 
   // box2d_solver = register_sys<box2d::box2d_lite_world>();
-
-  camera_zoom = 32.0f; // 1 unit in world space ---> 32 pixels
-  camera_rotation = 0.0f;
-  camera_position = math::vector2::Zero();
+  reset_camera();
 }
 
 math::vector2 engine2d::world_to_screen(const math::vector2 &world_pos) {

@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include "toolkit/sdl2d/header.hpp"
 #include "toolkit/sdl2d/avbd/utils.hpp"
+#include "toolkit/sdl2d/header.hpp"
 
 namespace toolkit::sdl2d {
 class engine2d;
@@ -39,7 +39,7 @@ struct Solver {
   // Position threshold for sticking contacts (ie static friction)
   inline static const float STICK_THRESH = 0.01f;
   // Whether to show contacts in the debug draw
-  inline static const bool SHOW_CONTACTS = true;
+  bool SHOW_CONTACTS = true;
 
   float dt;       // Timestep
   float gravity;  // Gravity
@@ -64,8 +64,35 @@ struct Solver {
   Rigid *pick(math::vector2 at, math::vector2 &local);
   void clear();
   void defaultParams();
+
+  // One step call consists of one collision_step and one simulation_step
   void step();
+
+  void collision_step();
+  void simulation_step();
+
   void debug_draw(sdl2d::engine2d *engine);
+};
+
+enum ColliderType { CIRCLE_SHAPE, CONVEX_SHAPE };
+
+class ColliderShape {
+public:
+  ColliderType type;
+  virtual void debug_draw(sdl2d::engine2d *engine) {}
+};
+
+class CircleColliderShape : public ColliderShape {
+public:
+  CircleColliderShape() { type = ColliderType::CIRCLE_SHAPE; }
+  float radius = 1.0f;
+  math::vector2 center = math::vector2(0, 0);
+};
+
+class ConvexColliderShape : public ColliderShape {
+public:
+  ConvexColliderShape() { type = ColliderType::CONVEX_SHAPE; }
+  std::vector<math::vector2> points;
 };
 
 // Holds all the state for a single rigid body that is needed by AVBD
@@ -83,6 +110,8 @@ struct Rigid {
   float moment;
   float friction;
   float radius;
+
+  ColliderShape *shape = nullptr;
 
   Rigid(Solver *solver, math::vector2 size, float density, float friction,
         math::vector3 position,
@@ -122,7 +151,7 @@ struct Force {
   virtual bool initialize() = 0;
   virtual void computeConstraint(float alpha) = 0;
   virtual void computeDerivatives(Rigid *body) = 0;
-  virtual void draw() const {}
+  virtual void debug_draw(sdl2d::engine2d *engine) const {}
 };
 
 // Revolute joint + angle constraint between two rigid bodies, with optional
@@ -143,7 +172,7 @@ struct Joint : Force {
   bool initialize() override;
   void computeConstraint(float alpha) override;
   void computeDerivatives(Rigid *body) override;
-  void draw() const override;
+  void debug_draw(sdl2d::engine2d *engine) const override;
 };
 
 // Standard spring force
@@ -159,7 +188,7 @@ struct Spring : Force {
   bool initialize() override { return true; }
   void computeConstraint(float alpha) override;
   void computeDerivatives(Rigid *body) override;
-  void draw() const override;
+  void debug_draw(sdl2d::engine2d *engine) const override;
 };
 
 // Force which has no physical effect, but is used to ignore collisions between
@@ -173,7 +202,7 @@ struct IgnoreCollision : Force {
   bool initialize() override { return true; }
   void computeConstraint(float alpha) override {}
   void computeDerivatives(Rigid *body) override {}
-  void draw() const override {}
+  void debug_draw(sdl2d::engine2d *engine) const override {}
 };
 
 // Motor force which applies a torque to two rigid bodies to achieve a desired
@@ -189,7 +218,7 @@ struct Motor : Force {
   bool initialize() override { return true; }
   void computeConstraint(float alpha) override;
   void computeDerivatives(Rigid *body) override;
-  void draw() const override {}
+  void debug_draw(sdl2d::engine2d *engine) const override {}
 };
 
 // Collision manifold between two rigid bodies, which contains up to two
@@ -229,7 +258,7 @@ struct Manifold : Force {
   bool initialize() override;
   void computeConstraint(float alpha) override;
   void computeDerivatives(Rigid *body) override;
-  void draw() const override;
+  void debug_draw(sdl2d::engine2d *engine) const override;
 
   static int collide(Rigid *bodyA, Rigid *bodyB, Contact *contacts);
 };

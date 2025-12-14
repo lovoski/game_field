@@ -38,6 +38,8 @@ Rigid::~Rigid() {
   while (*p != this)
     p = &(*p)->next;
   *p = next;
+  if (shape != nullptr)
+    delete shape;
 }
 
 bool Rigid::constrainedTo(Rigid *other) const {

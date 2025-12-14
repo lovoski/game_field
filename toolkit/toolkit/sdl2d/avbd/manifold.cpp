@@ -11,6 +11,8 @@
 
 #include "solver.h"
 
+#include "toolkit/sdl2d/engine.hpp"
+
 using namespace toolkit::math;
 
 namespace toolkit::avbd {
@@ -123,20 +125,17 @@ void Manifold::computeDerivatives(Rigid *body) {
   }
 }
 
-void Manifold::draw() const {
-  //   if (!SHOW_CONTACTS)
-  //     return;
-
-  //   for (int i = 0; i < numContacts; i++) {
-  //     float2 v0 = transform(bodyA->position, contacts[i].rA);
-  //     float2 v1 = transform(bodyB->position, contacts[i].rB);
-
-  //     glColor3f(0.75f, 0.0f, 0.0f);
-  //     glBegin(GL_POINTS);
-  //     glVertex2f(v0.x, v0.y);
-  //     glVertex2f(v1.x, v1.y);
-  //     glEnd();
-  //   }
+void Manifold::debug_draw(sdl2d::engine2d *engine) const {
+  if (solver->SHOW_CONTACTS) {
+    for (int i = 0; i < numContacts; i++) {
+      vector2 v0 = engine->world_to_screen(
+          transform_position(bodyA->position, contacts[i].rA));
+      vector2 v1 = engine->world_to_screen(
+          transform_position(bodyB->position, contacts[i].rB));
+      engine->ss_draw_circle(v0.x(), v0.y(), 2.0f, true, vector4(0, 1, 0, 1));
+      engine->ss_draw_circle(v1.x(), v1.y(), 2.0f, true, vector4(0, 1, 0, 1));
+    }
+  }
 }
 
 }; // namespace toolkit::avbd
