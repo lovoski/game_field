@@ -74,7 +74,7 @@ struct Solver {
   void debug_draw(sdl2d::engine2d *engine);
 };
 
-enum ColliderType { CIRCLE_SHAPE, CONVEX_SHAPE };
+enum ColliderType { CIRCLE, CONVEX };
 
 class ColliderShape {
 public:
@@ -84,14 +84,15 @@ public:
 
 class CircleColliderShape : public ColliderShape {
 public:
-  CircleColliderShape() { type = ColliderType::CIRCLE_SHAPE; }
+  CircleColliderShape() { type = ColliderType::CIRCLE; }
   float radius = 1.0f;
   math::vector2 center = math::vector2(0, 0);
 };
 
 class ConvexColliderShape : public ColliderShape {
 public:
-  ConvexColliderShape() { type = ColliderType::CONVEX_SHAPE; }
+  ConvexColliderShape() { type = ColliderType::CONVEX; }
+  // points on the convex shape in CCW ordering
   std::vector<math::vector2> points;
 };
 
@@ -111,7 +112,7 @@ struct Rigid {
   float friction;
   float radius;
 
-  ColliderShape *shape = nullptr;
+  std::unique_ptr<ColliderShape> shape;
 
   Rigid(Solver *solver, math::vector2 size, float density, float friction,
         math::vector3 position,

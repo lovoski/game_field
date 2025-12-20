@@ -6,6 +6,23 @@
 
 #include "toolkit/opengl3d/experiments/spring_damper.hpp"
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <d3dcommon.h>
+#include <dxgi.h>
+
+#pragma comment(lib, "dxgi.lib")
+
+// Export symbols to force high-performance GPU selection on multi-GPU systems
+// These are checked by NVIDIA and AMD drivers before context creation
+extern "C" {
+// NVIDIA Optimus: Enable high-performance GPU (discrete GPU)
+__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+// AMD PowerXpress: Request high-performance GPU (discrete GPU)
+__declspec(dllexport) DWORD AmdPowerXpressRequestHighPerformance = 0x00000001;
+}
+#endif
+
 namespace toolkit::opengl3d {
 
 void engine3d::init(int width, int height, std::string title, int majorVersion,
@@ -23,17 +40,28 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, majorVersion);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minorVersion);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-  // SDL_GL_SetAttribute(SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG, 1);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
+                      SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-  SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+  SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 
-  // Create window with OpenGL context
-  // window = SDL_CreateWindow(
-  //     title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-  //     static_cast<int>(width), static_cast<int>(height),
-  //     SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
+  SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+  // Optimize for compute shader performance
+  SDL_SetHint(SDL_HINT_VIDEO_WINDOW_SHARE_PIXEL_FORMAT, "1");
+  SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "0"); // Ensure desktop OpenGL, not ES
+
+  // Note: GPU selection is handled by exported symbols at file scope
+  // (NvOptimusEnablement and AmdPowerXpressRequestHighPerformance)
+  // These are automatically checked by the graphics drivers
+
   window = SDL_CreateWindow(title.c_str(), SDL_WINDOWPOS_CENTERED,
                             SDL_WINDOWPOS_CENTERED, static_cast<int>(width),
                             static_cast<int>(height),
@@ -50,10 +78,82 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
     return;
   }
 
+  // Explicitly make the context current (required for proper compute shader
+  // performance)
+  if (SDL_GL_MakeCurrent(window, gl_context) != 0) {
+    printf("Failed to make GL context current: %s\n", SDL_GetError());
+    return;
+  }
+
   // Load GL functions with glad
   if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
     printf("Failed to load glad\n");
     return;
+  }
+
+  // Detect and log GPU information
+  {
+    const char *vendor = (const char *)glGetString(GL_VENDOR);
+    const char *renderer = (const char *)glGetString(GL_RENDERER);
+    const char *version = (const char *)glGetString(GL_VERSION);
+
+    printf("OpenGL Context Information:\n");
+    printf("  Vendor: %s\n", vendor ? vendor : "Unknown");
+    printf("  Renderer: %s\n", renderer ? renderer : "Unknown");
+    printf("  Version: %s\n", version ? version : "Unknown");
+
+#ifdef _WIN32
+    // Try to enumerate adapters using DXGI to find the most powerful one
+    IDXGIFactory *pFactory = nullptr;
+    if (SUCCEEDED(
+            CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory))) {
+      IDXGIAdapter *pAdapter = nullptr;
+      IDXGIAdapter *pBestAdapter = nullptr;
+      UINT bestAdapterMemory = 0;
+      UINT adapterIndex = 0;
+
+      printf("  Detected Graphics Adapters:\n");
+      while (pFactory->EnumAdapters(adapterIndex, &pAdapter) !=
+             DXGI_ERROR_NOT_FOUND) {
+        DXGI_ADAPTER_DESC desc;
+        if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
+          char adapterName[256];
+          WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, adapterName,
+                              sizeof(adapterName), nullptr, nullptr);
+
+          printf("    [%d] %s (VRAM: %.2f GB)\n", adapterIndex, adapterName,
+                 desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
+
+          // Select adapter with most dedicated video memory (usually the
+          // discrete GPU)
+          if (desc.DedicatedVideoMemory > bestAdapterMemory) {
+            bestAdapterMemory = desc.DedicatedVideoMemory;
+            if (pBestAdapter)
+              pBestAdapter->Release();
+            pBestAdapter = pAdapter;
+            pBestAdapter->AddRef();
+          }
+        }
+        pAdapter->Release();
+        adapterIndex++;
+      }
+
+      if (pBestAdapter) {
+        DXGI_ADAPTER_DESC bestDesc;
+        if (SUCCEEDED(pBestAdapter->GetDesc(&bestDesc))) {
+          char bestAdapterName[256];
+          WideCharToMultiByte(CP_UTF8, 0, bestDesc.Description, -1,
+                              bestAdapterName, sizeof(bestAdapterName), nullptr,
+                              nullptr);
+          printf("  Selected GPU: %s (%.2f GB VRAM)\n", bestAdapterName,
+                 bestDesc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
+        }
+        pBestAdapter->Release();
+      }
+
+      pFactory->Release();
+    }
+#endif
   }
 
   // ImGui + SDL2 + OpenGL3 initialization
@@ -75,10 +175,6 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
   ImGui_ImplOpenGL3_Init(glsl_version);
 
   ImPlot::CreateContext();
-
-  // default_font = ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(
-  //     cascadia_code_yahei_data, cascadia_code_yahei_size, 20.0f, nullptr,
-  //     ImGui::GetIO().Fonts->GetGlyphRangesChineseFull());
 
   // create system default textures
   white_tex.create();
@@ -377,8 +473,8 @@ void engine3d::run() {
       scene_wnd_size.x() = wnd_height;
       default_render_sys->resize(wnd_width, wnd_height);
       in_game_mode = !in_game_mode;
+      SDL_SetRelativeMouseMode(in_game_mode ? SDL_TRUE : SDL_FALSE);
     }
-    SDL_SetRelativeMouseMode(in_game_mode ? SDL_TRUE : SDL_FALSE);
 
     auto &active_cam_trans = registry.get<transform>(active_camera);
     auto &active_cam_comp = registry.get<camera>(active_camera);

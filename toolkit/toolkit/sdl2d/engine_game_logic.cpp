@@ -20,8 +20,8 @@ void engine2d::handle_game_logic_tick() {
           screen_to_world(0.5f * math::vector2(screen_width, screen_height) -
                           mouse_screen_delta);
     }
-    if (is_key_pressed(SDLK_LCTRL)) {
-      camera_zoom += 100.0f * deltatime * mouse_scroll_offset.y();
+    if (is_key_pressed(SDLK_LCTRL) && is_mouse_button_pressed(SDL_BUTTON_LEFT)) {
+      camera_zoom -= 50.0f * deltatime * mouse_screen_delta.y();
       camera_zoom = std::clamp(camera_zoom, 0.0f, 1e5f);
     }
   }
