@@ -6,7 +6,6 @@
 #pragma once
 
 #include "toolkit/opengl3d/engine.hpp"
-#include <cnpy.h>
 
 namespace toolkit::opengl3d {
 
@@ -24,17 +23,23 @@ struct mm_context {
 class motion_matching_app : public engine3d {
 public:
   void handle_custom_initialization() override;
-  void handle_game_logic_tick() override;
+  void handle_game_logic_tick(float dt) override;
   void handle_engine_gui() override;
+
+  void animate_player(float dt);
 
 private:
   bool mouse_hidden = false;
+  entt::entity player_entity = entt::null;
+  float cam_move_speed = 100.0f;
+  float cam_angle_horizontal = 0.0f, cam_angle_vertical = 30.0f;
+  float joystick_deadzone = 0.2f;
 
-  bool db_loaded, mapping_loaded = false;
-  std::string db_filepath = "", mapping_filepath = "";
+  std::int64_t __cur_exec_fixed = 0;
+  double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
+
   std::map<std::string, int> joint_name_to_idx;
 
-  float joystick_deadzone = 0.2f;
   float current_bias = 0.01, approx_bias = 0.01;
   float vel_halflife = 0.2f, rot_halflife = 0.2f;
   float search_time = 0.25f, search_timer = search_time;

@@ -521,7 +521,7 @@ void engine3d::run() {
     ss_handler_system->proxy_update(registry, dt);
     // physics_system->update(registry, dt);
 
-    handle_game_logic_tick();
+    handle_game_logic_tick(dt);
 
     default_render_sys->render(registry, active_cam_trans, active_cam_comp);
 

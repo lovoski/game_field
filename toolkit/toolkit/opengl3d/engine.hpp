@@ -127,7 +127,7 @@ public:
   // this function can be override to create custom initialization
   virtual void handle_custom_initialization() {}
   // this function can be override to create custom logic
-  virtual void handle_game_logic_tick() {}
+  virtual void handle_game_logic_tick(float dt) {}
   virtual void handle_engine_gui();
 
   void set_game_mode(bool game_mode, bool hide_mouse = false) {
@@ -135,13 +135,7 @@ public:
     SDL_SetRelativeMouseMode((in_game_mode && hide_mouse) ? SDL_TRUE
                                                           : SDL_FALSE);
   }
-  void quit_app_running() {
-    app_running = false;
-    if (window) {
-      SDL_DestroyWindow(window);
-      window = nullptr;
-    }
-  }
+  void quit_app_running() { app_running = false; }
 
   /**
    * Handle keyboard short cut inputs, modify editor states

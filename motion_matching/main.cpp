@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
 #endif
 #endif
   toolkit::opengl3d::motion_matching_app engine;
-  engine.init();
+  engine.init(1920, 1080, "motion matching");
   engine.run();
   engine.shutdown();
   return 0;
