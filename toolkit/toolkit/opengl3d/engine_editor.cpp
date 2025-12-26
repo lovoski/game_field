@@ -298,6 +298,7 @@ void engine3d::draw_gizmos(bool enable) {
 }
 
 void engine3d::draw_main_menubar() {
+  static bool open_named_field_window = false;
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       // ---------------------- Scene save/load menu ----------------------
@@ -466,6 +467,11 @@ void engine3d::draw_main_menubar() {
         set_vsync_state(should_vsync);
       }
 
+      ImGui::Separator();
+      ImGui::MenuItem("Named Entities", nullptr, nullptr, false);
+      if (ImGui::Button("Open Named Field Window", {-1, 30}))
+        open_named_field_window = true;
+
       ImGui::EndMenu();
     }
 
@@ -489,6 +495,95 @@ void engine3d::draw_main_menubar() {
     ImGui::PushStyleColor(ImGuiCol_Text, {1.0, 1.0, 0.0, 1.0});
     ImGui::Text("Frame Time: %.3f ms, FPS: %d", _displayFT, _displayFPS);
     ImGui::PopStyleColor();
+
+    if (open_named_field_window) {
+      if (ImGui::Begin("Named Field Editor", &open_named_field_window)) {
+        if (ImGui::Button("New Field", {-1, 30})) {
+          named_entities["new field"] = entt::null;
+        }
+        ImGui::BeginTable("##named_entities_table", 2, ImGuiTableFlags_Borders);
+        ImGui::TableSetupColumn("Named Field Key");
+        ImGui::TableSetupColumn("Named Field Value");
+        ImGui::TableHeadersRow();
+
+        {
+          // Work on a copy so we can safely rename keys and update values
+          std::vector<std::pair<std::string, entt::entity>> _named_entries;
+          _named_entries.reserve(named_entities.size());
+          for (auto &p : named_entities)
+            _named_entries.emplace_back(p.first, p.second);
+
+          for (size_t i = 0; i < _named_entries.size(); ++i) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+
+            // Editable name buffer
+            char name_buf[256] = {0};
+            std::strncpy(name_buf, _named_entries[i].first.c_str(),
+                         sizeof(name_buf) - 1);
+            std::string name_id = str_format("##named_entity_name_%zu", i);
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::InputText(name_id.c_str(), name_buf, sizeof(name_buf),
+                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
+              std::string new_name(name_buf);
+              std::string old_name = _named_entries[i].first;
+              if (new_name.empty())
+                new_name = old_name;
+              if (new_name != old_name) {
+                // prevent collision
+                if (named_entities.find(new_name) == named_entities.end()) {
+                  entt::entity val = named_entities[old_name];
+                  named_entities.erase(old_name);
+                  named_entities[new_name] = val;
+                  _named_entries[i].first = new_name;
+                } else {
+                  // name collision: ignore rename (could show a warning
+                  // later)
+                  _named_entries[i].first = old_name;
+                }
+              }
+            }
+
+            ImGui::TableSetColumnIndex(1);
+            // Display current entity name (or None) and accept drag-and-drop
+            entt::entity cur_ent = _named_entries[i].second;
+            std::string ent_label = "(None)";
+            if (registry.valid(cur_ent))
+              ent_label = registry.get<transform>(cur_ent).name;
+            std::string val_id = str_format("%s##named_entity_value_%zu",
+                                            ent_label.c_str(), i);
+            ImGui::SetNextItemWidth(-1);
+            // Use a selectable so it has an item id we can attach context menu to
+            ImGui::Selectable(val_id.c_str(), false, ImGuiSelectableFlags_None,
+                              ImVec2(0, 0));
+
+            // Right-click context to remove this named field
+            if (ImGui::BeginPopupContextItem(nullptr, 1)) {
+              if (ImGui::MenuItem("Remove Field")) {
+                named_entities.erase(_named_entries[i].first);
+              }
+              ImGui::EndPopup();
+            }
+
+            // Accept drag-drop payloads to set the entity value
+            if (ImGui::BeginDragDropTarget()) {
+              if (const ImGuiPayload *payload =
+                      ImGui::AcceptDragDropPayload("ENTITY")) {
+                entt::entity dropped = *(entt::entity *)payload->Data;
+                // update the original map and our local copy
+                named_entities[_named_entries[i].first] = dropped;
+                _named_entries[i].second = dropped;
+              }
+              ImGui::EndDragDropTarget();
+            }
+          }
+        }
+
+        ImGui::EndTable();
+
+        ImGui::End();
+      }
+    }
 
     ImGui::EndMainMenuBar();
   }

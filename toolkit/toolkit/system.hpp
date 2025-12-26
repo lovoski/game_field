@@ -76,6 +76,10 @@ public:
 
   entt::registry registry;
 
+  // this can be useful for dedicated game scenes that need to have custom
+  // marked entities (player, enemy, container etc.)
+  std::unordered_map<std::string, entt::entity> named_entities;
+
   static inline std::map<
       std::string, std::pair<std::function<void(entt::registry &, entt::entity,
                                                 nlohmann::json &)>,

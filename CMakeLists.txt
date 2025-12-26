@@ -7,9 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory("toolkit")
-# add_subdirectory("manga_viewer")
-
-# file(GLOB_RECURSE SCRIPTS_SRC "scripts/*.cpp")
 
 # set(ONNX_MODEL_BASE_PATH "${PROJECT_SOURCE_DIR}/scripts/onnxruntime/models")
 # configure_file("${PROJECT_SOURCE_DIR}/scripts/onnxruntime/config.h.in" "${PROJECT_BINARY_DIR}/onnx_model_configs.h")
@@ -46,3 +43,19 @@ target_include_directories(engine3d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOUR
 add_executable(engine2d main2d.cpp)
 target_link_libraries(engine2d PRIVATE toolkit)
 target_include_directories(engine2d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+
+add_executable(
+  craft 
+  craft/main.cpp
+  craft/craft.cpp
+)
+target_link_libraries(craft PRIVATE toolkit)
+target_include_directories(craft PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+
+add_executable(
+  motion_matching 
+  motion_matching/main.cpp
+  motion_matching/motion_matching.cpp
+)
+target_link_libraries(motion_matching PRIVATE toolkit)
+target_include_directories(motion_matching PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})

@@ -21,6 +21,8 @@ nlohmann::json iapp::serialize() {
   }
   all["registry"] = reg;
   all["systems"] = sys;
+  if (named_entities.size() > 0)
+    all["named_entities"] = named_entities;
   late_serialize(all);
   return all;
 }
@@ -30,6 +32,8 @@ void iapp::deserialize(nlohmann::json &j) {
   // systems.clear(); // preserve the original order of registered systems
   auto reg = j["registry"];
   auto sys = j["systems"];
+  if (j.contains("named_entities"))
+    named_entities = j["named_entities"];
   // system data initialization, init0 gets called inside deserialize function
   for (auto &p0 : __sys_serializer_callbacks__) {
     auto name = p0.first;

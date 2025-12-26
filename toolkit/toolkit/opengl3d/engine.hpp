@@ -124,8 +124,24 @@ public:
   // override this if there's more components
   void draw_systems_gui();
 
+  // this function can be override to create custom initialization
+  virtual void handle_custom_initialization() {}
   // this function can be override to create custom logic
   virtual void handle_game_logic_tick() {}
+  virtual void handle_engine_gui();
+
+  void set_game_mode(bool game_mode, bool hide_mouse = false) {
+    in_game_mode = game_mode;
+    SDL_SetRelativeMouseMode((in_game_mode && hide_mouse) ? SDL_TRUE
+                                                          : SDL_FALSE);
+  }
+  void quit_app_running() {
+    app_running = false;
+    if (window) {
+      SDL_DestroyWindow(window);
+      window = nullptr;
+    }
+  }
 
   /**
    * Handle keyboard short cut inputs, modify editor states
@@ -175,6 +191,7 @@ public:
 protected:
   int gizmo_mode_idx = 0;
   bool in_game_mode = false;
+  bool app_running = true;
   bool should_vsync = false;
 
   // input handling
