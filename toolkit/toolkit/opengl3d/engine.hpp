@@ -83,10 +83,10 @@ class engine3d : public iapp {
 public:
   void init(int width = 1920, int height = 1080, std::string title = "engine3d",
             int majorVersion = 4, int minorVersion = 6);
-  void run();
-  void shutdown();
+  virtual void run();
+  virtual void shutdown();
 
-  void reset();
+  virtual void reset();
   void add_default_objects();
 
   ImGuiIO *imgui_io = nullptr;
@@ -124,6 +124,7 @@ public:
   // override this if there's more components
   void draw_systems_gui();
 
+  virtual void handle_custom_cleanup() {}
   // this function can be override to create custom initialization
   virtual void handle_custom_initialization() {}
   // this function can be override to create custom logic

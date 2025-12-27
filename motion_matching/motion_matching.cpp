@@ -273,32 +273,34 @@ void motion_matching_app::handle_custom_initialization() {
 void motion_matching_app::handle_game_logic_tick(float dt) {
   double residual = __cur_time - __cur_exec_fixed * fixed_interval;
   while (residual > fixed_interval) {
-    // update camera position
-    auto &player_trans = registry.get<transform>(player_entity);
-    cam_angle_horizontal -= fixed_interval * cam_move_speed * mouse_screen_delta.x();
-    cam_angle_vertical += fixed_interval * cam_move_speed * mouse_screen_delta.y();
-    cam_angle_vertical = std::clamp(cam_angle_vertical, -10.0f, 80.0f);
-    float cos_z = cos(math::deg_to_rad(cam_angle_vertical));
-    math::vector3 cam_z =
-        math::vector3(cos_z * sin(math::deg_to_rad(cam_angle_horizontal)),
-                      sin(math::deg_to_rad(cam_angle_vertical)),
-                      cos_z * cos(math::deg_to_rad(cam_angle_horizontal)))
-            .normalized();
-    math::vector3 cam_y(0.0, 1.0, 0.0);
-    math::vector3 cam_x = (cam_y.cross(cam_z)).normalized();
-    cam_y = (cam_z.cross(cam_x)).normalized();
-    math::matrix3 cam_rot = math::matrix3::Identity();
-    cam_rot << cam_x, cam_y, cam_z;
-    auto &cam_trans = registry.get<transform>(active_camera);
-    cam_trans.set_world_rot(math::quat(cam_rot));
-    cam_trans.set_world_pos(player_trans.world_pos() + cam_z * 3);
-
     // animate the character with motion matching
     animate_player(static_cast<float>(fixed_interval));
     residual -= fixed_interval;
     __cur_exec_fixed += 1;
   }
   __cur_time += dt;
+
+  // update camera position
+  auto &player_trans = registry.get<transform>(player_entity);
+  cam_angle_horizontal -= dt * cam_move_speed * mouse_screen_delta.x();
+  cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
+  cam_angle_vertical = std::clamp(cam_angle_vertical, -10.0f, 80.0f);
+  float cos_z = cos(math::deg_to_rad(cam_angle_vertical));
+  math::vector3 cam_z =
+      math::vector3(cos_z * sin(math::deg_to_rad(cam_angle_horizontal)),
+                    sin(math::deg_to_rad(cam_angle_vertical)),
+                    cos_z * cos(math::deg_to_rad(cam_angle_horizontal)))
+          .normalized();
+  math::vector3 cam_y(0.0, 1.0, 0.0);
+  math::vector3 cam_x = (cam_y.cross(cam_z)).normalized();
+  cam_y = (cam_z.cross(cam_x)).normalized();
+  math::matrix3 cam_rot = math::matrix3::Identity();
+  cam_rot << cam_x, cam_y, cam_z;
+  auto &cam_trans = registry.get<transform>(active_camera);
+  cam_trans.set_world_rot(math::quat(cam_rot));
+  cam_trans.set_world_pos(player_trans.world_pos() + cam_z * 3);
+  // TODO: this reduce the jittering of the camera, why?
+  cam_trans.force_update_hierarchy();
 
   // handle interaction input
   if (is_key_triggered(SDLK_ESCAPE))

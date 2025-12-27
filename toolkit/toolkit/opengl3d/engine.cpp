@@ -256,6 +256,9 @@ void main() {
 }
 
 void engine3d::shutdown() {
+  // custom cleanup
+  handle_custom_cleanup();
+
   // ImGui + SDL cleanup
   ImPlot::DestroyContext();
   ImGui_ImplOpenGL3_Shutdown();
