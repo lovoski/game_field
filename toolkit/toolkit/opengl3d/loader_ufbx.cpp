@@ -53,7 +53,8 @@ ufbx_node *find_last_bone_parent(ufbx_node *node) {
 }
 
 std::map<ufbx_node *, entt::entity>
-read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
+read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename,
+           std::vector<entt::entity> &actor_entities) {
   std::map<ufbx_node *, entt::entity> ufbx_node_to_entity;
   // create node hierarchy given the fbx scene nodes, each node correspond to
   // one entity in the scene.
@@ -124,6 +125,7 @@ read_nodes(entt::registry &registry, ufbx_scene *scene, std::string filename) {
             bone_nodes_sub.push_back(bone_nodes[i]);
         int joint_num = bone_nodes_sub.size();
         auto &actor_comp = registry.emplace<opengl3d::actor>(root_ent);
+        actor_entities.push_back(root_ent);
         // auto &vis_script = registry.emplace<vis_skeleton>(root_ent);
         actor_comp.joint_active.resize(joint_num, true);
         actor_comp.ordered_entities.resize(joint_num);
@@ -405,7 +407,8 @@ entt::entity open_model_ufbx(entt::registry &registry, std::string filepath) {
 #else
   std::string filename = std::filesystem::path(filepath).filename().string();
 #endif
-  auto ufbx_node_to_entity = read_nodes(registry, scene, filename);
+  std::vector<entt::entity> actor_entities;
+  auto ufbx_node_to_entity = read_nodes(registry, scene, filename, actor_entities);
   // create skinned mesh bundle
   auto bone_entities =
       create_skinned_mesh_bundle_data(registry, scene, ufbx_node_to_entity);
@@ -416,6 +419,8 @@ entt::entity open_model_ufbx(entt::registry &registry, std::string filepath) {
     auto &bundle_comp =
         registry.emplace<opengl3d::skinned_mesh_bundle>(bundle_entity);
     bundle_comp.bone_entities = bone_entities;
+    bundle_comp.actor_entities = actor_entities;
+    bundle_comp.actor_draw.resize(actor_entities.size(), true);
   }
   // create meshes
   for (int i = 0; i < scene->meshes.count; i++) {

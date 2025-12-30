@@ -1,4 +1,6 @@
+#include "toolkit/opengl3d/components/actor.hpp"
 #include "toolkit/opengl3d/components/mesh.hpp"
+#include "toolkit/opengl3d/gui.hpp"
 
 namespace toolkit::opengl3d {
 
@@ -29,21 +31,35 @@ void skinned_mesh_bundle::try_setup() {
 
 void skinned_mesh_bundle::draw_gui(entt::registry &registry,
                                    entt::entity entity) {
-  // ImGui::SeparatorText("Drop here to add entity");
-  // entt::entity added_entity = entt::null, removed_entity = entt::null;
-  // if (ImGui::BeginDragDropTarget()) {
-  //   if (const ImGuiPayload *payload = ImGui::AcceptDragDropPayload("ENTITY"))
-  //   {
-  //     added_entity = *(entt::entity *)payload->Data;
-  //   }
-  //   ImGui::EndDragDropTarget();
-  // }
-  // auto new_mesh_ptr = registry.try_get<mesh_data>(added_entity);
-  // if ((added_entity != entt::null) && (new_mesh_ptr != nullptr) &&
-  //     (std::find(mesh_entities.begin(), mesh_entities.end(), added_entity) ==
-  //      mesh_entities.end())) {
-  //   mesh_entities.push_back(added_entity);
-  // }
+  if (ImGui::TreeNode(
+          str_format("Actor (count: %d)", actor_entities.size()).c_str())) {
+    ImGui::Checkbox("Draw Skeleton", &actor_draw_skeleton);
+    ImGui::Checkbox("Draw Names", &actor_draw_names);
+    ImGui::Checkbox("Draw Joint Spheres", &actor_draw_spheres);
+    ImGui::Checkbox("Skeleton On Top", &actor_bones_on_top);
+    ImGui::Checkbox("Draw Joint Axes", &actor_draw_axes);
+    ImGui::DragFloat("Axes Size", &actor_axes_length, 0.005f, 0.0f, 1.0f);
+    ImGui::DragFloat("Alpha Blending", &actor_bone_alpha, 0.005f, 0.0f, 1.0f);
+    color_edit_3("Bone Color", actor_bone_color);
+    for (int i = 0; i < actor_entities.size(); i++) {
+      auto actor_entity = actor_entities[i];
+      if (ImGui::TreeNode(
+              str_format(
+                  "Actor Entity %d: (%s)", i,
+                  (actor_entity == entt::null)
+                      ? "null"
+                      : registry.get<transform>(actor_entity).name.c_str())
+                  .c_str())) {
+        bool cur_actor_draw = actor_draw[i];
+        if (ImGui::Checkbox("Draw Actor", &cur_actor_draw))
+          actor_draw[i] = cur_actor_draw;
+        registry.get<actor>(actor_entity).draw_gui(registry, actor_entity);
+        ImGui::TreePop();
+      }
+      ImGui::Separator();
+    }
+    ImGui::TreePop();
+  }
 
   if (ImGui::TreeNode(
           str_format("Bone Nodes (count: %d)", bone_entities.size()).c_str())) {

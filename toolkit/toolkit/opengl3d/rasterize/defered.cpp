@@ -1,9 +1,9 @@
 #include "toolkit/opengl3d/components/actor.hpp"
 #include "toolkit/opengl3d/effects/ambient_occlusion.hpp"
+#include "toolkit/opengl3d/gui.hpp"
 #include "toolkit/opengl3d/rasterize/kernal.hpp"
 #include "toolkit/opengl3d/rasterize/shaders.hpp"
 #include "toolkit/opengl3d/rasterize/system.hpp"
-#include "toolkit/opengl3d/gui.hpp"
 
 #include "toolkit/opengl3d/native_subsys.hpp"
 
@@ -452,8 +452,7 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
           bone_matrices[i].model_mat =
               registry.get<transform>(bundle.bone_entities[i]).matrix();
           bone_matrices[i].offset_mat =
-              registry.get<bone_node>(bundle.bone_entities[i])
-                  .offset_matrix;
+              registry.get<bone_node>(bundle.bone_entities[i]).offset_matrix;
         }
         skeleton_matrices_buffer.set_data_ssbo(bone_matrices, GL_DYNAMIC_DRAW);
 
@@ -791,6 +790,103 @@ void defered_render_system::render(entt::registry &registry,
       // glEnable(GL_DEPTH_TEST);
     }
 
+    // render skeleton for skinned mesh bundle
+    skinned_mesh_bundle_view.each([&](entt::entity entity,
+                                      skinned_mesh_bundle &bundle_data) {
+      if (!bundle_data.actor_draw_skeleton)
+        return;
+      for (int actor_idx = 0; actor_idx < bundle_data.actor_entities.size();
+           actor_idx++) {
+        auto actor_entity = bundle_data.actor_entities[actor_idx];
+        if ((actor_idx >= bundle_data.actor_draw.size()) ||
+            !bundle_data.actor_draw[actor_idx])
+          continue;
+        auto &actor_comp = registry.get<actor>(actor_entity);
+        bundle_data._actor_active_joint_entities.clear();
+        for (int i = 0; i < actor_comp.joint_active.size(); i++)
+          if (actor_comp.joint_active[i])
+            bundle_data._actor_active_joint_entities.insert(
+                actor_comp.ordered_entities[i]);
+        collect_skeleton_draw_queue(registry, actor_comp,
+                                    bundle_data._actor_draw_queue);
+        if (bundle_data._actor_draw_queue.size() == 0)
+          continue;
+        draw_bones(bundle_data._actor_draw_queue, cam_comp.vp,
+                   bundle_data.actor_bone_color, bundle_data.actor_bone_alpha,
+                   !bundle_data.actor_bones_on_top);
+        float avg_bone_length = 0.0f;
+        for (int i = 0; i < bundle_data._actor_draw_queue.size(); i++)
+          avg_bone_length += (bundle_data._actor_draw_queue[i].first -
+                              bundle_data._actor_draw_queue[i].second)
+                                 .norm();
+        avg_bone_length /= bundle_data._actor_draw_queue.size();
+        if (bundle_data.actor_draw_axes) {
+          bundle_data._actor_x_dir.clear();
+          bundle_data._actor_y_dir.clear();
+          bundle_data._actor_z_dir.clear();
+          bundle_data._actor_x_dir.reserve(
+              bundle_data._actor_active_joint_entities.size());
+          bundle_data._actor_y_dir.reserve(
+              bundle_data._actor_active_joint_entities.size());
+          bundle_data._actor_z_dir.reserve(
+              bundle_data._actor_active_joint_entities.size());
+          for (auto joint_entity : bundle_data._actor_active_joint_entities) {
+            auto &joint_trans = registry.get<transform>(joint_entity);
+            bundle_data._actor_x_dir.push_back(std::make_pair(
+                joint_trans.world_pos(),
+                joint_trans.world_pos() + bundle_data.actor_axes_length *
+                                              avg_bone_length *
+                                              joint_trans.local_right()));
+            bundle_data._actor_y_dir.push_back(std::make_pair(
+                joint_trans.world_pos(),
+                joint_trans.world_pos() + bundle_data.actor_axes_length *
+                                              avg_bone_length *
+                                              joint_trans.local_up()));
+            bundle_data._actor_z_dir.push_back(std::make_pair(
+                joint_trans.world_pos(),
+                joint_trans.world_pos() + bundle_data.actor_axes_length *
+                                              avg_bone_length *
+                                              joint_trans.local_forward()));
+          }
+          draw_arrows(bundle_data._actor_x_dir, cam_comp.vp, Red,
+                      0.1f * bundle_data.actor_axes_length * avg_bone_length,
+                      bundle_data.actor_bone_alpha,
+                      !bundle_data.actor_bones_on_top);
+          draw_arrows(bundle_data._actor_y_dir, cam_comp.vp, Green,
+                      0.1f * bundle_data.actor_axes_length * avg_bone_length,
+                      bundle_data.actor_bone_alpha,
+                      !bundle_data.actor_bones_on_top);
+          draw_arrows(bundle_data._actor_z_dir, cam_comp.vp, Blue,
+                      0.1f * bundle_data.actor_axes_length * avg_bone_length,
+                      bundle_data.actor_bone_alpha,
+                      !bundle_data.actor_bones_on_top);
+        }
+        if (bundle_data.actor_draw_spheres) {
+          bundle_data._actor_joint_positions.clear();
+          bundle_data._actor_joint_positions.reserve(
+              bundle_data._actor_active_joint_entities.size());
+          for (auto joint_entity : bundle_data._actor_active_joint_entities) {
+            auto &joint_trans = registry.get<transform>(joint_entity);
+            bundle_data._actor_joint_positions.push_back(
+                joint_trans.world_pos());
+          }
+          draw_spheres(bundle_data._actor_joint_positions, cam_comp.vp,
+                       0.08f * avg_bone_length, bundle_data.actor_bone_color,
+                       false, bundle_data.actor_bone_alpha,
+                       !bundle_data.actor_bones_on_top);
+        }
+        if (bundle_data.actor_draw_names) {
+          for (auto joint_entity : bundle_data._actor_active_joint_entities) {
+            auto &joint_trans = registry.get<transform>(joint_entity);
+            draw_text3d(joint_trans.name, joint_trans.world_pos(),
+                        math::quat::Identity(), cam_comp.vp, White, 0.0f, 0.02f,
+                        1.0f, 1.0f, 0.0f, 1.0f, 1.0f, false);
+          }
+        }
+        bundle_data._actor_draw_queue.clear();
+      }
+    });
+
     // ------------------- apply post processing -------------------
     glEnable(GL_BLEND);
     // 1. ambient occlusion
@@ -817,4 +913,4 @@ void defered_render_system::render(entt::registry &registry,
   }
 }
 
-}; // namespace toolkit::opengl
+}; // namespace toolkit::opengl3d

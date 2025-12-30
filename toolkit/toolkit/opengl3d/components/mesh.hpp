@@ -80,10 +80,29 @@ struct skinned_mesh_bundle : public icomponent {
       blendshape_weights; // temporary variable, no need for serialization
   void draw_gui(entt::registry &registry, entt::entity entity) override;
 
+  // actor related
+  float actor_axes_length = 1.0f, actor_bone_alpha = 1.0f;
+  bool actor_draw_skeleton = true, actor_draw_axes = false,
+       actor_draw_spheres = true, actor_draw_names = false,
+       actor_bones_on_top = true;
+  math::vector3 actor_bone_color = math::vector3(0, 1, 0);
+  std::vector<bool> actor_draw;
+  std::vector<entt::entity> actor_entities;
+
+  // temporary variables
+  std::set<entt::entity> _actor_active_joint_entities;
+  std::vector<math::vector3> _actor_joint_positions;
+  std::vector<std::pair<math::vector3, math::vector3>> _actor_draw_queue,
+      _actor_x_dir, _actor_y_dir, _actor_z_dir;
+
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
   std::vector<entt::entity> bone_entities, mesh_entities;
 };
-DECLARE_COMPONENT(skinned_mesh_bundle, data, bone_entities, mesh_entities)
+DECLARE_COMPONENT(skinned_mesh_bundle, data, bone_entities, mesh_entities,
+                  actor_entities, actor_draw, actor_axes_length,
+                  actor_bone_alpha, actor_draw_skeleton, actor_draw_axes,
+                  actor_draw_spheres, actor_draw_names, actor_bones_on_top,
+                  actor_bone_color)
 
 void init_opengl_buffers(mesh_data &data);
 

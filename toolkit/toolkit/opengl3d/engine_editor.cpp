@@ -69,6 +69,17 @@ void engine3d::active_camera_manipulate(float dt) {
                                cam_trans->local_forward() * scroll_offset.y() *
                                    movement_delta);
     }
+    // if (is_key_pressed(SDLK_LCTRL) &&
+    //     is_mouse_button_pressed(SDL_BUTTON_LEFT)) {
+    //   // move the camera towards to pivot
+    //   if (((cam_manip_data.camera_pivot - cam_trans->world_pos()).norm() >
+    //        0.2f) &&
+    //       (mouse_screen_delta.y() != 0.0f))
+    //     cam_trans->set_world_pos(
+    //         cam_trans->world_pos() +
+    //         (mouse_screen_delta.y() < 0 ? 1 : -1) * movement_delta *
+    //             (cam_manip_data.camera_pivot - cam_trans->world_pos()));
+    // }
     bool press_mouse_mid_btn = is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
     bool press_mouse_right_btn = is_mouse_button_pressed(SDL_BUTTON_RIGHT);
     // only handle mouse input when cursor in scene window
@@ -550,10 +561,11 @@ void engine3d::draw_main_menubar() {
             std::string ent_label = "(None)";
             if (registry.valid(cur_ent))
               ent_label = registry.get<transform>(cur_ent).name;
-            std::string val_id = str_format("%s##named_entity_value_%zu",
-                                            ent_label.c_str(), i);
+            std::string val_id =
+                str_format("%s##named_entity_value_%zu", ent_label.c_str(), i);
             ImGui::SetNextItemWidth(-1);
-            // Use a selectable so it has an item id we can attach context menu to
+            // Use a selectable so it has an item id we can attach context menu
+            // to
             ImGui::Selectable(val_id.c_str(), false, ImGuiSelectableFlags_None,
                               ImVec2(0, 0));
 

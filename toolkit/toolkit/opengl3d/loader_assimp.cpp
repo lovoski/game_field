@@ -35,7 +35,8 @@ void build_skeleton(
 void collect_bone_entities(entt::registry &registry,
                            std::map<aiNode *, entt::entity> &node_mapping,
                            std::vector<entt::entity> &bone_entities,
-                           const aiScene *scene) {
+                           const aiScene *scene,
+                           std::vector<entt::entity> &actor_entities) {
   std::map<std::string, entt::entity> name_to_bone_entity;
   for (auto &p : node_mapping) {
     for (int i = 0; i < p.first->mNumMeshes; i++) {
@@ -82,6 +83,7 @@ void collect_bone_entities(entt::registry &registry,
     if (cur_trans->m_parent == entt::null)
       skeleton_roots.push_back(bone_entities[i]);
   }
+  actor_entities = skeleton_roots;
   for (auto ent : skeleton_roots) {
     auto &actor_comp = registry.emplace<opengl3d::actor>(ent);
     // auto &vis_skel_script = registry.emplace<anim::vis_skeleton>(ent);
@@ -281,13 +283,15 @@ entt::entity open_model_assimp(entt::registry &registry, std::string filepath) {
   root_trans.force_update_hierarchy();
 
   // build skinned mesh bundle
-  std::vector<entt::entity> bone_entities;
-  collect_bone_entities(registry, node_mapping, bone_entities, scene);
+  std::vector<entt::entity> bone_entities, actor_entities;
+  collect_bone_entities(registry, node_mapping, bone_entities, scene, actor_entities);
   if (bone_entities.size() > 0) {
     // there's bone nodes
     auto &bundle_comp =
         registry.emplace<opengl3d::skinned_mesh_bundle>(root_entity);
     bundle_comp.bone_entities = bone_entities;
+    bundle_comp.actor_entities = actor_entities;
+    bundle_comp.actor_draw.resize(actor_entities.size(), true);
   }
 
   // handle node with meshes
