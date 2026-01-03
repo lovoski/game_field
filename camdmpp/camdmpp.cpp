@@ -1,17 +1,11 @@
-#include "scripts/onnxruntime/camdmpp.hpp"
+#include "camdmpp.hpp"
 
-namespace toolkit {
+namespace toolkit::opengl3d {
 
-void camdmpp::draw_gui(entt::registry &registry, entt::entity entity) {
-  if (ImGui::Button("Select .onnx model", {-1, 30})) {
-    // std::string filepath;
-    // if (open_file_dialog("Select .onnx model", {"*.onnx"}, filepath))
-    //   diffusion.setup(filepath, "");
-  }
-}
+void camdmpp::handle_custom_initialization() {}
 
-void camdmpp::draw_to_scene(entt::registry &registry, transform &cam_trans, camera &cam_comp) {}
+void camdmpp::handle_game_logic_tick(float dt) {}
 
-void camdmpp::fixedupdate(entt::registry &registry, float dt) {}
+void camdmpp::handle_engine_gui() {}
 
-}; // namespace toolkit
+}; // namespace toolkit::opengl3d

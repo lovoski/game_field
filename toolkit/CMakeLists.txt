@@ -8,11 +8,11 @@ find_package(assimp CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CGAL CONFIG REQUIRED)
-find_package(Bullet CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
 find_package(SDL2_image CONFIG REQUIRED)
 find_package(SDL2_mixer CONFIG REQUIRED)
 find_package(SDL2_ttf CONFIG REQUIRED)
+find_package(mujoco CONFIG REQUIRED)
 add_subdirectory("toolkit/deps/cnpy")
 add_subdirectory("toolkit/deps/tinyfd")
 add_subdirectory("toolkit/deps/ufbx")
@@ -45,18 +45,13 @@ target_link_libraries(
   imgui 
   sun_sky 
   assimp::assimp 
+  mujoco::mujoco
   CGAL::CGAL
   $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
   $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
   $<IF:$<TARGET_EXISTS:SDL2_image::SDL2_image>,SDL2_image::SDL2_image,SDL2_image::SDL2_image-static>
   $<IF:$<TARGET_EXISTS:SDL2_mixer::SDL2_mixer>,SDL2_mixer::SDL2_mixer,SDL2_mixer::SDL2_mixer-static>
   $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
-  BulletSoftBody
-  BulletDynamics
-  BulletInverseDynamics
-  BulletCollision
-  Bullet3Common
-  LinearMath
 )
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR} "toolkit/deps/headers")
 if (MSVC)

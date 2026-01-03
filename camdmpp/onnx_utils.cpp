@@ -1,7 +1,7 @@
-#include "scripts/onnxruntime/utils.hpp"
+#include "onnx_utils.hpp"
 #include <iostream>
 
-const char *TensorElementDataTypeToString(ONNXTensorElementDataType type) {
+const char *tensor_element_data_type_as_str(ONNXTensorElementDataType type) {
   switch (type) {
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
     return "float32";
@@ -34,7 +34,7 @@ const char *TensorElementDataTypeToString(ONNXTensorElementDataType type) {
   }
 }
 
-void PrintNodeDetails(Ort::Session &session,
+void print_onnx_node_details(Ort::Session &session,
                       Ort::AllocatorWithDefaultOptions &allocator,
                       bool is_input) {
   size_t node_count =
@@ -56,7 +56,7 @@ void PrintNodeDetails(Ort::Session &session,
 
     // Get data type
     ONNXTensorElementDataType data_type = tensor_info.GetElementType();
-    std::string type_str = TensorElementDataTypeToString(data_type);
+    std::string type_str = tensor_element_data_type_as_str(data_type);
 
     // Get shape
     std::vector<int64_t> shape = tensor_info.GetShape();

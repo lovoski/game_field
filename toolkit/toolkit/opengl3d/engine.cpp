@@ -561,7 +561,6 @@ void engine3d::reset() {
   transform_hierarchy_sys = register_sys<transform_system>();
   default_render_sys = register_sys<defered_render_system>();
   ss_handler_system = register_sys<sub_system_handler>();
-  physics_system = register_sys<bullet::bullet_physics_system>();
 }
 
 void engine3d::add_default_objects() {

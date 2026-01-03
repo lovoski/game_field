@@ -1,23 +1,18 @@
 #pragma once
 
-#include "onnx_model_configs.h"
-#include "toolkit/anim/components/actor.hpp"
-#include "toolkit/opengl/editor.hpp"
-#include "toolkit/scriptable.hpp"
-#include "toolkit/system.hpp"
+#include "diffusion.hpp"
 
-#include "scripts/onnxruntime/camdm_diffusion.hpp"
+#include "toolkit/opengl3d/engine.hpp"
 
-namespace toolkit {
+namespace toolkit::opengl3d {
 
-class camdmpp : public sub_system {
+class camdmpp : public engine3d {
 public:
-  void draw_gui(entt::registry &registry, entt::entity entity) override;
-  void draw_to_scene(entt::registry &registry, transform &cam_trans,
-                     camera &cam_comp) override;
+  void handle_custom_initialization() override;
+  void handle_game_logic_tick(float dt) override;
+  void handle_engine_gui() override;
 
-  void fixedupdate(entt::registry &registry, float dt) override;
+private:
 };
-DECLARE_SUB_SYSTEM(camdmpp, animation)
 
-}; // namespace toolkit
+}; // namespace toolkit::opengl3d
