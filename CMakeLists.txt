@@ -19,7 +19,7 @@ target_link_libraries(engine2d PRIVATE toolkit)
 target_include_directories(engine2d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
-  craft 
+  craft
   craft/main.cpp
   craft/craft.cpp
 )
@@ -27,7 +27,7 @@ target_link_libraries(craft PRIVATE toolkit)
 target_include_directories(craft PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
-  motion_matching 
+  motion_matching
   motion_matching/main.cpp
   motion_matching/motion_matching.cpp
 )
@@ -35,17 +35,18 @@ target_link_libraries(motion_matching PRIVATE toolkit)
 target_include_directories(motion_matching PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
-  camdmpp 
+  camdmpp
   camdmpp/main.cpp
   camdmpp/camdmpp.cpp
   camdmpp/diffusion.cpp
   camdmpp/onnx_utils.cpp
+  camdmpp/ziggurat.cpp
 )
 target_link_libraries(camdmpp PRIVATE toolkit ${ONNXRUNTIME_LIBRARY})
 target_include_directories(
-  camdmpp 
-  PRIVATE 
-  ${PROJECT_BINARY_DIR} 
+  camdmpp
+  PRIVATE
+  ${PROJECT_BINARY_DIR}
   ${PROJECT_SOURCE_DIR}
   ${ONNXRUNTIME_INCLUDE_DIR}
 )

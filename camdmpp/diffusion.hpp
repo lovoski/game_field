@@ -1,7 +1,7 @@
 #pragma once
 
 #include "onnx_utils.hpp"
-#include "toolkit/utils.hpp"
+#include "ziggurat.hpp"
 
 #include <atomic>
 #include <condition_variable>
@@ -30,6 +30,12 @@ public:
    */
   void process_completions();
 
+  /**
+   * Run the inference immediately on the main thread, this could block the
+   * execution.
+   */
+  std::vector<float> run_model_inference();
+
   ~diffusion();
 
   // These variables should be modified from the main thread, acting as the
@@ -49,6 +55,14 @@ public:
   std::vector<std::int64_t> x_t_shape, past_motion_shape, traj_facing_shape,
       traj_pos_shape, style_idx_shape;
 
+private:
+  // for random number generation
+  uint32_t ziggurat_kn[128], ziggurat_jsr = 0;
+  float ziggurat_fn[128], ziggurat_wn[128];
+
+  Ort::MemoryInfo memory_info =
+      Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
   Ort::Session session = Ort::Session(nullptr);
   Ort::Env env = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "diffusion");
   Ort::AllocatorWithDefaultOptions allocator;
@@ -63,6 +77,5 @@ public:
   std::queue<std::function<void()>> completion_queue;
   std::atomic_bool stop_worker{false};
 
-private:
   void worker_loop();
 };

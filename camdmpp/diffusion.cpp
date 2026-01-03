@@ -73,82 +73,80 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   traj_pos_data = std::vector<float>(__shape_to_size(traj_pos_shape), 0.0f);
   style_idx_data = std::vector<int64_t>(__shape_to_size(style_idx_shape), 0);
 
+  // setup random number generator
+  ziggurat::r4_nor_setup(ziggurat_kn, ziggurat_fn, ziggurat_wn);
+
   // Start background worker for async inference
   stop_worker.store(false);
   if (!worker_thread.joinable())
     worker_thread = std::thread(&diffusion::worker_loop, this);
 }
 
-std::vector<float> run_model_inference(diffusion &self) {
-  auto &x_t_data = self.x_t_data;
-  static thread_local std::mt19937 gen{std::random_device{}()};
-  std::normal_distribution<float> normal_dist(0.0f, 1.0f);
+std::vector<float> diffusion::run_model_inference() {
   for (float &v : x_t_data)
-    v = normal_dist(gen);
-
-  Ort::MemoryInfo memory_info =
-      Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    v = ziggurat::r4_nor(ziggurat_jsr, ziggurat_kn, ziggurat_fn, ziggurat_wn);
 
   std::vector<int64_t> timestep_data(1, 0);
   const std::vector<int64_t> timestep_shape{1};
-  std::vector<const char *> input_names;
-  for (const auto &s : self.input_names)
-    input_names.push_back(s.c_str());
-  std::vector<const char *> output_names;
-  for (const auto &s : self.output_names)
-    output_names.push_back(s.c_str());
+  std::vector<const char *> _input_names;
+  for (const auto &s : input_names)
+    _input_names.push_back(s.c_str());
+  std::vector<const char *> _output_names;
+  for (const auto &s : output_names)
+    _output_names.push_back(s.c_str());
 
   std::vector<Ort::Value> inputs;
   // noisey future motion sequence
   inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, x_t_data.data(), x_t_data.size(), self.x_t_shape.data(),
-      self.x_t_shape.size())));
+      memory_info, x_t_data.data(), x_t_data.size(), x_t_shape.data(),
+      x_t_shape.size())));
   // timestep
   inputs.push_back(std::move(Ort::Value::CreateTensor<int64_t>(
       memory_info, timestep_data.data(), timestep_data.size(),
       timestep_shape.data(), timestep_shape.size())));
   // past motion sequence condition
   inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, self.past_motion_data.data(), self.past_motion_data.size(),
-      self.past_motion_shape.data(), self.past_motion_shape.size())));
+      memory_info, past_motion_data.data(), past_motion_data.size(),
+      past_motion_shape.data(), past_motion_shape.size())));
   // trajectory position condition
   inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, self.traj_pos_data.data(), self.traj_pos_data.size(),
-      self.traj_pos_shape.data(), self.traj_pos_shape.size())));
+      memory_info, traj_pos_data.data(), traj_pos_data.size(),
+      traj_pos_shape.data(), traj_pos_shape.size())));
   // trajectory facing direction condition
   inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, self.traj_facing_data.data(), self.traj_facing_data.size(),
-      self.traj_facing_shape.data(), self.traj_facing_shape.size())));
+      memory_info, traj_facing_data.data(), traj_facing_data.size(),
+      traj_facing_shape.data(), traj_facing_shape.size())));
   // motion style discrete label condition
   inputs.push_back(std::move(Ort::Value::CreateTensor<int64_t>(
-      memory_info, self.style_idx_data.data(), self.style_idx_data.size(),
-      self.style_idx_shape.data(), self.style_idx_shape.size())));
+      memory_info, style_idx_data.data(), style_idx_data.size(),
+      style_idx_shape.data(), style_idx_shape.size())));
 
   /* ---------------- Diffusion loop ---------------- */
-  for (int t = self.diffusion_steps - 1; t >= 0; --t) {
+  for (int t = diffusion_steps - 1; t >= 0; --t) {
     // Update the value in the buffer; the tensor wrapper sees this change
     // automatically
     *(inputs[1].GetTensorMutableData<int64_t>()) = static_cast<int64_t>(t);
 
-    auto outputs = self.session.Run(
-        Ort::RunOptions{nullptr}, input_names.data(), inputs.data(),
-        inputs.size(), output_names.data(), output_names.size());
+    auto outputs = session.Run(Ort::RunOptions{nullptr}, _input_names.data(),
+                               inputs.data(), inputs.size(),
+                               _output_names.data(), output_names.size());
     // batch_size (1), pose_token_dim, past_points + future_points
     const float *pred_noise = outputs[0].GetTensorData<float>();
     float *x_t_ptr = inputs[0].GetTensorMutableData<float>();
-    const float coef1 = self.posterior_mean_coef1[t];
-    const float coef2 = self.posterior_mean_coef2[t];
+    const float coef1 = posterior_mean_coef1[t];
+    const float coef2 = posterior_mean_coef2[t];
     const float std_dev =
-        std::sqrt(std::exp(self.posterior_log_variance_clipped[t]));
+        std::sqrt(std::exp(posterior_log_variance_clipped[t]));
 
     // Update x_t_data directly
-    for (int p = 0; p < self.pose_token_dim; p++) {
-      for (int f = 0; f < self.future_points; f++) {
-        int i = 1 * p * self.future_points + f;
-        int j = 1 * p * (self.future_points + self.past_points) + f +
-                self.past_points;
+    for (int p = 0; p < pose_token_dim; p++) {
+      for (int f = 0; f < future_points; f++) {
+        int i = 1 * p * future_points + f;
+        int j = 1 * p * (future_points + past_points) + f + past_points;
         float posterior_mean = coef1 * pred_noise[j] + coef2 * x_t_ptr[i];
-        float noise = (t > 0) ? normal_dist(gen) : 0.0f;
+        float noise = (t > 0) ? ziggurat::r4_nor(ziggurat_jsr, ziggurat_kn,
+                                                 ziggurat_fn, ziggurat_wn)
+                              : 0.0f;
         x_t_ptr[i] = posterior_mean + std_dev * noise;
       }
     }
@@ -163,7 +161,7 @@ void diffusion::submit_inference(std::function<void(std::vector<float>)> cb) {
     task_queue.push([this, cb = std::move(cb)]() mutable {
       toolkit::stopwatch timer;
       timer.reset();
-      std::vector<float> result = run_model_inference(*this);
+      std::vector<float> result = run_model_inference();
       float inference_time = timer.elapse_ms();
       printf("Inference complete, takes %.3f ms\n", inference_time);
       std::lock_guard<std::mutex> lk2(completion_mutex);
