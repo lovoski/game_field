@@ -34,6 +34,10 @@ public:
     return math::vector2(canvas_width, canvas_height);
   }
 
+  void push_custom_draw(std::function<void(void)> f) {
+    custom_draw_func.push_back(std::move(f));
+  }
+
   bool should_draw_grid = true;
   int grid_spacing = 1;
 
@@ -105,6 +109,8 @@ protected:
 
   std::map<entt::entity, bool> main_cam_visible_cache;
 
+  std::vector<std::function<void(void)>> custom_draw_func;
+
   REFLECT_PRIVATE(defered_render_system)
 };
 DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
@@ -115,4 +121,4 @@ DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
                csm_max_bias, shadowmap_max_bias, shadowmap_min_bias,
                enable_fxaa, canvas_width, canvas_height)
 
-}; // namespace toolkit::opengl
+}; // namespace toolkit::opengl3d

@@ -91,70 +91,70 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
     return;
   }
 
-  // Detect and log GPU information
-  {
-    const char *vendor = (const char *)glGetString(GL_VENDOR);
-    const char *renderer = (const char *)glGetString(GL_RENDERER);
-    const char *version = (const char *)glGetString(GL_VERSION);
+//   // Detect and log GPU information
+//   {
+//     const char *vendor = (const char *)glGetString(GL_VENDOR);
+//     const char *renderer = (const char *)glGetString(GL_RENDERER);
+//     const char *version = (const char *)glGetString(GL_VERSION);
 
-    printf("OpenGL Context Information:\n");
-    printf("  Vendor: %s\n", vendor ? vendor : "Unknown");
-    printf("  Renderer: %s\n", renderer ? renderer : "Unknown");
-    printf("  Version: %s\n", version ? version : "Unknown");
+//     printf("OpenGL Context Information:\n");
+//     printf("  Vendor: %s\n", vendor ? vendor : "Unknown");
+//     printf("  Renderer: %s\n", renderer ? renderer : "Unknown");
+//     printf("  Version: %s\n", version ? version : "Unknown");
 
-#ifdef _WIN32
-    // Try to enumerate adapters using DXGI to find the most powerful one
-    IDXGIFactory *pFactory = nullptr;
-    if (SUCCEEDED(
-            CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory))) {
-      IDXGIAdapter *pAdapter = nullptr;
-      IDXGIAdapter *pBestAdapter = nullptr;
-      UINT bestAdapterMemory = 0;
-      UINT adapterIndex = 0;
+// #ifdef _WIN32
+//     // Try to enumerate adapters using DXGI to find the most powerful one
+//     IDXGIFactory *pFactory = nullptr;
+//     if (SUCCEEDED(
+//             CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory))) {
+//       IDXGIAdapter *pAdapter = nullptr;
+//       IDXGIAdapter *pBestAdapter = nullptr;
+//       UINT bestAdapterMemory = 0;
+//       UINT adapterIndex = 0;
 
-      printf("  Detected Graphics Adapters:\n");
-      while (pFactory->EnumAdapters(adapterIndex, &pAdapter) !=
-             DXGI_ERROR_NOT_FOUND) {
-        DXGI_ADAPTER_DESC desc;
-        if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
-          char adapterName[256];
-          WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, adapterName,
-                              sizeof(adapterName), nullptr, nullptr);
+//       printf("  Detected Graphics Adapters:\n");
+//       while (pFactory->EnumAdapters(adapterIndex, &pAdapter) !=
+//              DXGI_ERROR_NOT_FOUND) {
+//         DXGI_ADAPTER_DESC desc;
+//         if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
+//           char adapterName[256];
+//           WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, adapterName,
+//                               sizeof(adapterName), nullptr, nullptr);
 
-          printf("    [%d] %s (VRAM: %.2f GB)\n", adapterIndex, adapterName,
-                 desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
+//           printf("    [%d] %s (VRAM: %.2f GB)\n", adapterIndex, adapterName,
+//                  desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
 
-          // Select adapter with most dedicated video memory (usually the
-          // discrete GPU)
-          if (desc.DedicatedVideoMemory > bestAdapterMemory) {
-            bestAdapterMemory = desc.DedicatedVideoMemory;
-            if (pBestAdapter)
-              pBestAdapter->Release();
-            pBestAdapter = pAdapter;
-            pBestAdapter->AddRef();
-          }
-        }
-        pAdapter->Release();
-        adapterIndex++;
-      }
+//           // Select adapter with most dedicated video memory (usually the
+//           // discrete GPU)
+//           if (desc.DedicatedVideoMemory > bestAdapterMemory) {
+//             bestAdapterMemory = desc.DedicatedVideoMemory;
+//             if (pBestAdapter)
+//               pBestAdapter->Release();
+//             pBestAdapter = pAdapter;
+//             pBestAdapter->AddRef();
+//           }
+//         }
+//         pAdapter->Release();
+//         adapterIndex++;
+//       }
 
-      if (pBestAdapter) {
-        DXGI_ADAPTER_DESC bestDesc;
-        if (SUCCEEDED(pBestAdapter->GetDesc(&bestDesc))) {
-          char bestAdapterName[256];
-          WideCharToMultiByte(CP_UTF8, 0, bestDesc.Description, -1,
-                              bestAdapterName, sizeof(bestAdapterName), nullptr,
-                              nullptr);
-          printf("  Selected GPU: %s (%.2f GB VRAM)\n", bestAdapterName,
-                 bestDesc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
-        }
-        pBestAdapter->Release();
-      }
+//       if (pBestAdapter) {
+//         DXGI_ADAPTER_DESC bestDesc;
+//         if (SUCCEEDED(pBestAdapter->GetDesc(&bestDesc))) {
+//           char bestAdapterName[256];
+//           WideCharToMultiByte(CP_UTF8, 0, bestDesc.Description, -1,
+//                               bestAdapterName, sizeof(bestAdapterName), nullptr,
+//                               nullptr);
+//           printf("  Selected GPU: %s (%.2f GB VRAM)\n", bestAdapterName,
+//                  bestDesc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
+//         }
+//         pBestAdapter->Release();
+//       }
 
-      pFactory->Release();
-    }
-#endif
-  }
+//       pFactory->Release();
+//     }
+// #endif
+//   }
 
   // ImGui + SDL2 + OpenGL3 initialization
   IMGUI_CHECKVERSION();

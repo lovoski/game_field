@@ -782,12 +782,12 @@ void defered_render_system::render(entt::registry &registry,
 
     // render debug ui from scripts
     if (should_draw_debug) {
-      // glDisable(GL_DEPTH_TEST);
       if (auto app_ptr = registry.ctx().get<iapp *>()) {
         auto ss_handler = app_ptr->get_sys<sub_system_handler>();
         ss_handler->proxy_draw_to_scene(registry, cam_trans, cam_comp);
       }
-      // glEnable(GL_DEPTH_TEST);
+      for (auto &f : custom_draw_func)
+        f();
     }
 
     // render skeleton for skinned mesh bundle
@@ -911,6 +911,8 @@ void defered_render_system::render(entt::registry &registry,
 
     cbuffer.unbind();
   }
+
+  custom_draw_func.clear();
 }
 
 }; // namespace toolkit::opengl3d
