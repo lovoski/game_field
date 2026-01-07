@@ -4,6 +4,11 @@
 
 namespace toolkit::opengl3d {
 
+assets::bvh_data motion;
+int motion_frame = 0;
+std::vector<math::quat> repair_c;
+std::map<int, int> data_to_actor;
+
 void camdmpp::handle_custom_initialization() {
   if (std::filesystem::exists("camdmpp/model.onnx") &&
       std::filesystem::exists("camdmpp/config.json") &&
@@ -43,6 +48,30 @@ void camdmpp::handle_custom_initialization() {
     std::cout << "Assets incomplete, can't start demo." << std::endl;
     quit_app_running();
   }
+
+  motion = assets::load_bvh("camdmpp/motion_0.bvh");
+  auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
+  auto &player_trans = registry.get<transform>(player_entity);
+  auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+  player_trans.force_update_hierarchy();
+  repair_c.resize(player_actor.ordered_entities.size(), math::quat::Identity());
+  for (int i = 0; i < player_actor.ordered_entities.size(); i++) {
+    const auto &joint_trans =
+        registry.get<transform>(player_actor.ordered_entities[i]);
+    repair_c[i] = joint_trans.world_rot();
+  }
+  for (int i = 0; i < motion.names.size(); i++) {
+    if (player_actor.name_to_entity.find(motion.names[i]) !=
+        player_actor.name_to_entity.end()) {
+      auto joint_entity = player_actor.name_to_entity[motion.names[i]];
+      for (int j = 0; j < player_actor.ordered_entities.size(); j++) {
+        if (player_actor.ordered_entities[j] == joint_entity) {
+          data_to_actor[i] = j;
+          break;
+        }
+      }
+    }
+  }
 }
 
 void camdmpp::handle_game_logic_tick(float dt) {
@@ -68,7 +97,8 @@ void camdmpp::handle_game_logic_tick(float dt) {
   // update the camera movement every logic tick after character update
   // update camera position
   {
-    auto &player_trans = registry.get<transform>(player_entity);
+    auto &player_trans = registry.get<transform>(
+        registry.get<skinned_mesh_bundle>(player_entity).actor_entities[0]);
     // cam_angle_horizontal -= dt * cam_move_speed * mouse_screen_delta.x();
     // cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
     cam_angle_vertical = std::clamp(cam_angle_vertical, -10.0f, 80.0f);
@@ -93,7 +123,41 @@ void camdmpp::handle_game_logic_tick(float dt) {
 
 void camdmpp::fixed_interval_logic() {
   auto &player_trans = registry.get<transform>(player_entity);
-  auto &player_actor = registry.get<opengl3d::actor>(player_entity);
+  auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
+  auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+
+  if (motion_frame >= motion.local_rot.size())
+    motion_frame = 0;
+  std::vector<math::quat> motion_world_rot(motion.names.size(),
+                                           math::quat::Identity());
+  for (int i = 0; i < motion.names.size(); i++) {
+    if (i == 0)
+      motion_world_rot[i] = motion.local_rot[motion_frame][i];
+    else
+      motion_world_rot[i] = motion_world_rot[motion.parents[i]] *
+                            motion.local_rot[motion_frame][i];
+  }
+  for (int i = 0; i < motion.names.size(); i++) {
+    if (player_actor.name_to_entity.find(motion.names[i]) ==
+        player_actor.name_to_entity.end())
+      continue;
+    auto &joint_trans =
+        registry.get<transform>(player_actor.name_to_entity[motion.names[i]]);
+    if (i == 0) {
+      joint_trans.set_world_rot(motion_world_rot[i] *
+                                repair_c[data_to_actor[i]]);
+      joint_trans.set_world_pos(motion.local_pos[motion_frame][0]);
+    } else
+      joint_trans.set_local_rot(
+          (motion_world_rot[motion.parents[i]] *
+           repair_c[data_to_actor[motion.parents[i]]])
+              .inverse() *
+          (motion_world_rot[i] * repair_c[data_to_actor[i]]));
+  }
+  player_trans.force_update_hierarchy();
+  motion_frame++;
+
+  return;
 
   // make new predictions to the trajectory based on user input
   {
@@ -194,7 +258,6 @@ void camdmpp::fixed_interval_logic() {
       waiting_for_model_output.store(false);
 
       for (int i = 0; i < model.future_points; i++) {
-
       }
     });
   }

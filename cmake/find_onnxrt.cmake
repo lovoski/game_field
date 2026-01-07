@@ -3,6 +3,7 @@ find_path(ONNXRUNTIME_INCLUDE_DIR NAMES onnxruntime_cxx_api.h
   PATHS 
     $ENV{ONNXRUNTIME_ROOT}
     "D:/repo/onnxruntime-win-x64-1.17.3"
+    # "D:/repo/onnxruntime-win-x64-gpu-1.17.3"
     "~/lib/onnxruntime-linux-x64-1.17.3"
   PATH_SUFFIXES include
   NO_DEFAULT_PATH)
@@ -12,6 +13,7 @@ find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime
   PATHS 
     $ENV{ONNXRUNTIME_ROOT}
     "D:/repo/onnxruntime-win-x64-1.17.3"
+    # "D:/repo/onnxruntime-win-x64-gpu-1.17.3"
     "~/lib/onnxruntime-linux-x64-1.17.3"
   PATH_SUFFIXES lib
   NO_DEFAULT_PATH)

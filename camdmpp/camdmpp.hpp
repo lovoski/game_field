@@ -26,7 +26,7 @@ private:
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied
-  unsigned int submit_prediction_interval = 20;
+  unsigned int submit_prediction_interval = 200;
   std::atomic_bool waiting_for_model_output{false};
 
   // Caches for character's state, converted from model_output

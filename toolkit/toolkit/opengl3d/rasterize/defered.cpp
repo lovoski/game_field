@@ -786,9 +786,10 @@ void defered_render_system::render(entt::registry &registry,
         auto ss_handler = app_ptr->get_sys<sub_system_handler>();
         ss_handler->proxy_draw_to_scene(registry, cam_trans, cam_comp);
       }
-      for (auto &f : custom_draw_func)
-        f();
     }
+
+    for (auto &f : custom_draw_func)
+      f();
 
     // render skeleton for skinned mesh bundle
     skinned_mesh_bundle_view.each([&](entt::entity entity,

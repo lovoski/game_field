@@ -294,10 +294,13 @@ void transform::force_update_hierarchy() {
 
 void transform::draw_gui(entt::registry &registry, entt::entity) {
   auto __position = world_pos();
+  auto __local_position = local_pos();
   auto __localeuler = local_euler_degrees();
   auto __scale = world_scl();
   if (ImGui::DragFloat3("World Pos.", __position.data(), 0.01f))
     set_world_pos(__position);
+  if (ImGui::DragFloat3("Local Pos.", __local_position.data(), 0.01f))
+    set_local_pos(__local_position);
   if (ImGui::DragFloat3("Local Rot.", __localeuler.data(), 0.01f))
     set_local_euler_degrees(__localeuler);
   if (ImGui::DragFloat3("World Scl.", __scale.data(), 0.01f))

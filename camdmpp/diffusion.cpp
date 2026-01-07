@@ -43,7 +43,16 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
 
   // initialize the model
   Ort::SessionOptions session_options;
-  session_options.SetIntraOpNumThreads(1);
+  // IntraOp threads: threads used to parallelize the work inside a single
+  // operator (a heavy kernel like MatMul, Conv, GEMM). When a single op is the
+  // bottleneck, more IntraOp threads let that op use more CPU cores and finish
+  // faster.
+  session_options.SetIntraOpNumThreads(
+      std::min(8u, std::thread::hardware_concurrency()));
+  // InterOp threads: threads used to run independent graph nodes (different
+  // ops) concurrently. If the graph has many independent small ops, InterOp>1
+  // can run multiple nodes in parallel.
+  session_options.SetInterOpNumThreads(1);
   session_options.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_ALL);
   try {
