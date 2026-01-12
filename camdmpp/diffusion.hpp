@@ -22,7 +22,7 @@ public:
    * thread when the result is ready. The vector contains the output tensor data
    * produced by the model.
    */
-  void submit_inference(std::function<void(std::vector<float>)> cb);
+  void submit_inference(std::function<void(std::vector<float>, float)> cb);
 
   /**
    * This function should be called from th emain thread each frame to run the
@@ -47,7 +47,7 @@ public:
   nlohmann::json config;
   int joint_num, past_points, pose_token_dim, future_points, diffusion_steps;
   std::vector<int> joint_parents;
-  std::vector<std::string> joint_names;
+  std::vector<std::string> joint_names, style_names;
   std::vector<toolkit::math::vector3> joint_offsets;
   std::vector<float> posterior_log_variance_clipped, posterior_mean_coef1,
       posterior_mean_coef2;

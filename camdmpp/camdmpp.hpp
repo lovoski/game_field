@@ -16,12 +16,12 @@ private:
   // application variables
   bool hide_mouse = false, debug_draw_trajectory = true,
        debug_draw_skeleton = true, draw_ground_mesh = true;
-  float cam_move_speed = 100.0f;
+  float cam_move_speed = 100.0f, cam_distance = 3.0f;
   float cam_angle_horizontal = 0.0f, cam_angle_vertical = 30.0f;
   std::int64_t __cur_exec_fixed = 0;
   double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
   entt::entity player_entity = entt::null, ground_entity = entt::null;
-  int active_style_idx = 0; // the style we are using
+  float display_inference_time = 0.0f;
 
   // blending parameters
   bool enable_inertia_blending = true;
@@ -56,7 +56,7 @@ private:
                 char_root_world_vel = math::vector3::Zero(),
                 char_root_world_acc = math::vector3::Zero(),
                 char_root_world_ang = math::vector3::Zero();
-  math::quat char_root_world_rot = math::quat::Identity();
+  math::quat proj_char_root_world_rot = math::quat::Identity();
   std::vector<math::quat> char_repair_c;
   std::vector<int> char_joint_parents;
   std::map<int, int> char_data_to_actor;
@@ -69,7 +69,7 @@ private:
 
   // Trajectory predicted from user input with spring damper heuristics
   float vel_halflife = 0.2f, rot_halflife = 0.2f,
-        traj_sample_time = 1.0f / 5.0f, velocity_scale = 5.0f;
+        traj_sample_time = 1.0f / 5.0f, velocity_scale = 8.0f;
   std::array<math::vector3, 5> _traj_world_vel, _traj_world_pos,
       _traj_world_dir;
   math::vector3 desired_vel = math::vector3::Zero(),

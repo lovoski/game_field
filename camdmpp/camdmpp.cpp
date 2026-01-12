@@ -107,16 +107,17 @@ void camdmpp::handle_game_logic_tick(float dt) {
   // update application state based on user input
   if (is_key_triggered(SDLK_ESCAPE))
     quit_app_running();
-  // if (is_key_triggered(SDLK_1)) {
-  //   hide_mouse = !hide_mouse;
-  //   set_game_mode(true, hide_mouse);
-  // }
+  if (is_key_triggered(SDLK_j))
+    i_style_idx[0] = (i_style_idx[0] + 99) % 100;
+  if (is_key_triggered(SDLK_k))
+    i_style_idx[0] = (i_style_idx[0] + 1) % 100;
 
   // update the camera movement every logic tick after character update
   {
     auto &player_trans = registry.get<transform>(
         registry.get<skinned_mesh_bundle>(player_entity).actor_entities[0]);
-    if (is_mouse_button_pressed(SDL_BUTTON_LEFT) && is_key_pressed(SDLK_LCTRL)) {
+    if (is_mouse_button_pressed(SDL_BUTTON_LEFT) &&
+        is_key_pressed(SDLK_LCTRL)) {
       cam_angle_horizontal -= dt * cam_move_speed * mouse_screen_delta.x();
       cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
     }
@@ -134,7 +135,9 @@ void camdmpp::handle_game_logic_tick(float dt) {
     cam_rot << cam_x, cam_y, cam_z;
     auto &cam_trans = registry.get<transform>(active_camera);
     cam_trans.set_world_rot(math::quat(cam_rot));
-    cam_trans.set_world_pos(player_trans.world_pos() + cam_z * 3);
+    cam_trans.set_world_pos(math::vector3(player_trans.world_pos().x(), 1.0f,
+                                          player_trans.world_pos().z()) +
+                            cam_z * cam_distance);
   }
 
   default_render_sys->push_custom_draw([this]() { debug_draw(); });
@@ -168,7 +171,7 @@ void camdmpp::predict_trajectory() {
         char_root_world_vel, char_root_world_acc, desired_vel,
         math::vector3::Zero(), traj_sample_time * (i + 1), vel_halflife);
     auto [rot, ang] = spring_damper_rotation(
-        char_root_world_rot, char_root_world_ang, desired_rot,
+        proj_char_root_world_rot, char_root_world_ang, desired_rot,
         math::vector3::Zero(), traj_sample_time * (i + 1), rot_halflife);
     _traj_world_vel[i] = vel;
     if (i == 0) {
@@ -201,14 +204,18 @@ void camdmpp::apply_pose_and_refill() {
         registry.get<transform>(player_actor.ordered_entities[ai]);
     if (ai == 0) {
       // root joint
-      // if (root_rel_pos_cache[applied_frames].norm() > 1e-5f)
-      //   char_root_world_pos =
-      //       char_root_world_pos +
-      //       char_root_world_rot * root_rel_pos_cache[applied_frames];
-      // char_root_world_rot =
-      //     root_rel_rot_cache[applied_frames] * char_root_world_rot;
+      if (root_rel_pos_cache[applied_frames].norm() > 1e-5f) {
+        char_root_world_pos =
+            char_root_world_pos +
+            proj_char_root_world_rot * root_rel_pos_cache[applied_frames];
+      }
+      char_root_world_pos.y() = root_height_cache[applied_frames];
+      proj_char_root_world_rot =
+          root_rel_rot_cache[applied_frames] * proj_char_root_world_rot;
       joint_trans.set_world_pos(char_root_world_pos);
-      joint_trans.set_world_rot(char_root_world_rot);
+      joint_trans.set_world_rot(
+          proj_char_root_world_rot *
+          joint_rotation_cache[applied_frames][da_entry_idx]);
     } else {
       joint_trans.set_local_rot(
           joint_rotation_cache[applied_frames][da_entry_idx]);
@@ -218,13 +225,11 @@ void camdmpp::apply_pose_and_refill() {
   player_trans.force_update_hierarchy();
 
   // update network input cache
-  // input motion style
-  i_style_idx[0] = active_style_idx;
   // input trajectory
   for (int i = 0; i < 5; i++) {
-    auto _traj_pos = char_root_world_rot.inverse() *
+    auto _traj_pos = proj_char_root_world_rot.inverse() *
                      (_traj_world_pos[i] - char_root_world_pos);
-    auto _traj_facing = char_root_world_rot.inverse() * _traj_world_dir[i];
+    auto _traj_facing = proj_char_root_world_rot.inverse() * _traj_world_dir[i];
     i_traj_pos[2 * i + 0] = _traj_pos.x();
     i_traj_pos[2 * i + 1] = _traj_pos.z();
     i_traj_facing[2 * i + 0] = _traj_facing.x();
@@ -253,9 +258,11 @@ void camdmpp::predict_new_tokens() {
     model.traj_facing_data = i_traj_facing;
     model.style_idx_data = i_style_idx;
     printf("Dispatch inference when applied_frames=%d\n", applied_frames);
-    model.submit_inference([this](std::vector<float> model_output) {
+    model.submit_inference([this](std::vector<float> model_output,
+                                  float inference_time) {
       printf("Inference finished when applied_frames=%d, update pose cache\n",
              applied_frames);
+      display_inference_time = inference_time;
       // keep using current active buffer, swap when one runs out
       // use_front_buffer = !use_front_buffer;
       waiting_for_model_output.store(false);

@@ -30,6 +30,7 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   diffusion_steps = config["diffusion_steps"];
   joint_names = config["joint_names"].get<std::vector<std::string>>();
   joint_parents = config["joint_parents"].get<std::vector<int>>();
+  style_names = config["style_names"].get<std::vector<std::string>>();
   input_names = config["input_names"].get<std::vector<std::string>>();
   output_names = config["output_names"].get<std::vector<std::string>>();
   auto joint_offsets_data = config["joint_offsets"].get<std::vector<float>>();
@@ -172,7 +173,8 @@ std::vector<float> diffusion::run_model_inference() {
   return x_t_data;
 }
 
-void diffusion::submit_inference(std::function<void(std::vector<float>)> cb) {
+void diffusion::submit_inference(
+    std::function<void(std::vector<float>, float)> cb) {
   {
     std::lock_guard<std::mutex> lk(queue_mutex);
     task_queue.push([this, cb = std::move(cb)]() mutable {
@@ -182,10 +184,10 @@ void diffusion::submit_inference(std::function<void(std::vector<float>)> cb) {
       float inference_time = timer.elapse_ms();
       printf("Inference complete, takes %.3f ms\n", inference_time);
       std::lock_guard<std::mutex> lk2(completion_mutex);
-      completion_queue.push(
-          [cb = std::move(cb), result = std::move(result)]() mutable {
-            cb(std::move(result));
-          });
+      completion_queue.push([cb = std::move(cb), result = std::move(result),
+                             inference_time = inference_time]() mutable {
+        cb(std::move(result), inference_time);
+      });
     });
   }
   queue_cv.notify_one();
