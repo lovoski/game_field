@@ -4,12 +4,27 @@ namespace toolkit::opengl3d {
 
 void camdmpp::handle_engine_gui() {
   ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(200, 300), ImGuiCond_Always);
-  ImGui::SetNextWindowBgAlpha(0.35f);
+  ImGui::SetNextWindowSize(ImVec2(400, 400), ImGuiCond_Always);
+  ImGui::SetNextWindowBgAlpha(1.0f);
   ImGui::Begin("Settings", nullptr,
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+
+  ImGui::SeparatorText("Commands");
+  ImGui::TextColored({0, 1, 0, 1}, "LCTRL+LMB");
+  ImGui::SameLine();
+  ImGui::Text(": Rotate View");
+
+  ImGui::SeparatorText("Draws");
   ImGui::Checkbox("Draw Trajectory", &debug_draw_trajectory);
-  // ImGui::Checkbox("Draw Skeleton", &debug_draw_skeleton);
+  if (ImGui::Checkbox("Draw Ground", &draw_ground_mesh)) {
+    registry.get<mesh_data>(ground_entity).should_render_mesh =
+        draw_ground_mesh;
+  }
+
+  ImGui::SeparatorText("Inertia Blending");
+  ImGui::Checkbox("Enable", &enable_inertia_blending);
+  ImGui::DragFloat("Half Life", &inertia_halflife, 0.0001f, 0.0f, 1.0f);
+  ImGui::InputInt("Blend Window", &inertia_blend_wnd);
   ImGui::End();
 }
 

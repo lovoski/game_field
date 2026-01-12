@@ -1,6 +1,8 @@
 #include "onnx_utils.hpp"
 #include <iostream>
 
+using namespace toolkit::math;
+
 const char *tensor_element_data_type_as_str(ONNXTensorElementDataType type) {
   switch (type) {
   case ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT:
@@ -79,4 +81,28 @@ void print_onnx_node_details(Ort::Session &session,
     std::cout << "]" << std::endl;
   }
   std::cout << std::endl;
+}
+
+quat repr6d_to_quat(const std::array<float, 6> &data) {
+  vector3 x = vector3(data[0], data[1], data[2]).normalized();
+  vector3 y = vector3(data[3], data[4], data[5]).normalized();
+  vector3 z = x.cross(y).normalized();
+  y = z.cross(x).normalized();
+  matrix3 mat;
+  mat.row(0) = x;
+  mat.row(1) = y;
+  mat.row(2) = z;
+  return quat(mat);
+}
+
+std::array<float, 6> quat_to_repr6d(const quat &data) {
+  std::array<float, 6> ret;
+  auto mat = data.normalized().toRotationMatrix();
+  ret[0] = mat(0,0);
+  ret[1] = mat(0,1);
+  ret[2] = mat(0,2);
+  ret[3] = mat(1,0);
+  ret[4] = mat(1,1);
+  ret[5] = mat(1,2);
+  return ret;
 }

@@ -91,70 +91,74 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
     return;
   }
 
-//   // Detect and log GPU information
-//   {
-//     const char *vendor = (const char *)glGetString(GL_VENDOR);
-//     const char *renderer = (const char *)glGetString(GL_RENDERER);
-//     const char *version = (const char *)glGetString(GL_VERSION);
+  //   // Detect and log GPU information
+  //   {
+  //     const char *vendor = (const char *)glGetString(GL_VENDOR);
+  //     const char *renderer = (const char *)glGetString(GL_RENDERER);
+  //     const char *version = (const char *)glGetString(GL_VERSION);
 
-//     printf("OpenGL Context Information:\n");
-//     printf("  Vendor: %s\n", vendor ? vendor : "Unknown");
-//     printf("  Renderer: %s\n", renderer ? renderer : "Unknown");
-//     printf("  Version: %s\n", version ? version : "Unknown");
+  //     printf("OpenGL Context Information:\n");
+  //     printf("  Vendor: %s\n", vendor ? vendor : "Unknown");
+  //     printf("  Renderer: %s\n", renderer ? renderer : "Unknown");
+  //     printf("  Version: %s\n", version ? version : "Unknown");
 
-// #ifdef _WIN32
-//     // Try to enumerate adapters using DXGI to find the most powerful one
-//     IDXGIFactory *pFactory = nullptr;
-//     if (SUCCEEDED(
-//             CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory))) {
-//       IDXGIAdapter *pAdapter = nullptr;
-//       IDXGIAdapter *pBestAdapter = nullptr;
-//       UINT bestAdapterMemory = 0;
-//       UINT adapterIndex = 0;
+  // #ifdef _WIN32
+  //     // Try to enumerate adapters using DXGI to find the most powerful one
+  //     IDXGIFactory *pFactory = nullptr;
+  //     if (SUCCEEDED(
+  //             CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory)))
+  //             {
+  //       IDXGIAdapter *pAdapter = nullptr;
+  //       IDXGIAdapter *pBestAdapter = nullptr;
+  //       UINT bestAdapterMemory = 0;
+  //       UINT adapterIndex = 0;
 
-//       printf("  Detected Graphics Adapters:\n");
-//       while (pFactory->EnumAdapters(adapterIndex, &pAdapter) !=
-//              DXGI_ERROR_NOT_FOUND) {
-//         DXGI_ADAPTER_DESC desc;
-//         if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
-//           char adapterName[256];
-//           WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, adapterName,
-//                               sizeof(adapterName), nullptr, nullptr);
+  //       printf("  Detected Graphics Adapters:\n");
+  //       while (pFactory->EnumAdapters(adapterIndex, &pAdapter) !=
+  //              DXGI_ERROR_NOT_FOUND) {
+  //         DXGI_ADAPTER_DESC desc;
+  //         if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
+  //           char adapterName[256];
+  //           WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1,
+  //           adapterName,
+  //                               sizeof(adapterName), nullptr, nullptr);
 
-//           printf("    [%d] %s (VRAM: %.2f GB)\n", adapterIndex, adapterName,
-//                  desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
+  //           printf("    [%d] %s (VRAM: %.2f GB)\n", adapterIndex,
+  //           adapterName,
+  //                  desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
 
-//           // Select adapter with most dedicated video memory (usually the
-//           // discrete GPU)
-//           if (desc.DedicatedVideoMemory > bestAdapterMemory) {
-//             bestAdapterMemory = desc.DedicatedVideoMemory;
-//             if (pBestAdapter)
-//               pBestAdapter->Release();
-//             pBestAdapter = pAdapter;
-//             pBestAdapter->AddRef();
-//           }
-//         }
-//         pAdapter->Release();
-//         adapterIndex++;
-//       }
+  //           // Select adapter with most dedicated video memory (usually the
+  //           // discrete GPU)
+  //           if (desc.DedicatedVideoMemory > bestAdapterMemory) {
+  //             bestAdapterMemory = desc.DedicatedVideoMemory;
+  //             if (pBestAdapter)
+  //               pBestAdapter->Release();
+  //             pBestAdapter = pAdapter;
+  //             pBestAdapter->AddRef();
+  //           }
+  //         }
+  //         pAdapter->Release();
+  //         adapterIndex++;
+  //       }
 
-//       if (pBestAdapter) {
-//         DXGI_ADAPTER_DESC bestDesc;
-//         if (SUCCEEDED(pBestAdapter->GetDesc(&bestDesc))) {
-//           char bestAdapterName[256];
-//           WideCharToMultiByte(CP_UTF8, 0, bestDesc.Description, -1,
-//                               bestAdapterName, sizeof(bestAdapterName), nullptr,
-//                               nullptr);
-//           printf("  Selected GPU: %s (%.2f GB VRAM)\n", bestAdapterName,
-//                  bestDesc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
-//         }
-//         pBestAdapter->Release();
-//       }
+  //       if (pBestAdapter) {
+  //         DXGI_ADAPTER_DESC bestDesc;
+  //         if (SUCCEEDED(pBestAdapter->GetDesc(&bestDesc))) {
+  //           char bestAdapterName[256];
+  //           WideCharToMultiByte(CP_UTF8, 0, bestDesc.Description, -1,
+  //                               bestAdapterName, sizeof(bestAdapterName),
+  //                               nullptr, nullptr);
+  //           printf("  Selected GPU: %s (%.2f GB VRAM)\n", bestAdapterName,
+  //                  bestDesc.DedicatedVideoMemory / (1024.0 * 1024.0 *
+  //                  1024.0));
+  //         }
+  //         pBestAdapter->Release();
+  //       }
 
-//       pFactory->Release();
-//     }
-// #endif
-//   }
+  //       pFactory->Release();
+  //     }
+  // #endif
+  //   }
 
   // ImGui + SDL2 + OpenGL3 initialization
   IMGUI_CHECKVERSION();
@@ -497,9 +501,13 @@ void engine3d::handle_engine_gui() {
 }
 
 void engine3d::run() {
-  timer.reset();
   add_default_objects();
+  timer.reset();
+  static int __start_logic_tick_counter = 0;
   while (app_running) {
+    float dt = timer.elapse_s();
+    timer.reset();
+
     handle_input_events();
     if (!window)
       break;
@@ -513,8 +521,6 @@ void engine3d::run() {
 
     auto &active_cam_trans = registry.get<transform>(active_camera);
     auto &active_cam_comp = registry.get<camera>(active_camera);
-    float dt = timer.elapse_s();
-    timer.reset();
 
     transform_hierarchy_sys->update_transform(registry);
     default_render_sys->update_scene_buffers(registry);
@@ -524,7 +530,10 @@ void engine3d::run() {
     ss_handler_system->proxy_update(registry, dt);
     // physics_system->update(registry, dt);
 
-    handle_game_logic_tick(dt);
+    if (__start_logic_tick_counter < 10)
+      __start_logic_tick_counter++;
+    else
+      handle_game_logic_tick(dt);
 
     default_render_sys->render(registry, active_cam_trans, active_cam_comp);
 

@@ -26,6 +26,8 @@ public:
   void update_scene_lights(entt::registry &registry);
   void update_scene_data_structures(entt::registry &registry);
 
+  void save_color_buffer_as_png(std::string filepath);
+
   texture get_target_texture() const { return color_tex; }
 
   void draw_menu_gui() override;

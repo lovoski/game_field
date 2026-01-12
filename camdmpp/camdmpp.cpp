@@ -5,9 +5,6 @@
 namespace toolkit::opengl3d {
 
 assets::bvh_data motion;
-int motion_frame = 0;
-std::vector<math::quat> repair_c;
-std::map<int, int> data_to_actor;
 
 void camdmpp::handle_custom_initialization() {
   if (std::filesystem::exists("camdmpp/model.onnx") &&
@@ -36,45 +33,66 @@ void camdmpp::handle_custom_initialization() {
     }
     set_game_mode(true, hide_mouse);
     player_entity = named_entities["player"];
+    ground_entity = named_entities["ground"];
     default_render_sys->resize(wnd_width, wnd_height);
 
     // setup diffusion model
     model.setup("camdmpp/model.onnx", "camdmpp/config.json");
-    i_past_motion.resize(model.pose_token_dim * model.past_points);
+    i_past_motion.resize(model.pose_token_dim * model.past_points, 0.0f);
     i_traj_pos.resize(10);
     i_traj_facing.resize(10);
     i_style_idx.resize(1);
+
+    auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
+    auto &player_trans = registry.get<transform>(player_entity);
+    auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+    player_trans.force_update_hierarchy();
+    char_repair_c.resize(player_actor.ordered_entities.size(),
+                         math::quat::Identity());
+    auto [_parents, _children, _roots] =
+        estimate_actor_bone_hierarchy(registry, player_actor);
+    char_joint_parents = _parents;
+    for (int i = 0; i < player_actor.ordered_entities.size(); i++) {
+      const auto &joint_trans =
+          registry.get<transform>(player_actor.ordered_entities[i]);
+      char_repair_c[i] = joint_trans.world_rot();
+    }
+    // find mapping between network's prediction joint to actor's joint
+    for (int i = 0; i < model.joint_names.size(); i++) {
+      if (player_actor.name_to_entity.find(model.joint_names[i]) !=
+          player_actor.name_to_entity.end()) {
+        auto joint_entity = player_actor.name_to_entity[model.joint_names[i]];
+        for (int j = 0; j < player_actor.ordered_entities.size(); j++) {
+          if (player_actor.ordered_entities[j] == joint_entity) {
+            char_data_to_actor[i] = j;
+          }
+        }
+      }
+    }
+    int matched_joint_count = char_data_to_actor.size();
+    for (int i = 0; i < cache_size; i++) {
+      root_rel_pos_cache[i] = math::vector3::Zero();
+      root_rel_rot_cache[i] = math::quat::Identity();
+      root_height_cache[i] = 0;
+      joint_rotation_cache[i].resize(matched_joint_count,
+                                     math::quat::Identity());
+      int da_entry_idx = 0;
+      for (auto [di, ai] : char_data_to_actor) {
+        if (ai != 0)
+          joint_rotation_cache[i][da_entry_idx] =
+              char_repair_c[char_joint_parents[ai]].inverse() *
+              char_repair_c[ai];
+        da_entry_idx++;
+      }
+    }
   } else {
     std::cout << "Assets incomplete, can't start demo." << std::endl;
     quit_app_running();
   }
-
-  motion = assets::load_bvh("camdmpp/motion_0.bvh");
-  auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
-  auto &player_trans = registry.get<transform>(player_entity);
-  auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
-  player_trans.force_update_hierarchy();
-  repair_c.resize(player_actor.ordered_entities.size(), math::quat::Identity());
-  for (int i = 0; i < player_actor.ordered_entities.size(); i++) {
-    const auto &joint_trans =
-        registry.get<transform>(player_actor.ordered_entities[i]);
-    repair_c[i] = joint_trans.world_rot();
-  }
-  for (int i = 0; i < motion.names.size(); i++) {
-    if (player_actor.name_to_entity.find(motion.names[i]) !=
-        player_actor.name_to_entity.end()) {
-      auto joint_entity = player_actor.name_to_entity[motion.names[i]];
-      for (int j = 0; j < player_actor.ordered_entities.size(); j++) {
-        if (player_actor.ordered_entities[j] == joint_entity) {
-          data_to_actor[i] = j;
-          break;
-        }
-      }
-    }
-  }
 }
 
 void camdmpp::handle_game_logic_tick(float dt) {
+  // printf("frame delta time=%.3f\n", dt);
   model.process_completions();
 
   // most of the logic are executed with fixed interval (60fps)
@@ -95,12 +113,13 @@ void camdmpp::handle_game_logic_tick(float dt) {
   // }
 
   // update the camera movement every logic tick after character update
-  // update camera position
   {
     auto &player_trans = registry.get<transform>(
         registry.get<skinned_mesh_bundle>(player_entity).actor_entities[0]);
-    // cam_angle_horizontal -= dt * cam_move_speed * mouse_screen_delta.x();
-    // cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
+    if (is_mouse_button_pressed(SDL_BUTTON_LEFT) && is_key_pressed(SDLK_LCTRL)) {
+      cam_angle_horizontal -= dt * cam_move_speed * mouse_screen_delta.x();
+      cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
+    }
     cam_angle_vertical = std::clamp(cam_angle_vertical, -10.0f, 80.0f);
     float cos_z = cos(math::deg_to_rad(cam_angle_vertical));
     math::vector3 cam_z =
@@ -122,142 +141,232 @@ void camdmpp::handle_game_logic_tick(float dt) {
 }
 
 void camdmpp::fixed_interval_logic() {
+  // make new predictions to the trajectory based on user input
+  predict_trajectory();
+
+  // apply pose to the character, fill in caches for network input
+  apply_pose_and_refill();
+
+  // submit a new prediction when counter reaches a threashold
+  predict_new_tokens();
+}
+
+void camdmpp::predict_trajectory() {
+  auto [left_stick_raw, right_stick_raw, left_trigger, right_trigger] =
+      get_game_controller_analog_inputs(get_game_controllers()[0]);
+  math::vector3 left_stick(left_stick_raw.x(), 0.0f, left_stick_raw.y());
+  math::vector3 right_stick(right_stick_raw.x(), 0.0f, right_stick_raw.y());
+  math::quat desired_rot;
+  desired_vel = velocity_scale * left_stick;
+  if (left_stick.norm() > 0.01f)
+    desired_dir = left_stick.normalized();
+  if (right_stick.norm() > 0.01f)
+    desired_dir = right_stick.normalized();
+  desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
+  for (int i = 0; i < 5; i++) {
+    auto [vel, acc] = spring_damper_position(
+        char_root_world_vel, char_root_world_acc, desired_vel,
+        math::vector3::Zero(), traj_sample_time * (i + 1), vel_halflife);
+    auto [rot, ang] = spring_damper_rotation(
+        char_root_world_rot, char_root_world_ang, desired_rot,
+        math::vector3::Zero(), traj_sample_time * (i + 1), rot_halflife);
+    _traj_world_vel[i] = vel;
+    if (i == 0) {
+      _traj_world_pos[i] =
+          (char_root_world_vel + vel) * 0.5f * traj_sample_time +
+          char_root_world_pos;
+    } else {
+      _traj_world_pos[i] = (_traj_world_vel[i - 1] + _traj_world_vel[i]) *
+                               0.5f * traj_sample_time +
+                           _traj_world_pos[i - 1];
+    }
+    _traj_world_dir[i] = (rot * math::vector3(0, 0, 1));
+    _traj_world_dir[i].y() = 0.0f;
+    _traj_world_dir[i].normalized();
+    _traj_world_pos[i].y() = 0.0f;
+  }
+}
+
+void camdmpp::apply_pose_and_refill() {
   auto &player_trans = registry.get<transform>(player_entity);
   auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
   auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
 
-  if (motion_frame >= motion.local_rot.size())
-    motion_frame = 0;
-  std::vector<math::quat> motion_world_rot(motion.names.size(),
-                                           math::quat::Identity());
-  for (int i = 0; i < motion.names.size(); i++) {
-    if (i == 0)
-      motion_world_rot[i] = motion.local_rot[motion_frame][i];
-    else
-      motion_world_rot[i] = motion_world_rot[motion.parents[i]] *
-                            motion.local_rot[motion_frame][i];
-  }
-  for (int i = 0; i < motion.names.size(); i++) {
-    if (player_actor.name_to_entity.find(motion.names[i]) ==
-        player_actor.name_to_entity.end())
-      continue;
+  printf("applied_frames=%d\n", applied_frames);
+
+  // find matching joint names and apply transform
+  int da_entry_idx = 0;
+  for (auto [di, ai] : char_data_to_actor) {
     auto &joint_trans =
-        registry.get<transform>(player_actor.name_to_entity[motion.names[i]]);
-    if (i == 0) {
-      joint_trans.set_world_rot(motion_world_rot[i] *
-                                repair_c[data_to_actor[i]]);
-      joint_trans.set_world_pos(motion.local_pos[motion_frame][0]);
-    } else
+        registry.get<transform>(player_actor.ordered_entities[ai]);
+    if (ai == 0) {
+      // root joint
+      // if (root_rel_pos_cache[applied_frames].norm() > 1e-5f)
+      //   char_root_world_pos =
+      //       char_root_world_pos +
+      //       char_root_world_rot * root_rel_pos_cache[applied_frames];
+      // char_root_world_rot =
+      //     root_rel_rot_cache[applied_frames] * char_root_world_rot;
+      joint_trans.set_world_pos(char_root_world_pos);
+      joint_trans.set_world_rot(char_root_world_rot);
+    } else {
       joint_trans.set_local_rot(
-          (motion_world_rot[motion.parents[i]] *
-           repair_c[data_to_actor[motion.parents[i]]])
-              .inverse() *
-          (motion_world_rot[i] * repair_c[data_to_actor[i]]));
+          joint_rotation_cache[applied_frames][da_entry_idx]);
+    }
+    da_entry_idx++;
   }
   player_trans.force_update_hierarchy();
-  motion_frame++;
 
-  return;
-
-  // make new predictions to the trajectory based on user input
-  {
-    auto [left_stick_raw, right_stick_raw, left_trigger, right_trigger] =
-        get_game_controller_analog_inputs(get_game_controllers()[0]);
-    math::vector3 left_stick(left_stick_raw.x(), 0.0f, left_stick_raw.y());
-    math::vector3 right_stick(right_stick_raw.x(), 0.0f, right_stick_raw.y());
-    math::quat desired_rot;
-    desired_vel = velocity_scale * left_stick;
-    if (left_stick.norm() > 0.01f)
-      desired_dir = left_stick.normalized();
-    if (right_stick.norm() > 0.01f)
-      desired_dir = right_stick.normalized();
-    desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
-    for (int i = 0; i < 5; i++) {
-      auto [vel, acc] = spring_damper_position(
-          char_root_world_vel, char_root_world_acc, desired_vel,
-          math::vector3::Zero(), traj_sample_time * (i + 1), vel_halflife);
-      auto [rot, ang] = spring_damper_rotation(
-          char_root_world_rot, char_root_world_ang, desired_rot,
-          math::vector3::Zero(), traj_sample_time * (i + 1), rot_halflife);
-      _traj_world_vel[i] = vel;
-      if (i == 0) {
-        _traj_world_pos[i] =
-            (char_root_world_vel + vel) * 0.5f * traj_sample_time +
-            char_root_world_pos;
-      } else {
-        _traj_world_pos[i] = (_traj_world_vel[i - 1] + _traj_world_vel[i]) *
-                                 0.5f * traj_sample_time +
-                             _traj_world_pos[i - 1];
-      }
-      _traj_world_dir[i] = (rot * math::vector3(0, 0, 1));
-      _traj_world_dir[i].y() = 0.0f;
-      _traj_world_dir[i].normalized();
-      _traj_world_pos[i].y() = 0.0f;
-    }
+  // update network input cache
+  // input motion style
+  i_style_idx[0] = active_style_idx;
+  // input trajectory
+  for (int i = 0; i < 5; i++) {
+    auto _traj_pos = char_root_world_rot.inverse() *
+                     (_traj_world_pos[i] - char_root_world_pos);
+    auto _traj_facing = char_root_world_rot.inverse() * _traj_world_dir[i];
+    i_traj_pos[2 * i + 0] = _traj_pos.x();
+    i_traj_pos[2 * i + 1] = _traj_pos.z();
+    i_traj_facing[2 * i + 0] = _traj_facing.x();
+    i_traj_facing[2 * i + 1] = _traj_facing.z();
   }
 
-  // apply pose to the character, fill in caches for network input
-  {
-    // find matching joint names and apply transform
-    if (joint_rotation_cache[0].size() > 0) {
-      for (int jid = 0; jid < model.joint_num; jid++) {
-        auto joint_name = model.joint_names[jid];
-        auto &joint_trans =
-            registry.get<transform>(player_actor.name_to_entity[joint_name]);
-        if (jid == 0) {
-          // update root transform
-          char_root_world_pos =
-              char_root_world_pos +
-              char_root_world_rot * root_rel_pos_cache[applied_frames];
-          char_root_world_rot =
-              root_rel_rot_cache[applied_frames] * char_root_world_rot;
-          joint_trans.set_world_pos(char_root_world_pos);
-          joint_trans.set_world_rot(char_root_world_rot);
-        } else
-          joint_trans.set_local_rot(joint_rotation_cache[applied_frames][jid]);
-      }
-      registry.get<transform>(player_actor.ordered_entities[0])
-          .force_update_hierarchy();
-    }
-
-    // update network input cache
-    i_style_idx[0] = 0;
-    for (int i = 0; i < 5; i++) {
-      auto _traj_pos = char_root_world_rot.inverse() *
-                       (_traj_world_pos[i] - char_root_world_pos);
-      auto _traj_facing = char_root_world_rot.inverse() * _traj_world_dir[i];
-      i_traj_pos[2 * i + 0] = _traj_pos.x();
-      i_traj_pos[2 * i + 1] = _traj_pos.z();
-      i_traj_facing[2 * i + 0] = _traj_facing.x();
-      i_traj_facing[2 * i + 1] = _traj_facing.z();
-    }
-    for (int p = 0; p < model.pose_token_dim; p++) {
-      for (int f = 0; f < model.past_points; f++) {
-        i_past_motion[p * model.past_points + f] =
-            (i_past_motion[p * model.past_points + f] - model.data_mean[p]) /
-            (model.data_std[p] + 1e-8f);
-      }
-    }
-
-    // increase the apply frame counter
-    applied_frames++;
+  // increase the apply frame counter
+  applied_frames++;
+  // check for buffer swap
+  if (applied_frames ==
+      (switch_prediction_interval + (use_front_buffer ? 0 : cache_size / 2))) {
+    applied_frames = use_front_buffer ? cache_size / 2 : 0;
+    use_front_buffer = !use_front_buffer;
   }
+}
 
-  // submit a new prediction when counter reaches a threashold
-  if ((applied_frames >= submit_prediction_interval) &&
-      !(waiting_for_model_output.load())) {
+void camdmpp::predict_new_tokens() {
+  // only start new prediction when condition met
+  bool should_submit_prediction =
+      (applied_frames ==
+       (submit_prediction_interval + (use_front_buffer ? 0 : cache_size / 2)));
+  if (should_submit_prediction && !(waiting_for_model_output.load())) {
     waiting_for_model_output.store(true);
     model.past_motion_data = i_past_motion;
     model.traj_pos_data = i_traj_pos;
     model.traj_facing_data = i_traj_facing;
     model.style_idx_data = i_style_idx;
+    printf("Dispatch inference when applied_frames=%d\n", applied_frames);
     model.submit_inference([this](std::vector<float> model_output) {
       printf("Inference finished when applied_frames=%d, update pose cache\n",
              applied_frames);
-      applied_frames = 0;
+      // keep using current active buffer, swap when one runs out
+      // use_front_buffer = !use_front_buffer;
       waiting_for_model_output.store(false);
+      int buffer_start_idx = (use_front_buffer ? (cache_size / 2) : 0);
 
-      for (int i = 0; i < model.future_points; i++) {
+      // reset the past motion input
+      for (int pf = 0; pf < model.past_points; pf++) {
+        for (int ti = 0; ti < model.pose_token_dim; ti++) {
+          i_past_motion[ti * model.past_points + pf] =
+              model_output[ti * model.future_points + pf +
+                           switch_prediction_interval - model.past_points];
+        }
+      }
+
+      // convert predicted pose tokens into cache format
+      // (1, pose_token_dim, future_points)
+      int rot_channel_size = model.joint_num * 6;
+      std::vector<math::quat> pred_world_rot(model.joint_num,
+                                             math::quat::Identity());
+      std::array<float, 6> tmp_data6d;
+      inertia_lambda = std::log(2.0f) / (inertia_halflife * std::log(2.71828f));
+      for (int f = 0; f < model.future_points; f++) {
+        // fill in joint local rotations
+        for (int jid = 0; jid < model.joint_num; jid++) {
+          for (int k = 0; k < 6; k++) {
+            tmp_data6d[k] =
+                model_output[(6 * jid + k) * model.future_points + f] *
+                    model.data_std[6 * jid + k] +
+                model.data_mean[6 * jid + k];
+          }
+          auto &&joint_local_rot = repr6d_to_quat(tmp_data6d);
+          if (jid == 0)
+            pred_world_rot[jid] = joint_local_rot;
+          else
+            pred_world_rot[jid] =
+                pred_world_rot[model.joint_parents[jid]] * joint_local_rot;
+        }
+        int da_entry_idx = 0;
+        for (auto [di, ai] : char_data_to_actor) {
+          if (di == 0) {
+            joint_rotation_cache[buffer_start_idx + f][da_entry_idx] =
+                pred_world_rot[di];
+          } else {
+            joint_rotation_cache[buffer_start_idx + f][da_entry_idx] =
+                (pred_world_rot[model.joint_parents[di]] *
+                 char_repair_c[char_joint_parents[ai]])
+                    .inverse() *
+                (pred_world_rot[di] * char_repair_c[ai]);
+          }
+          da_entry_idx++;
+        }
+
+        // fill in relative root position
+        for (int k = 0; k < 3; k++) {
+          root_rel_pos_cache[buffer_start_idx + f](k) =
+              model_output[(rot_channel_size + k) * model.future_points + f] *
+                  model.data_std[rot_channel_size + k] +
+              model.data_mean[rot_channel_size + k];
+        }
+        // fill in relative root rotation
+        for (int k = 3; k < 9; k++) {
+          tmp_data6d[k - 3] =
+              model_output[(rot_channel_size + k) * model.future_points + f] *
+                  model.data_std[rot_channel_size + k] +
+              model.data_mean[rot_channel_size + k];
+        }
+        root_rel_rot_cache[buffer_start_idx + f] = repr6d_to_quat(tmp_data6d);
+        // fill in root height
+        root_height_cache[buffer_start_idx + f] =
+            model_output[(rot_channel_size + 9) * model.future_points + f] *
+                model.data_std[rot_channel_size + 9] +
+            model.data_mean[rot_channel_size + 9];
+      }
+
+      // inertial blending over the predicted motion
+      if (enable_inertia_blending) {
+        int ib_from_idx = (use_front_buffer ? switch_prediction_interval - 1
+                                            : switch_prediction_interval - 1 +
+                                                  cache_size / 2);
+        int ib_to_idx = (use_front_buffer ? cache_size / 2 : 0);
+        std::vector<math::vector3> ib_off_rot(char_data_to_actor.size(),
+                                              math::vector3::Zero()),
+            ib_off_ang(char_data_to_actor.size(), math::vector3::Zero());
+        for (int jid = 0; jid < char_data_to_actor.size(); jid++) {
+          ib_off_rot[jid] = math::quat_to_rot_vec(
+              joint_rotation_cache[ib_from_idx][jid] *
+              (joint_rotation_cache[ib_to_idx][jid].inverse()));
+          math::vector3 from_ang =
+              math::quat_to_rot_vec(
+                  joint_rotation_cache[ib_from_idx][jid] *
+                  (joint_rotation_cache[ib_from_idx - 1][jid].inverse())) /
+              fixed_interval;
+          math::vector3 to_ang =
+              math::quat_to_rot_vec(
+                  joint_rotation_cache[ib_to_idx + 1][jid] *
+                  (joint_rotation_cache[ib_to_idx][jid].inverse())) /
+              fixed_interval;
+          ib_off_ang[jid] = from_ang - to_ang;
+        }
+        for (int bf = 0; bf < inertia_blend_wnd; bf++) {
+          float bf_dt = fixed_interval * (bf + 1);
+          for (int jid = 0; jid < char_data_to_actor.size(); jid++) {
+            auto no_blend = joint_rotation_cache[ib_to_idx + bf][jid];
+            auto r = ib_off_rot[jid];
+            auto av = ib_off_ang[jid];
+            r = (r + (av + inertia_lambda * r) * bf_dt) *
+                std::exp(-inertia_lambda * bf_dt);
+            joint_rotation_cache[ib_to_idx + bf][jid] =
+                math::rot_vec_to_quat(r) * no_blend;
+          }
+        }
       }
     });
   }

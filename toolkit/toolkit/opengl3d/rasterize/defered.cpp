@@ -99,6 +99,10 @@ void defered_render_system::draw_menu_gui() {
   //   resize_csm_buffer();
 }
 
+void defered_render_system::save_color_buffer_as_png(std::string filepath) {
+  color_tex.save_as_image().save_png(filepath);
+}
+
 void defered_render_system::show_textures_wnd_func() {
   ImGui::Begin("mixed_rsys_tex_wnd", &show_textures_wnd);
   auto size = ImGui::GetWindowSize();
@@ -316,7 +320,7 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
       scene_mesh_counter != mesh_data_entities.size_hint();
   if (scene_vtx_count_mismatch || scene_idx_count_mismatch ||
       scene_mesh_mismatch || any_force_update_flag) {
-    std::cout << "Detect change in scnene vertex count, scene index count, "
+    std::cout << "Detect change in scene vertex count, scene index count, "
                  "scene mesh count or force update flag, "
                  "resize scene vertex buffer and scene index buffer."
               << std::endl;

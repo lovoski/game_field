@@ -15,24 +15,41 @@ public:
 private:
   // application variables
   bool hide_mouse = false, debug_draw_trajectory = true,
-       debug_draw_skeleton = true;
+       debug_draw_skeleton = true, draw_ground_mesh = true;
   float cam_move_speed = 100.0f;
   float cam_angle_horizontal = 0.0f, cam_angle_vertical = 30.0f;
   std::int64_t __cur_exec_fixed = 0;
   double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
-  entt::entity player_entity = entt::null;
+  entt::entity player_entity = entt::null, ground_entity = entt::null;
+  int active_style_idx = 0; // the style we are using
+
+  // blending parameters
+  bool enable_inertia_blending = true;
+  int inertia_blend_wnd = 15;
+  float inertia_halflife = 0.06f, inertia_lambda;
 
   diffusion model;
+  std::atomic_bool waiting_for_model_output{false};
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied
-  unsigned int submit_prediction_interval = 200;
-  std::atomic_bool waiting_for_model_output{false};
+  unsigned int submit_prediction_interval = 15;
+  // In each prediction, how many frames are used
+  unsigned int switch_prediction_interval = 20;
 
   // Caches for character's state, converted from model_output
-  std::array<std::vector<math::quat>, 100> joint_rotation_cache;
-  std::array<math::vector3, 100> root_rel_pos_cache;
-  std::array<math::quat, 100> root_rel_rot_cache;
+  static const int cache_size = 100;
+  std::array<std::vector<math::quat>, cache_size> joint_rotation_cache;
+  std::array<math::vector3, cache_size> root_rel_pos_cache;
+  std::array<math::quat, cache_size> root_rel_rot_cache;
+  std::array<float, cache_size> root_height_cache;
+  // The update of model output is performed in a "double buffer" way, the async
+  // inference is dispatched when "submit_prediction_interval" is reached, after
+  // the inference finishes, the newly predicted output will be store in the
+  // cache that is not currently being used, so the update can go smoothly from
+  // the last prediction to the next when "switch_prediction_interval" is
+  // reached.
+  bool use_front_buffer = true;
 
   // Used for trajectory update and root position update
   math::vector3 char_root_world_pos = math::vector3::Zero(),
@@ -40,6 +57,9 @@ private:
                 char_root_world_acc = math::vector3::Zero(),
                 char_root_world_ang = math::vector3::Zero();
   math::quat char_root_world_rot = math::quat::Identity();
+  std::vector<math::quat> char_repair_c;
+  std::vector<int> char_joint_parents;
+  std::map<int, int> char_data_to_actor;
 
   // Caches for network input
   std::vector<float> i_past_motion; // (1, pose_token_dim, past_points)
@@ -58,10 +78,14 @@ private:
   /**
    * Three things are done inside this function:
    *   1. make new predictions to the trajectory based on user input
-   *   2. apply pose to the character
+   *   2. apply pose to the character, fill in caches for network input
    *   3. submit a new prediction when counter reaches a threashold
    */
   void fixed_interval_logic();
+
+  void predict_trajectory();
+  void apply_pose_and_refill();
+  void predict_new_tokens();
 
   void debug_draw();
 };

@@ -29,8 +29,16 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   pose_token_dim = config["pose_token_dim"];
   diffusion_steps = config["diffusion_steps"];
   joint_names = config["joint_names"].get<std::vector<std::string>>();
+  joint_parents = config["joint_parents"].get<std::vector<int>>();
   input_names = config["input_names"].get<std::vector<std::string>>();
   output_names = config["output_names"].get<std::vector<std::string>>();
+  auto joint_offsets_data = config["joint_offsets"].get<std::vector<float>>();
+  joint_offsets.resize(joint_num, toolkit::math::vector3::Zero());
+  for (int i = 0; i < joint_num; i++) {
+    joint_offsets[i].x() = joint_offsets_data[3 * i + 0];
+    joint_offsets[i].y() = joint_offsets_data[3 * i + 1];
+    joint_offsets[i].z() = joint_offsets_data[3 * i + 2];
+  }
   // variables used for ddpm sampling
   posterior_log_variance_clipped =
       config["posterior_log_variance_clipped"].get<std::vector<float>>();
