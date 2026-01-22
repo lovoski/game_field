@@ -14,8 +14,8 @@ public:
 
 private:
   // application variables
-  bool hide_mouse = false, debug_draw_trajectory = true,
-       debug_draw_skeleton = true, draw_ground_mesh = true;
+  bool debug_draw_trajectory = true, debug_draw_skeleton = true,
+       draw_ground_mesh = true;
   float cam_move_speed = 100.0f, cam_distance = 3.0f;
   float cam_angle_horizontal = 0.0f, cam_angle_vertical = 30.0f;
   std::int64_t __cur_exec_fixed = 0;
@@ -29,7 +29,6 @@ private:
   float inertia_halflife = 0.06f, inertia_lambda;
 
   diffusion model;
-  std::atomic_bool waiting_for_model_output{false};
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied

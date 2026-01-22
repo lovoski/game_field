@@ -63,6 +63,10 @@ public:
 protected:
   unsigned int canvas_width = 1920, canvas_height = 1080;
 
+  // background
+  bool use_pure_color_bg = false;
+  math::vector3 bg_color = math::vector3(1.0f, 1.0f, 1.0f);
+
   shader gbuffer_geometry_pass, defered_default_pass;
   // gbuffer
   framebuffer gbuffer;
@@ -121,6 +125,7 @@ DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
                sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
                csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_min_bias,
                csm_max_bias, shadowmap_max_bias, shadowmap_min_bias,
-               enable_fxaa, canvas_width, canvas_height)
+               enable_fxaa, canvas_width, canvas_height, use_pure_color_bg,
+               bg_color)
 
 }; // namespace toolkit::opengl3d

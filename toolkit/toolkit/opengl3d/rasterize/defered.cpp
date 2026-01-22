@@ -26,6 +26,11 @@ void defered_render_system::draw_menu_gui() {
   ImGui::InputInt("Grid Spacing", &grid_spacing);
   ImGui::Separator();
 
+  ImGui::MenuItem("Background", nullptr, nullptr, false);
+  ImGui::Checkbox("Use Pure Color", &use_pure_color_bg);
+  color_edit_3("Pure Color", bg_color);
+  ImGui::Separator();
+
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
   ImGui::Checkbox("Draw Debug", &should_draw_debug);
   ImGui::Checkbox("Draw Wireframe", &enable_wireframe);
@@ -754,7 +759,10 @@ void defered_render_system::render(entt::registry &registry,
     glClearColor(0, 0, 0, 1);
 
     glDisable(GL_DEPTH_TEST);
-    ss_model.render(cam_comp.vp, cam_trans.world_pos());
+    if (!use_pure_color_bg) {
+      ss_model.render(cam_comp.vp, cam_trans.world_pos());
+    } else {
+    }
     glEnable(GL_DEPTH_TEST);
 
     defered_default_pass.use();

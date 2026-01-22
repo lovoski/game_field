@@ -31,7 +31,7 @@ void camdmpp::handle_custom_initialization() {
           << std::endl;
       return;
     }
-    set_game_mode(true, hide_mouse);
+    set_game_mode(true, false);
     player_entity = named_entities["player"];
     ground_entity = named_entities["ground"];
     default_render_sys->resize(wnd_width, wnd_height);
@@ -248,11 +248,8 @@ void camdmpp::apply_pose_and_refill() {
 
 void camdmpp::predict_new_tokens() {
   // only start new prediction when condition met
-  bool should_submit_prediction =
-      (applied_frames ==
-       (submit_prediction_interval + (use_front_buffer ? 0 : cache_size / 2)));
-  if (should_submit_prediction && !(waiting_for_model_output.load())) {
-    waiting_for_model_output.store(true);
+  if (applied_frames ==
+      (submit_prediction_interval + (use_front_buffer ? 0 : cache_size / 2))) {
     model.past_motion_data = i_past_motion;
     model.traj_pos_data = i_traj_pos;
     model.traj_facing_data = i_traj_facing;
@@ -264,8 +261,6 @@ void camdmpp::predict_new_tokens() {
              applied_frames);
       display_inference_time = inference_time;
       // keep using current active buffer, swap when one runs out
-      // use_front_buffer = !use_front_buffer;
-      waiting_for_model_output.store(false);
       int buffer_start_idx = (use_front_buffer ? (cache_size / 2) : 0);
 
       // reset the past motion input
