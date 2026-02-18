@@ -552,11 +552,26 @@ void manga_viewer::scene_logic() {
     cameraPos -= cameraSpaceDelta;
   }
 
+  math::vector3 wasd_movement = math::vector3::Zero();
+  if (is_key_pressed(SDLK_w))
+    wasd_movement += math::vector3(0.0,1.0,0.0);
+  if (is_key_pressed(SDLK_a))
+    wasd_movement += math::vector3(-1.0,0.0,0.0);
+  if (is_key_pressed(SDLK_s))
+    wasd_movement += math::vector3(0.0,-1.0,0.0);
+  if (is_key_pressed(SDLK_d))
+    wasd_movement += math::vector3(1.0,0.0,0.0);
+  cameraPos += wasd_movement * 0.5f * deltaTime;
+
   // render the page geometry at different scale
   cameraHalfRangeY -= deltaTime * scroll_offset.y();
   if (is_key_pressed(SDLK_LCTRL) && is_mouse_button_pressed(SDL_BUTTON_RIGHT)) {
     cameraHalfRangeY += mouse_screen_delta.y() * 0.003f;
   }
+  if (is_key_pressed(SDLK_e))
+    cameraHalfRangeY += 0.5f * deltaTime;
+  if (is_key_pressed(SDLK_q))
+    cameraHalfRangeY -= 0.5f * deltaTime;
   cameraHalfRangeY = std::clamp(cameraHalfRangeY, 0.1f, 3.0f);
 
   if (is_mouse_button_pressed(SDL_BUTTON_LEFT)) {
@@ -571,6 +586,10 @@ void manga_viewer::scene_logic() {
     math::vector3 crossmv = mv0.cross(mv1);
     book_angle += (crossmv.z() < 0 ? 1.0f : -1.0f) * std::asinf(crossmv.norm());
   }
+  if (is_key_triggered(SDLK_UP))
+    book_angle += 3.1415926/2.0f;
+  if (is_key_triggered(SDLK_DOWN))
+    book_angle -= 3.1415926/2.0f;
 
   // update vp matrix for scene camera
   vp = math::ortho(-cameraHalfRangeY * aspect, cameraHalfRangeY * aspect,
@@ -722,7 +741,16 @@ void manga_viewer::draw_gui() {
       ImGui::Text(": 重置视角");
       ImGui::TextColored({0, 1, 0, 1}, "LEFT/RIGHT");
       ImGui::SameLine();
-      ImGui::Text(": 前一页/后一页");
+      ImGui::Text(": 左/右翻一页");
+      ImGui::TextColored({0, 1, 0, 1}, "UP/DOWN   ");
+      ImGui::SameLine();
+      ImGui::Text(": 顺/逆时针旋转90度");
+      ImGui::TextColored({0, 1, 0, 1}, "W/A/S/D   ");
+      ImGui::SameLine();
+      ImGui::Text(": 移动视角");
+      ImGui::TextColored({0, 1, 0, 1}, "Q/E       ");
+      ImGui::SameLine();
+      ImGui::Text(": 放大/缩小书本");
 
       ImGui::EndMenu();
     }
