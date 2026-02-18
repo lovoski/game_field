@@ -152,6 +152,7 @@ private:
   bool pageFromRightToLeft = true, autoTurnPage = false,
        manuallyTurningPage = false;
   bool pageFlowRTL = true;
+  float white_boarder = 0.0f;
   toolkit::opengl3d::texture whiteTexture;
   toolkit::opengl3d::compute_shader createPageGeometryProgram,
       deformPageGeometryProgram;
@@ -160,8 +161,11 @@ private:
 
   bool padAfterFirstPage = false;
 
+  bool settings_menu_opened = false;
+
   const float defaultCameraHalfRangeY = 0.6f;
   float cameraHalfRangeY = defaultCameraHalfRangeY;
+  float book_angle = 0.0f;
   toolkit::math::vector3 cameraPos = toolkit::math::vector3(0, 0.5f, 1);
   toolkit::math::matrix4 vp = toolkit::math::matrix4::Identity();
 
@@ -191,4 +195,4 @@ private:
   REFLECT_PRIVATE(manga_viewer)
 };
 REFLECT(manga_viewer, autoTurnPageSpeed, eyeProtection, eyeProtectionColor,
-        backgroundColor, pageFlowRTL)
+        backgroundColor, pageFlowRTL, white_boarder)

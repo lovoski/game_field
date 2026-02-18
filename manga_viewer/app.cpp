@@ -190,6 +190,7 @@ uniform sampler2D gPageTex;
 uniform sampler2D gBackPageTex;
 uniform bool gColored;
 uniform bool gBackColored;
+uniform float gWhiteBoarder;
 
 uniform vec3 gEyeProtectionColor;
 
@@ -197,18 +198,23 @@ out vec4 FragColor;
 
 void main() {
   vec4 pageColor;
-  vec2 uv;
+  vec2 uv, uv_boardered;
+  float white_boarder_scale = 1.0-2*gWhiteBoarder;
   if (texCoord.x > 1.5) {
     uv = texCoord-vec2(2.0);
-    pageColor = texture(gBackPageTex, uv);
+    uv_boardered = (uv-vec2(0.5))/(white_boarder_scale+1e-5)+vec2(0.5);
+    pageColor = texture(gBackPageTex, uv_boardered);
     if (!gBackColored)
       pageColor = vec4(vec3(pageColor.r), 1.0);
   } else {
     uv = texCoord;
-    pageColor = texture(gPageTex, uv);
+    uv_boardered = (uv-vec2(0.5))/(white_boarder_scale+1e-5)+vec2(0.5);
+    pageColor = texture(gPageTex, uv_boardered);
     if (!gColored)
       pageColor = vec4(vec3(pageColor.r), 1.0);
   }
+  if (uv_boardered.x<0 || uv_boardered.y<0 || uv_boardered.x>1 || uv_boardered.y>1)
+    pageColor = vec4(1.0);
   float mx = 2*uv.x-1, my = 2*uv.y-1;
   float mx4 = mx*mx*mx*mx, my4 = my*my*my*my;
   float mx16 = mx4*mx4*mx4*mx4, my16 = my4*my4*my4*my4;
@@ -372,6 +378,7 @@ void manga_viewer::draw_book() {
     vao.link_attribute(pageVertexBuffer, 1, 4, GL_FLOAT, sizeof(vert_data),
                        (void *)(offsetof(vert_data, texCoord)));
     shader.use();
+    shader.set_float("gWhiteBoarder", white_boarder);
     shader.set_float("gOffsetX", pageFlowRTL ? -pageWidth : 0);
     shader.set_mat4("gVP", vp);
     shader.set_vec3("gEyeProtectionColor",
@@ -414,6 +421,7 @@ void manga_viewer::draw_book() {
     vao.link_attribute(pageVertexBuffer, 1, 4, GL_FLOAT, sizeof(vert_data),
                        (void *)(offsetof(vert_data, texCoord)));
     shader.use();
+    shader.set_float("gWhiteBoarder", white_boarder);
     shader.set_float("gOffsetX", pageFlowRTL ? 0 : -pageWidth);
     shader.set_mat4("gVP", vp);
     shader.set_vec3("gEyeProtectionColor",
@@ -468,6 +476,7 @@ void manga_viewer::draw_book() {
                        sizeof(vert_data),
                        (void *)(offsetof(vert_data, texCoord)));
     shader.use();
+    shader.set_float("gWhiteBoarder", white_boarder);
     shader.set_float("gOffsetX", 0);
     shader.set_mat4("gVP", vp);
     shader.set_vec3("gEyeProtectionColor",
@@ -517,45 +526,69 @@ void manga_viewer::draw_book() {
 
 void manga_viewer::scene_logic() {
   float aspect = (float)wnd_width / (float)wnd_height;
+  float screen_world_scale = 2.0f * cameraHalfRangeY / wnd_height;
   auto scrollOffsets = scroll_offset.y();
   bool mouseMidBtnPressed = is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
+  white_boarder = std::clamp(white_boarder, 0.0f, 0.5f);
+  math::vector2 mouse_world_offset = math::vector2(
+      (mouse_screen_pos.x() - wnd_width / 2) * screen_world_scale +
+          cameraPos.x(),
+      (wnd_height / 2 - mouse_screen_pos.y()) * screen_world_scale +
+          cameraPos.y() - 0.5f);
 
   // reset camera back to default
   if (is_key_triggered(SDLK_r)) {
     logger->info("Reset camera parameters");
+    book_angle = 0.0f;
     cameraPos << 0.0f, 0.5f, 1.0f;
     cameraHalfRangeY = defaultCameraHalfRangeY;
   }
 
-  // handle page translation
   if (mouseMidBtnPressed) {
-    // mid button pressed, left button not pressed, move camera position
-    if (mouseMidBtnPressed) {
-      // from screen space delta to camera space delta
-      math::vector3 cameraSpaceDelta;
-      cameraSpaceDelta << 2 * cameraHalfRangeY / wnd_height *
-                              mouse_screen_delta,
-          0.0f;
-      cameraSpaceDelta.x() *= -1;
-      cameraPos += cameraSpaceDelta;
-    }
+    // from screen space delta to camera space delta
+    math::vector3 cameraSpaceDelta;
+    cameraSpaceDelta << screen_world_scale * mouse_screen_delta, 0.0f;
+    cameraSpaceDelta.y() *= -1;
+    cameraPos -= cameraSpaceDelta;
   }
 
   // render the page geometry at different scale
   cameraHalfRangeY -= deltaTime * scroll_offset.y();
+  if (is_key_pressed(SDLK_LCTRL) && is_mouse_button_pressed(SDL_BUTTON_RIGHT)) {
+    cameraHalfRangeY += mouse_screen_delta.y() * 0.003f;
+  }
   cameraHalfRangeY = std::clamp(cameraHalfRangeY, 0.1f, 3.0f);
+
+  if (is_mouse_button_pressed(SDL_BUTTON_LEFT)) {
+    math::vector3 mv0, mv1;
+    mv0 << mouse_world_offset, 0.0f;
+    mv1 << mouse_world_offset +
+               math::vector2(mouse_screen_delta.x() * screen_world_scale,
+                             -mouse_screen_delta.y() * screen_world_scale),
+        0.0f;
+    mv0.normalize();
+    mv1.normalize();
+    math::vector3 crossmv = mv0.cross(mv1);
+    book_angle += (crossmv.z() < 0 ? 1.0f : -1.0f) * std::asinf(crossmv.norm());
+  }
 
   // update vp matrix for scene camera
   vp = math::ortho(-cameraHalfRangeY * aspect, cameraHalfRangeY * aspect,
                    cameraHalfRangeY, -cameraHalfRangeY, 1e-3f, 1e2f) *
-       math::lookat(cameraPos, cameraPos - math::world_forward, math::world_up);
+       math::lookat(cameraPos, cameraPos - math::world_forward,
+                    toolkit::math::world_up);
+
+  Eigen::Affine3f book_trans = Eigen::Affine3f::Identity();
+  book_trans.translate(math::vector3(0.0f, 0.5f, 0.0f))
+      .rotate(math::angle_axis(book_angle, -math::world_forward))
+      .translate(math::vector3(0.0f, -0.5f, 0.0f));
+  vp = vp * book_trans.matrix();
 
   float pageHeight = 1.0f;
   float pageWidth = first_page_width_div_height;
   if (!autoTurnPage && !(leadingPageIdx == -1 && pageFlowRTL) &&
       !(leadingPageIdx >= pageCount.load() - 1 && !pageFlowRTL) &&
-      (is_key_triggered(SDLK_LEFT) ||
-       (is_mouse_button_triggered(SDL_BUTTON_LEFT) && caps_lock_on))) {
+      (is_key_triggered(SDLK_LEFT))) {
     pageFromRightToLeft = false;
     autoTurnPage = true;
     foldB = -1;
@@ -564,8 +597,7 @@ void manga_viewer::scene_logic() {
   if (!autoTurnPage &&
       !(leadingPageIdx >= pageCount.load() - 1 && pageFlowRTL) &&
       !(leadingPageIdx == -1 && !pageFlowRTL) &&
-      (is_key_triggered(SDLK_RIGHT) ||
-       (is_mouse_button_triggered(SDL_BUTTON_RIGHT) && caps_lock_on))) {
+      (is_key_triggered(SDLK_RIGHT))) {
     pageFromRightToLeft = true;
     autoTurnPage = true;
     foldB = -1;
@@ -587,7 +619,7 @@ void manga_viewer::run() {
     glViewport(0, 0, wnd_width, wnd_height);
 
     if (bookLoaded && !isLoadingBook) {
-      if (!openSwitchPageWnd)
+      if (!openSwitchPageWnd && !settings_menu_opened)
         scene_logic();
       draw_book();
     } else {
@@ -624,7 +656,9 @@ void manga_viewer::draw_gui() {
       }
     }
     ImGui::SetItemTooltip("从 .pdf 或者 .epub 文件导入电子书");
+    settings_menu_opened = false;
     if (ImGui::BeginMenu("设置")) {
+      settings_menu_opened = true;
       ImGui::SeparatorText("导入选项");
       ImGui::Text(toolkit::str_format(
                       "dpi %d, (%d,%d,%d), %.3f MB", dpi, page_width.load(),
@@ -659,6 +693,9 @@ void manga_viewer::draw_gui() {
       ImGui::SetItemTooltip("仿真书翻页动画的播放速度。");
 
       ImGui::SeparatorText("渲染选项");
+      ImGui::DragFloat("填充白边", &white_boarder, 0.001f, 0.0f, 0.5f, "%.3f");
+      ImGui::SetItemTooltip(
+          "在每一个页面的边缘填充该比例的白边，某些情况下可以提高观感。");
       toolkit::opengl3d::color_edit_3("背景颜色", backgroundColor);
       ImGui::Checkbox("护眼模式", &eyeProtection);
       if (!eyeProtection)
@@ -666,11 +703,26 @@ void manga_viewer::draw_gui() {
       toolkit::opengl3d::color_edit_3("护眼颜色", eyeProtectionColor);
       if (!eyeProtection)
         ImGui::EndDisabled();
+
       ImGui::SeparatorText("IO 选项");
       if (ImGui::Button("保存设置", {-1, 30}))
         dump_preference();
       if (ImGui::Button("载入设置", {-1, 30}))
         load_preference();
+
+      ImGui::SeparatorText("按键说明");
+      ImGui::TextColored({0, 1, 0, 1}, "LCTRL+RMB ");
+      ImGui::SameLine();
+      ImGui::Text(": 拖动缩放书本");
+      ImGui::TextColored({0, 1, 0, 1}, "LMB       ");
+      ImGui::SameLine();
+      ImGui::Text(": 旋转书本");
+      ImGui::TextColored({0, 1, 0, 1}, "R         ");
+      ImGui::SameLine();
+      ImGui::Text(": 重置视角");
+      ImGui::TextColored({0, 1, 0, 1}, "LEFT/RIGHT");
+      ImGui::SameLine();
+      ImGui::Text(": 前一页/后一页");
 
       ImGui::EndMenu();
     }
