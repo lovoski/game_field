@@ -9,9 +9,21 @@ if (WIN32)
   set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /SUBSYSTEM:CONSOLE")
 endif()
 
-include_directories("D:\\repo\\mupdf\\include")
-link_directories("D:\\repo\\mupdf\\platform\\win32\\x64\\Debug")
+set(MUPDF_ROOT "D:/repo/mupdf" CACHE PATH "Local MuPDF root directory")
+set(MUPDF_INCLUDE_DIR "${MUPDF_ROOT}/include" CACHE PATH "MuPDF include directory")
+set(MUPDF_LIB_DIR_DEBUG "${MUPDF_ROOT}/platform/win32/x64/Debug" CACHE PATH "MuPDF Debug library directory")
+set(MUPDF_LIB_DIR_RELEASE "${MUPDF_ROOT}/platform/win32/x64/Release" CACHE PATH "MuPDF Release library directory")
+
+include_directories("${MUPDF_INCLUDE_DIR}")
+
+find_package(spdlog CONFIG REQUIRED)
 
 file(GLOB MANGA_VIEWER_SRC_FILES *.cpp)
 add_executable(${PROJECT_NAME} ${MANGA_VIEWER_SRC_FILES})
-target_link_libraries(${PROJECT_NAME} PRIVATE toolkit libmupdf)
+target_link_directories(
+  ${PROJECT_NAME}
+  PRIVATE
+  $<$<CONFIG:Debug>:${MUPDF_LIB_DIR_DEBUG}>
+  $<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:${MUPDF_LIB_DIR_RELEASE}>
+)
+target_link_libraries(${PROJECT_NAME} PRIVATE toolkit libmupdf spdlog::spdlog)

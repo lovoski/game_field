@@ -4,6 +4,8 @@ project(toolkit)
 set(CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 20)
 
+option(TOOLKIT_ENABLE_CNPY "Enable cnpy/zlib linkage in toolkit" ON)
+
 find_package(assimp CONFIG REQUIRED)
 find_package(glad CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -13,7 +15,9 @@ find_package(SDL2_image CONFIG REQUIRED)
 find_package(SDL2_mixer CONFIG REQUIRED)
 find_package(SDL2_ttf CONFIG REQUIRED)
 find_package(mujoco CONFIG REQUIRED)
-add_subdirectory("toolkit/deps/cnpy")
+if (TOOLKIT_ENABLE_CNPY)
+  add_subdirectory("toolkit/deps/cnpy")
+endif()
 add_subdirectory("toolkit/deps/tinyfd")
 add_subdirectory("toolkit/deps/ufbx")
 add_subdirectory("toolkit/deps/sun_sky")
@@ -33,12 +37,13 @@ foreach(DIR ${SRC_DIR_LIST})
 endforeach()
 
 add_library(${PROJECT_NAME} ${SRC_FILES})
+if (TOOLKIT_ENABLE_CNPY)
+  target_link_libraries(${PROJECT_NAME} PUBLIC cnpy ZLIB::ZLIB)
+endif()
 target_link_libraries(
   ${PROJECT_NAME} 
   PUBLIC 
-  cnpy 
   imgui
-  ZLIB::ZLIB 
   ufbx 
   tinyfd 
   glad::glad 

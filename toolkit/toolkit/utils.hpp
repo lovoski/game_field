@@ -1,11 +1,10 @@
 #pragma once
 
+#include <base64.hpp>
 #include <chrono>
 #include <filesystem>
 #include <functional>
 #include <random>
-#include <zlib.h>
-#include <base64.hpp>
 
 namespace toolkit {
 
@@ -66,12 +65,11 @@ template <typename... Paths> std::string join_path(Paths &&...paths) {
 }
 
 bool zip_file(std::string src_filepath, std::string dst_filepath,
-              int level = Z_BEST_COMPRESSION);
+              int level = 9);
 bool unzip_file(std::string src_filepath, std::string dst_filepath,
                 size_t buffer_size = 16384);
 // Compress a buffer of bytes
-std::vector<char> compress_bytes(const char *data, size_t size,
-                                 int level = Z_BEST_COMPRESSION);
+std::vector<char> compress_bytes(const char *data, size_t size, int level = 9);
 // Decompress with unknown size using streaming inflate
 std::vector<char> decompress_bytes(const char *data, size_t size);
 

@@ -10,6 +10,15 @@
       }
     },
     {
+      "name": "build_win_manga_viewer",
+      "inherits": "build_win",
+      "binaryDir": "${sourceDir}/build_win_manga_viewer",
+      "cacheVariables": {
+        "TOOLKIT_ENABLE_CNPY": "OFF",
+        "MUPDF_ROOT": "D:/repo/mupdf"
+      }
+    },
+    {
       "name": "build_linux_dbg",
       "binaryDir": "${sourceDir}/build_linux",
       "cacheVariables": {
@@ -31,8 +40,33 @@
       "configuration": "Release"
     },
     {
+      "name": "build_win_manga_viewer_dbg",
+      "configurePreset": "build_win_manga_viewer",
+      "configuration": "Debug",
+      "targets": [
+        "manga_viewer"
+      ]
+    },
+    {
+      "name": "build_win_manga_viewer_rel",
+      "configurePreset": "build_win_manga_viewer",
+      "configuration": "Release",
+      "targets": [
+        "manga_viewer"
+      ]
+    },
+    {
       "name": "build_linux_dbg",
       "configurePreset": "build_linux_dbg"
+    },
+    {
+      "name": "build_win_manga",
+      "description": "",
+      "displayName": "",
+      "inherits": [
+        "build_win_manga_viewer_dbg",
+        "build_win_manga_viewer_rel"
+      ]
     }
   ]
 }

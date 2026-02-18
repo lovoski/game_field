@@ -285,8 +285,8 @@ void manga_viewer::resizePageGrid() {
 void manga_viewer::draw_book() {
   applyHighResQueue();
 
-  static toolkit::opengl::vao vao;
-  static toolkit::opengl::shader shader;
+  static toolkit::opengl3d::vao vao;
+  static toolkit::opengl3d::shader shader;
   static bool initialized = false;
   if (!initialized) {
     vao.create();
@@ -516,15 +516,12 @@ void manga_viewer::draw_book() {
 }
 
 void manga_viewer::scene_logic() {
-  auto wndSize = toolkit::opengl::g_instance.get_window_size();
-  float aspect = wndSize.x() / wndSize.y();
-  auto scrollOffsets = toolkit::opengl::g_instance.get_scroll_offsets();
-  mouseCurrentPos = toolkit::opengl::g_instance.get_mouse_position();
-  bool mouseMidBtnPressed = toolkit::opengl::g_instance.is_mouse_button_pressed(
-      GLFW_MOUSE_BUTTON_MIDDLE);
+  float aspect = (float)wnd_width / (float)wnd_height;
+  auto scrollOffsets = scroll_offset.y();
+  bool mouseMidBtnPressed = is_mouse_button_pressed(SDL_BUTTON_MIDDLE);
 
   // reset camera back to default
-  if (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_R)) {
+  if (is_key_triggered(SDLK_r)) {
     logger->info("Reset camera parameters");
     cameraPos << 0.0f, 0.5f, 1.0f;
     cameraHalfRangeY = defaultCameraHalfRangeY;
@@ -532,30 +529,20 @@ void manga_viewer::scene_logic() {
 
   // handle page translation
   if (mouseMidBtnPressed) {
-    // move around the camera
-    if (mouseFirstMove) {
-      mouseLastPos = mouseCurrentPos;
-      mouseFirstMove = false;
-    }
-
     // mid button pressed, left button not pressed, move camera position
     if (mouseMidBtnPressed) {
       // from screen space delta to camera space delta
       math::vector3 cameraSpaceDelta;
-      cameraSpaceDelta << 2 * cameraHalfRangeY / wndSize.y() *
-                              (mouseCurrentPos - mouseLastPos),
+      cameraSpaceDelta << 2 * cameraHalfRangeY / wnd_height *
+                              mouse_screen_delta,
           0.0f;
       cameraSpaceDelta.x() *= -1;
       cameraPos += cameraSpaceDelta;
     }
-
-    mouseLastPos = mouseCurrentPos;
-  } else {
-    mouseFirstMove = true;
   }
 
   // render the page geometry at different scale
-  cameraHalfRangeY -= deltaTime * scrollOffsets.y();
+  cameraHalfRangeY -= deltaTime * scroll_offset.y();
   cameraHalfRangeY = std::clamp(cameraHalfRangeY, 0.1f, 3.0f);
 
   // update vp matrix for scene camera
@@ -567,10 +554,8 @@ void manga_viewer::scene_logic() {
   float pageWidth = first_page_width_div_height;
   if (!autoTurnPage && !(leadingPageIdx == -1 && pageFlowRTL) &&
       !(leadingPageIdx >= pageCount.load() - 1 && !pageFlowRTL) &&
-      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_LEFT) ||
-       (toolkit::opengl::g_instance.is_mouse_button_triggered(
-            GLFW_MOUSE_BUTTON_LEFT) &&
-        toolkit::opengl::g_instance.caps_lock_on))) {
+      (is_key_triggered(SDLK_LEFT) ||
+       (is_mouse_button_triggered(SDL_BUTTON_LEFT) && caps_lock_on))) {
     pageFromRightToLeft = false;
     autoTurnPage = true;
     foldB = -1;
@@ -579,10 +564,8 @@ void manga_viewer::scene_logic() {
   if (!autoTurnPage &&
       !(leadingPageIdx >= pageCount.load() - 1 && pageFlowRTL) &&
       !(leadingPageIdx == -1 && !pageFlowRTL) &&
-      (toolkit::opengl::g_instance.is_key_triggered(GLFW_KEY_RIGHT) ||
-       (toolkit::opengl::g_instance.is_mouse_button_triggered(
-            GLFW_MOUSE_BUTTON_RIGHT) &&
-        toolkit::opengl::g_instance.caps_lock_on))) {
+      (is_key_triggered(SDLK_RIGHT) ||
+       (is_mouse_button_triggered(SDL_BUTTON_RIGHT) && caps_lock_on))) {
     pageFromRightToLeft = true;
     autoTurnPage = true;
     foldB = -1;
@@ -590,37 +573,43 @@ void manga_viewer::scene_logic() {
   }
 }
 
-void manga_viewer::main_loop() {
-  glClearColor(backgroundColor.x(), backgroundColor.y(), backgroundColor.z(),
-               1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glViewport(0, 0, toolkit::opengl::g_instance.wnd_width,
-             toolkit::opengl::g_instance.wnd_height);
-
-  if (bookLoaded && !isLoadingBook) {
-    if (!openSwitchPageWnd)
-      scene_logic();
-    draw_book();
-  } else {
-    // these variables should always gets reseted when not in use
-    leadingPageIdx = -1;
-    autoTurnPage = false;
-    padAfterFirstPage = false;
-  }
-
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
-  ImGui::NewFrame();
-
-  draw_gui();
-
-  ImGui::EndFrame();
-  ImGui::Render();
-  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-  glfwSwapBuffers(toolkit::opengl::g_instance.window);
-  deltaTime = (float)timer.elapse_s();
+void manga_viewer::run() {
   timer.reset();
+  while (app_running) {
+    handle_input_events();
+
+    deltaTime = (float)timer.elapse_s();
+    timer.reset();
+
+    glClearColor(backgroundColor.x(), backgroundColor.y(), backgroundColor.z(),
+                 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, wnd_width, wnd_height);
+
+    if (bookLoaded && !isLoadingBook) {
+      if (!openSwitchPageWnd)
+        scene_logic();
+      draw_book();
+    } else {
+      // these variables should always gets reseted when not in use
+      leadingPageIdx = -1;
+      autoTurnPage = false;
+      padAfterFirstPage = false;
+    }
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+
+    draw_gui();
+
+    ImGui::EndFrame();
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    if (window)
+      SDL_GL_SwapWindow(window);
+  }
 }
 
 void manga_viewer::draw_gui() {
@@ -629,7 +618,7 @@ void manga_viewer::draw_gui() {
       std::string filepath;
       if (toolkit::open_file_dialog("选择一个 .pdf 或者 .epub 文件导入",
                                     {"*.PDF", "*.EPUB", "*.pdf", "*.epub"},
-                                    "*.pdf, *.epub", filepath)) {
+                                    filepath)) {
         std::thread t(&manga_viewer::on_load_file, this, filepath);
         t.detach();
       }
@@ -645,7 +634,7 @@ void manga_viewer::draw_gui() {
                       .c_str());
       static std::vector<std::string> dpi_names{"300", "216", "144", "72",
                                                 "36"};
-      gui::combo_default(
+      toolkit::opengl3d::combo_default(
           "DPI", dpi_index, dpi_names,
           [&](int current) {
             if (current != -1) {
@@ -670,11 +659,11 @@ void manga_viewer::draw_gui() {
       ImGui::SetItemTooltip("仿真书翻页动画的播放速度。");
 
       ImGui::SeparatorText("渲染选项");
-      gui::color_edit_3("背景颜色", backgroundColor);
+      toolkit::opengl3d::color_edit_3("背景颜色", backgroundColor);
       ImGui::Checkbox("护眼模式", &eyeProtection);
       if (!eyeProtection)
         ImGui::BeginDisabled();
-      gui::color_edit_3("护眼颜色", eyeProtectionColor);
+      toolkit::opengl3d::color_edit_3("护眼颜色", eyeProtectionColor);
       if (!eyeProtection)
         ImGui::EndDisabled();
       ImGui::SeparatorText("IO 选项");
@@ -772,8 +761,7 @@ std::string get_current_time_str() {
   return ss.str();
 }
 
-manga_viewer::manga_viewer() {
-  toolkit::opengl::g_instance.init();
+void manga_viewer::handle_custom_initialization() {
   ImGui::GetIO().IniFilename = nullptr;
 
   if (is_debug) {
@@ -788,7 +776,7 @@ manga_viewer::manga_viewer() {
   }
 
   // enable vsync to save batery
-  glfwSwapInterval(1);
+  set_vsync_state(true);
 
   // prepare page geometry
   resizePageGrid();
@@ -812,15 +800,10 @@ manga_viewer::manga_viewer() {
     return;
   }
 }
-manga_viewer::~manga_viewer() {
-  toolkit::opengl::g_instance.shutdown();
 
+void manga_viewer::handle_custom_cleanup() {
   if (doc)
     fz_drop_document(ctx, doc);
   if (ctx)
     fz_drop_context(ctx);
-}
-
-void manga_viewer::run() {
-  toolkit::opengl::g_instance.run([&]() { main_loop(); });
 }

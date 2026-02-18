@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <tinyfiledialogs.h>
+#include <zlib.h>
 
 namespace fs = std::filesystem;
 

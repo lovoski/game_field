@@ -24,7 +24,7 @@ After ensuring you have vcpkg repository cloned to your local directory, please 
 Finally you can execute the following commands to have vcpkg download and compile the external dependencies, affter a while, you can use cmake extension in your IDE to configure the entire project, or configure the project with cmake manually. I would recommend vscode+cmake extesion.
 
 ```cmd
-./vcpkg/vcpkg install assimp glad zlib cgal sdl2 sdl2-image sdl2-ttf sdl2-mixer mujoco
+./vcpkg/vcpkg install assimp glad zlib cgal sdl2 sdl2-image sdl2-ttf sdl2-mixer mujoco boost-asio
 ```
 
 The default font can be found [here](https://drive.google.com/file/d/17pHVEJhTXmY_WpZ4PlKX7iFsDCJjwWYT/view?usp=sharing).

@@ -64,6 +64,11 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   session_options.SetInterOpNumThreads(1);
   session_options.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_ALL);
+
+  // Avoid OOM error for large models
+  session_options.EnableCpuMemArena();
+  session_options.EnableMemPattern();
+
   try {
     session =
         Ort::Session(env, toolkit::string_to_wstring(onnx_filepath).c_str(),

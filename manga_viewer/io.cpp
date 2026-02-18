@@ -88,7 +88,7 @@ void manga_viewer::on_load_file(std::string filepath) {
   activeFilePath = filepath;
 
   // update the window title
-  glfwSetWindowTitle(toolkit::opengl::g_instance.window, filepath.c_str());
+  SDL_SetWindowTitle(window, filepath.c_str());
 
   // clear cached pages
   texturePoolPageIdxData.on([&](std::vector<int> &tppid) {
@@ -136,7 +136,7 @@ void manga_viewer::on_load_file(std::string filepath) {
 void manga_viewer::resetTexturePool(int limit) {
   limit = std::clamp(limit, 1, 255);
   texturePoolIdx = 0;
-  texturePoolData.on([&](std::vector<toolkit::opengl::texture> &texData) {
+  texturePoolData.on([&](std::vector<toolkit::opengl3d::texture> &texData) {
     for (auto &tex : texData)
       tex.del();
     texData.clear();
@@ -148,7 +148,7 @@ void manga_viewer::resetTexturePool(int limit) {
       [&](std::vector<int> &tppid) { tppid.resize(limit, -1); });
 }
 
-const toolkit::opengl::texture &manga_viewer::getTextureFromPool(int pageIdx) {
+const toolkit::opengl3d::texture &manga_viewer::getTextureFromPool(int pageIdx) {
   // pageIdx can't be negative
   pageIdx = std::max(0, pageIdx);
   if (!bookLoaded.load() || (padAfterFirstPage && pageIdx == 1))
@@ -174,7 +174,7 @@ const toolkit::opengl::texture &manga_viewer::getTextureFromPool(int pageIdx) {
   toolkit::assets::image pageCache;
   // load low res image or white texture
   loadPageCacheFromFile(pageIdx, pageCache);
-  texturePoolData.on([&](std::vector<toolkit::opengl::texture> &texData) {
+  texturePoolData.on([&](std::vector<toolkit::opengl3d::texture> &texData) {
     texData[texturePoolIdx].set_data_from_image(pageCache);
     texData[texturePoolIdx].set_parameters(
         {{GL_TEXTURE_MIN_FILTER, GL_LINEAR},
@@ -303,7 +303,7 @@ void manga_viewer::applyHighResQueue() {
             }
           }
         });
-        texturePoolData.on([&](std::vector<toolkit::opengl::texture> &texData) {
+        texturePoolData.on([&](std::vector<toolkit::opengl3d::texture> &texData) {
           for (int i = 0; i < matchedIndices.size(); i++) {
             if (matchedIndices[i] == -1)
               continue;

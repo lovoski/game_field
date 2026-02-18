@@ -1,8 +1,9 @@
 #pragma once
 
 #include "toolkit/math.hpp"
-#include "toolkit/opengl/base.hpp"
-#include "toolkit/opengl/gui/utils.hpp"
+#include "toolkit/opengl3d/engine.hpp"
+#include "toolkit/opengl3d/base.hpp"
+#include "toolkit/opengl3d/gui.hpp"
 #include "toolkit/reflect.hpp"
 #include "toolkit/utils.hpp"
 
@@ -94,16 +95,14 @@ private:
   std::vector<T> data;
 };
 
-class manga_viewer {
+class manga_viewer : public toolkit::opengl3d::engine3d {
 public:
-  manga_viewer();
-  ~manga_viewer();
+  void handle_custom_cleanup() override;
+  void handle_custom_initialization() override;
 
-  void run();
+  void run() override;
 
 private:
-  void main_loop();
-
   void draw_gui();
   void draw_book();
 
@@ -132,11 +131,11 @@ private:
 
   int texturePoolIdx = 0;
   thread_safe_vector<int> texturePoolPageIdxData;
-  thread_safe_vector<toolkit::opengl::texture> texturePoolData;
+  thread_safe_vector<toolkit::opengl3d::texture> texturePoolData;
   std::atomic<float> first_page_width_div_height;
   void resetTexturePool(int limit);
   void loadPageCacheFromFile(int pageIdx, toolkit::assets::image &result);
-  const toolkit::opengl::texture &getTextureFromPool(int pageIdx);
+  const toolkit::opengl3d::texture &getTextureFromPool(int pageIdx);
   thread_safe_vector<std::pair<int, toolkit::assets::image>> highResImageQueue;
   std::mutex docLoadingLock;
   thread_pool tpool;
@@ -153,10 +152,10 @@ private:
   bool pageFromRightToLeft = true, autoTurnPage = false,
        manuallyTurningPage = false;
   bool pageFlowRTL = true;
-  toolkit::opengl::texture whiteTexture;
-  toolkit::opengl::compute_shader createPageGeometryProgram,
+  toolkit::opengl3d::texture whiteTexture;
+  toolkit::opengl3d::compute_shader createPageGeometryProgram,
       deformPageGeometryProgram;
-  toolkit::opengl::buffer pageIndexBuffer, pageVertexBuffer,
+  toolkit::opengl3d::buffer pageIndexBuffer, pageVertexBuffer,
       deformedPageVertexBuffer;
 
   bool padAfterFirstPage = false;
@@ -165,9 +164,6 @@ private:
   float cameraHalfRangeY = defaultCameraHalfRangeY;
   toolkit::math::vector3 cameraPos = toolkit::math::vector3(0, 0.5f, 1);
   toolkit::math::matrix4 vp = toolkit::math::matrix4::Identity();
-
-  bool mouseFirstMove = true;
-  toolkit::math::vector2 mouseLastPos, mouseCurrentPos;
 
   float deltaTime = 0.0f;
   toolkit::stopwatch timer;
