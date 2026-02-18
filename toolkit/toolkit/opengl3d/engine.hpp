@@ -80,8 +80,9 @@ REFLECT(active_camera_manipulate_data, camera_pivot, initial_factor, speed_pow,
 
 class engine3d : public iapp {
 public:
-  void init(int width = 1920, int height = 1080, std::string title = "engine3d",
-            int majorVersion = 4, int minorVersion = 6);
+  virtual void init(int width = 1920, int height = 1080,
+                    std::string title = "engine3d", int majorVersion = 4,
+                    int minorVersion = 6);
   virtual void run();
   virtual void shutdown();
 

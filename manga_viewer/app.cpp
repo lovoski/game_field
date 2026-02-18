@@ -813,7 +813,109 @@ std::string get_current_time_str() {
   return ss.str();
 }
 
-void manga_viewer::handle_custom_initialization() {
+void manga_viewer::init(int width, int height, std::string title,
+                        int majorVersion, int minorVersion) {
+  wnd_width = width;
+  wnd_height = height;
+
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS |
+               SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) != 0) {
+    printf("Error: SDL_Init failed: %s\n", SDL_GetError());
+    return;
+  }
+
+  // Set GL attributes for modern OpenGL
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, majorVersion);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, minorVersion);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS,
+                      SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+
+  SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+  // Optimize for compute shader performance
+  SDL_SetHint(SDL_HINT_VIDEO_WINDOW_SHARE_PIXEL_FORMAT, "1");
+  SDL_SetHint(SDL_HINT_OPENGL_ES_DRIVER, "0"); // Ensure desktop OpenGL, not ES
+
+  window = SDL_CreateWindow(
+      title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+      static_cast<int>(width), static_cast<int>(height),
+      SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
+  if (!window) {
+    printf("Failed to create SDL window: %s\n", SDL_GetError());
+    return;
+  }
+  reset_wnd_drawable_size();
+
+  gl_context = SDL_GL_CreateContext(window);
+  if (!gl_context) {
+    printf("Failed to create GL context: %s\n", SDL_GetError());
+    return;
+  }
+
+  // Explicitly make the context current (required for proper compute shader
+  // performance)
+  if (SDL_GL_MakeCurrent(window, gl_context) != 0) {
+    printf("Failed to make GL context current: %s\n", SDL_GetError());
+    return;
+  }
+
+  // Load GL functions with glad
+  if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) {
+    printf("Failed to load glad\n");
+    return;
+  }
+
+  // ImGui + SDL2 + OpenGL3 initialization
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+
+  // Setup Platform/Renderer bindings
+  ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
+
+  // Use GLSL version string for ImGui OpenGL3 backend
+  // Construct version string like "#version 430"
+  char glsl_version[64];
+  snprintf(glsl_version, sizeof(glsl_version), "#version %d%d0", majorVersion,
+           minorVersion);
+  // For core profile we often pass "#version 430" etc. ImGui backend accepts
+  // string like "#version 330" But some combinations require tweak; caller may
+  // adjust if needed.
+  ImGui_ImplOpenGL3_Init(glsl_version);
+
+  ImPlot::CreateContext();
+  set_vsync_state(should_vsync);
+
+  reset();
+
+  // init imgui
+  imgui_io = &ImGui::GetIO();
+  imgui_io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  imgui_io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  imgui_io->IniFilename = "engine3d_layout.ini";
+
+  // load optional default font
+  if (std::filesystem::exists("font.ttf")) {
+    imgui_io->Fonts->AddFontFromFileTTF(
+        "font.ttf", 20.0f, nullptr,
+        imgui_io->Fonts->GetGlyphRangesChineseFull());
+    std::cout << "Default font loaded from ./font.ttf" << std::endl;
+  } else {
+    std::cout << "Default font not found at ./font.ttf, use imgui internal "
+                 "font without utf-8 support"
+              << std::endl;
+  }
+
   ImGui::GetIO().IniFilename = nullptr;
 
   if (is_debug) {

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "toolkit/math.hpp"
-#include "toolkit/opengl3d/engine.hpp"
 #include "toolkit/opengl3d/base.hpp"
+#include "toolkit/opengl3d/engine.hpp"
 #include "toolkit/opengl3d/gui.hpp"
 #include "toolkit/reflect.hpp"
 #include "toolkit/utils.hpp"
@@ -97,8 +97,10 @@ private:
 
 class manga_viewer : public toolkit::opengl3d::engine3d {
 public:
+  void init(int width = 1920, int height = 1080, std::string title = "Manga Viewer",
+            int majorVersion = 4, int minorVersion = 6) override;
+
   void handle_custom_cleanup() override;
-  void handle_custom_initialization() override;
 
   void run() override;
 
