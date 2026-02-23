@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_subdirectory("toolkit")
-add_subdirectory("manga_viewer")
 
 include(cmake/find_onnxrt.cmake)
 
