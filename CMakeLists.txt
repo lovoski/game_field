@@ -14,10 +14,6 @@ add_executable(engine3d main3d.cpp)
 target_link_libraries(engine3d PRIVATE toolkit)
 target_include_directories(engine3d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
-add_executable(engine2d main2d.cpp)
-target_link_libraries(engine2d PRIVATE toolkit)
-target_include_directories(engine2d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
-
 add_executable(
   craft
   craft/main.cpp
