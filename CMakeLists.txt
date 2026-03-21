@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(engine_test)
+project(engine3d)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,9 +10,9 @@ add_subdirectory("toolkit")
 
 include(cmake/find_onnxrt.cmake)
 
-add_executable(engine3d main3d.cpp)
-target_link_libraries(engine3d PRIVATE toolkit)
-target_include_directories(engine3d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+add_executable(editor3d editor3d.cpp)
+target_link_libraries(editor3d PRIVATE toolkit)
+target_include_directories(editor3d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
   craft
