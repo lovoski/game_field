@@ -251,16 +251,15 @@ layout(std430, binding = 0) buffer CascadeVPMatrices {
 uniform int num_cascades;
 uniform int csm_depth_dim;
 
-uniform float max_bias;
-uniform float min_bias;
-
-uniform vec2 viewport_size;
-
-uniform int pcf_kernal_size;
+uniform float normal_offset_scale;
+uniform float bias_scale;
+uniform bool debug_cascades;
+uniform float shadow_weight;
 
 uniform vec3 light_dir;
 
 uniform float csm_cascades[10];
+uniform float csm_texel_sizes[8];
 
 uniform sampler2D scene_pos;
 uniform sampler2D scene_normal;
@@ -288,75 +287,104 @@ float random(vec2 st) {
 }
 
 void main() {
-  frag_color = vec4(1.0);
-  return;
+  if (texture(scene_mask, texcoord).r != 1.0) {
+    discard;
+  }
 
-  // vec3 l_dir = -normalize(light_dir);
-  // vec2 viewport_texel = vec2(1.0)/viewport_size;
+  vec3 frag_world_pos = texture(scene_pos, texcoord).xyz;
+  vec3 frag_normal = normalize(2.0 * texture(scene_normal, texcoord).xyz - 1.0);
+  vec3 l_dir = -normalize(light_dir);
 
-  // vec4 mask_value = texture(scene_mask, texcoord);
-  // if (mask_value.r == 0) {
-  //   // force white background
-  //   frag_color = vec4(1.0);
-  //   return;
-  // }
+  // Determine linear depth in camera view space for cascade selection
+  vec4 cam_space_pos = cam_view * vec4(frag_world_pos, 1.0);
+  float linear_depth = -cam_space_pos.z / cam_space_pos.w;
 
-  // vec3 frag_world_pos = texture(scene_pos, texcoord).xyz;
-  // vec3 frag_world_normal = normalize(2*texture(scene_normal, texcoord).xyz-vec3(1.0));
-  // vec4 cam_space_pos = cam_view * vec4(frag_world_pos, 1.0);
-  // cam_space_pos.xyz /= cam_space_pos.w;
-  // float linear_depth = -cam_space_pos.z;
-  // int match_cascade = -1;
-  // for (int i = 0; i < num_cascades; i++) {
-  //   if (linear_depth > csm_cascades[i] && linear_depth <= csm_cascades[i+1]) {
-  //     match_cascade = i;
-  //     break;
-  //   }
-  // }
-  // if (match_cascade < 0)
-  //   discard;
+  int match_cascade = -1;
+  for (int i = 0; i < num_cascades; i++) {
+    if (linear_depth >= csm_cascades[i] && linear_depth < csm_cascades[i+1]) {
+      match_cascade = i;
+      break;
+    }
+  }
 
-  // mat4 shadow_vp = csm_vp_mat[match_cascade];
-  // vec4 lp_frag_world_pos = shadow_vp * vec4(frag_world_pos, 1.0);
-  // lp_frag_world_pos.xyz /= lp_frag_world_pos.w;
+  if (match_cascade < 0) {
+    float diffuse = max(0.0, dot(frag_normal, l_dir));
+    float shadow = 1.0 + shadow_weight * (diffuse - 1.0);
+    frag_color = vec4(vec3(shadow), 1.0);
+    return;
+  }
 
-  // float cos_alpha = max(0.05, dot(frag_world_normal, l_dir));
-  // float bias = mix(max_bias, min_bias, cos_alpha);
-  // float frag_depth_value = (lp_frag_world_pos.z + 1.0) * 0.5;
-  // float repaired_depth = frag_depth_value - bias;
+  // --- Adaptive normal offset ---
+  // Offset the world position along the surface normal before projecting into
+  // light space. The offset scales with this cascade's texel size and grows at
+  // grazing angles where depth-only bias is insufficient.
+  float cos_theta = dot(frag_normal, l_dir);
+  float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+  float texel_size = csm_texel_sizes[match_cascade];
+  vec3 offset_pos = frag_world_pos + frag_normal * (sin_theta * texel_size * normal_offset_scale);
 
-  // vec2 shadow_texcoord = 0.5 * (lp_frag_world_pos.xy + vec2(1.0));
-  // shadow_texcoord.x = shadow_texcoord.x/float(num_cascades)+float(match_cascade)/float(num_cascades);
-  // // float shadowmap_value = texture(cascade_depth, shadow_texcoord).r;
-  // // float shadow = repaired_depth > shadowmap_value ? 0.0 : 1.0;
+  // Project the offset position into the matched cascade's light space
+  mat4 shadow_vp = csm_vp_mat[match_cascade];
+  vec4 lp_pos = shadow_vp * vec4(offset_pos, 1.0);
+  lp_pos.xyz /= lp_pos.w;
 
-  // float shadow = 0.0;
-  // float rand_angle = random(texcoord) * 2.0 * 3.14159265;
-  // float search_radius = 2.5 / float(csm_depth_dim);
-  // mat2 rotation_matrix = mat2(cos(rand_angle), sin(rand_angle), -sin(rand_angle), cos(rand_angle));
-  // for (int i = 0; i < POISSON_DISK.length(); i++) {
-  //   vec2 offset = rotation_matrix * POISSON_DISK[i];
-  //   offset.x /= float(num_cascades);
-  //   vec2 tmp_shadow_texcoord = shadow_texcoord + offset * search_radius;
-  //   shadow += texture(cascade_depth, vec3(tmp_shadow_texcoord, repaired_depth));
-  // }
-  // shadow /= POISSON_DISK.length();
-  // frag_color = vec4(vec3(shadow), 1.0);
+  // --- Receiver-plane depth bias (adaptive to surface orientation) ---
+  // Compute light-space partial derivatives of the depth to determine
+  // how much depth changes per shadow-map texel for this surface.
+  // This replaces a fixed min/max bias with a geometrically-correct value.
+  vec3 light_forward = normalize(light_dir);
+  vec3 light_right_axis = normalize(cross(light_forward, frag_normal));
+  // Fallback when normal is parallel to light
+  if (length(light_right_axis) < 0.001)
+    light_right_axis = normalize(cross(light_forward, vec3(0.0, 1.0, 0.0)));
+  vec3 light_up_axis = cross(light_right_axis, light_forward);
 
-  // if (match_cascade == 0)
-  //   frag_color = vec4(1.0,0.0,0.0,1.0);
-  // else if (match_cascade == 1)
-  //   frag_color = vec4(0.0,1.0,0.0,1.0);
-  // else if (match_cascade == 2)
-  //   frag_color = vec4(0.0,0.0,1.0,1.0);
-  // else if (match_cascade == 3)
-  //   frag_color = vec4(1.0,0.0,1.0,1.0);
-  // else if (match_cascade == 4)
-  //   frag_color = vec4(0.0,1.0,1.0,1.0);
-  // else if (match_cascade == 5)
-  //   frag_color = vec4(1.0,1.0,0.0,1.0);
-  // else
-  //   frag_color = vec4(1.0,1.0,1.0,1.0);
+  // dz/du and dz/dv: how much depth changes per texel in each shadow-map axis
+  float dz_du = dot(light_right_axis, frag_normal);
+  float dz_dv = dot(light_up_axis, frag_normal);
+  float receiver_plane_bias = sqrt(dz_du * dz_du + dz_dv * dz_dv);
+  // Scale by the cascade's depth-per-texel and a user-controllable multiplier
+  // Add a small constant minimum to avoid zero bias on perfectly perpendicular surfaces
+  float depth_bias = (receiver_plane_bias * texel_size + texel_size * 0.002) * bias_scale;
+
+  float frag_depth_value = (lp_pos.z + 1.0) * 0.5;
+  float repaired_depth = frag_depth_value - depth_bias;
+
+  // Compute shadow texcoords in the cascade depth atlas
+  vec2 shadow_texcoord = 0.5 * (lp_pos.xy + vec2(1.0));
+  shadow_texcoord.x = shadow_texcoord.x / float(num_cascades)
+                    + float(match_cascade) / float(num_cascades);
+
+  // Poisson disk PCF sampling with random rotation
+  float shadow = 0.0;
+  float rand_angle = random(texcoord) * 2.0 * 3.14159265;
+  float search_radius = 2.5 / float(csm_depth_dim);
+  mat2 rotation_matrix = mat2(cos(rand_angle), sin(rand_angle),
+                              -sin(rand_angle), cos(rand_angle));
+  for (int i = 0; i < 16; i++) {
+    vec2 offset = rotation_matrix * POISSON_DISK[i];
+    offset.x /= float(num_cascades);
+    vec2 tmp_shadow_texcoord = shadow_texcoord + offset * search_radius;
+    shadow += texture(cascade_depth, vec3(tmp_shadow_texcoord, repaired_depth));
+  }
+  shadow /= 16.0;
+
+  float diffuse = max(0.0, cos_theta);
+  shadow = min(diffuse, shadow);
+  shadow = 1.0 + shadow_weight * (shadow - 1.0);
+
+  if (debug_cascades) {
+    const vec3 cascade_colors[8] = vec3[](
+      vec3(1.0, 0.2, 0.2), vec3(0.2, 1.0, 0.2), vec3(0.2, 0.2, 1.0),
+      vec3(1.0, 1.0, 0.2), vec3(1.0, 0.2, 1.0), vec3(0.2, 1.0, 1.0),
+      vec3(1.0, 0.6, 0.2), vec3(0.6, 0.2, 1.0)
+    );
+    vec3 tint = cascade_colors[match_cascade % 8];
+    frag_color = vec4(mix(vec3(shadow), tint, 0.45), 1.0);
+    return;
+  }
+
+  frag_color = vec4(vec3(shadow), 1.0);
 }
 )";
 

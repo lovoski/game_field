@@ -1,7 +1,6 @@
+import bvh
 import numpy as np
-from utils import bvh
 import scipy.signal as signal
-from test import forward_kinematics_direct
 
 
 def build_motion_db(files):
@@ -317,7 +316,7 @@ def extract_motion_trajectory(base_dir, output_dir):
         if not file.endswith(".bvh"):
             continue
         data = bvh.load(os.path.join(base_dir, file))
-        gpos, grot = forward_kinematics_direct(
+        grot, gpos = bvh.fk(
             data["positions"], data["rotations"], data["parents"]
         )
         root_pos = gpos[:, 0]

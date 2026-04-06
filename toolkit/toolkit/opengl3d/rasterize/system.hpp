@@ -91,9 +91,12 @@ protected:
       static_mesh_light_mask_program;
   int num_cascades = 3, csm_depth_dim = 2048, pcf_kernal_size = 1;
   texture noise_tex_random;
-  float csm_split_lambda = 0.93f, csm_min_bias = 0.0001f,
-        csm_max_bias = 0.0008f, csm_cascades[10];
+  bool enable_csm = true, csm_debug_cascades = false;
+  float csm_split_lambda = 0.93f, csm_cascades[10];
+  float csm_normal_offset_scale = 1.5f, csm_bias_scale = 1.0f;
+  float csm_texel_sizes[10];
   void resize_csm_buffer();
+  void compute_csm_matrices(camera &cam_comp, transform &cam_trans);
   // csm cache
   buffer csm_vp_matrix_buffer;
   std::vector<math::matrix4> csm_vp_matrix;
@@ -122,10 +125,10 @@ protected:
 DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
-               sun_v, sun_h, sun_turbidity, sun_color, num_cascades,
-               csm_depth_dim, pcf_kernal_size, csm_split_lambda, csm_min_bias,
-               csm_max_bias, shadowmap_max_bias, shadowmap_min_bias,
-               enable_fxaa, canvas_width, canvas_height, use_pure_color_bg,
-               bg_color)
+               sun_v, sun_h, sun_turbidity, sun_color, enable_csm,
+               num_cascades, csm_depth_dim, pcf_kernal_size, csm_split_lambda,
+               csm_normal_offset_scale, csm_bias_scale, shadowmap_max_bias,
+               shadowmap_min_bias, enable_fxaa, canvas_width, canvas_height,
+               use_pure_color_bg, bg_color, enable_wireframe)
 
 }; // namespace toolkit::opengl3d

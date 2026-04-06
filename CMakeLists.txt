@@ -18,6 +18,8 @@ add_executable(
   craft
   craft/main.cpp
   craft/craft.cpp
+  craft/voxel.cpp
+  craft/voxel_render.cpp
 )
 target_link_libraries(craft PRIVATE toolkit)
 target_include_directories(craft PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
