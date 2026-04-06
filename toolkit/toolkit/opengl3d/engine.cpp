@@ -91,75 +91,6 @@ void engine3d::init(int width, int height, std::string title, int majorVersion,
     return;
   }
 
-  //   // Detect and log GPU information
-  //   {
-  //     const char *vendor = (const char *)glGetString(GL_VENDOR);
-  //     const char *renderer = (const char *)glGetString(GL_RENDERER);
-  //     const char *version = (const char *)glGetString(GL_VERSION);
-
-  //     printf("OpenGL Context Information:\n");
-  //     printf("  Vendor: %s\n", vendor ? vendor : "Unknown");
-  //     printf("  Renderer: %s\n", renderer ? renderer : "Unknown");
-  //     printf("  Version: %s\n", version ? version : "Unknown");
-
-  // #ifdef _WIN32
-  //     // Try to enumerate adapters using DXGI to find the most powerful one
-  //     IDXGIFactory *pFactory = nullptr;
-  //     if (SUCCEEDED(
-  //             CreateDXGIFactory(__uuidof(IDXGIFactory), (void **)&pFactory)))
-  //             {
-  //       IDXGIAdapter *pAdapter = nullptr;
-  //       IDXGIAdapter *pBestAdapter = nullptr;
-  //       UINT bestAdapterMemory = 0;
-  //       UINT adapterIndex = 0;
-
-  //       printf("  Detected Graphics Adapters:\n");
-  //       while (pFactory->EnumAdapters(adapterIndex, &pAdapter) !=
-  //              DXGI_ERROR_NOT_FOUND) {
-  //         DXGI_ADAPTER_DESC desc;
-  //         if (SUCCEEDED(pAdapter->GetDesc(&desc))) {
-  //           char adapterName[256];
-  //           WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1,
-  //           adapterName,
-  //                               sizeof(adapterName), nullptr, nullptr);
-
-  //           printf("    [%d] %s (VRAM: %.2f GB)\n", adapterIndex,
-  //           adapterName,
-  //                  desc.DedicatedVideoMemory / (1024.0 * 1024.0 * 1024.0));
-
-  //           // Select adapter with most dedicated video memory (usually the
-  //           // discrete GPU)
-  //           if (desc.DedicatedVideoMemory > bestAdapterMemory) {
-  //             bestAdapterMemory = desc.DedicatedVideoMemory;
-  //             if (pBestAdapter)
-  //               pBestAdapter->Release();
-  //             pBestAdapter = pAdapter;
-  //             pBestAdapter->AddRef();
-  //           }
-  //         }
-  //         pAdapter->Release();
-  //         adapterIndex++;
-  //       }
-
-  //       if (pBestAdapter) {
-  //         DXGI_ADAPTER_DESC bestDesc;
-  //         if (SUCCEEDED(pBestAdapter->GetDesc(&bestDesc))) {
-  //           char bestAdapterName[256];
-  //           WideCharToMultiByte(CP_UTF8, 0, bestDesc.Description, -1,
-  //                               bestAdapterName, sizeof(bestAdapterName),
-  //                               nullptr, nullptr);
-  //           printf("  Selected GPU: %s (%.2f GB VRAM)\n", bestAdapterName,
-  //                  bestDesc.DedicatedVideoMemory / (1024.0 * 1024.0 *
-  //                  1024.0));
-  //         }
-  //         pBestAdapter->Release();
-  //       }
-
-  //       pFactory->Release();
-  //     }
-  // #endif
-  //   }
-
   // ImGui + SDL2 + OpenGL3 initialization
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -262,6 +193,10 @@ void main() {
 void engine3d::shutdown() {
   // custom cleanup
   handle_custom_cleanup();
+
+  // shutdown physics world
+  if (physics_world_sys)
+    physics_world_sys->shutdown(registry);
 
   // ImGui + SDL cleanup
   ImPlot::DestroyContext();
@@ -511,6 +446,14 @@ void engine3d::run() {
     handle_input_events();
     if (!window)
       break;
+
+    // Process deferred scene load before anything touches the registry
+    if (pending_scene_load.has_value()) {
+      deserialize(pending_scene_load.value());
+      pending_scene_load.reset();
+      SDL_Log("Deferred scene load applied");
+    }
+
     if (is_key_triggered(SDLK_0) && is_key_pressed(SDLK_LCTRL)) {
       scene_wnd_size.x() = wnd_width;
       scene_wnd_size.x() = wnd_height;
@@ -528,13 +471,16 @@ void engine3d::run() {
     if (!in_game_mode)
       active_camera_manipulate(dt);
     ss_handler_system->proxy_update(registry, dt);
-    // physics_system->update(registry, dt);
+    physics_world_sys->step(registry, dt);
 
     if (__start_logic_tick_counter < 10)
       __start_logic_tick_counter++;
     else
       handle_game_logic_tick(dt);
 
+    default_render_sys->push_custom_draw([&]() {
+      physics_world_sys->debug_draw_world(registry, active_cam_comp.vp);
+    });
     default_render_sys->render(registry, active_cam_trans, active_cam_comp);
 
     glClearColor(0, 0, 0, 1);
@@ -570,6 +516,7 @@ void engine3d::reset() {
   transform_hierarchy_sys = register_sys<transform_system>();
   default_render_sys = register_sys<defered_render_system>();
   ss_handler_system = register_sys<sub_system_handler>();
+  physics_world_sys = register_sys<physics_world>();
 }
 
 void engine3d::add_default_objects() {

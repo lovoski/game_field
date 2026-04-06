@@ -21,3 +21,5 @@ __pycache__
 /python/data
 
 /scripts/onnxruntime/models
+
+/motion_matching/data

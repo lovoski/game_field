@@ -48,10 +48,12 @@
 #include "toolkit/opengl3d/base.hpp"
 #include "toolkit/opengl3d/components/camera.hpp"
 #include "toolkit/opengl3d/rasterize/system.hpp"
+#include "toolkit/opengl3d/components/physics_world.hpp"
 
 #include "toolkit/opengl3d/native_subsys.hpp"
 
 #include <ImGuizmo.h>
+#include <optional>
 
 namespace toolkit::opengl3d {
 
@@ -106,6 +108,7 @@ public:
   defered_render_system *default_render_sys = nullptr;
   transform_system *transform_hierarchy_sys = nullptr;
   sub_system_handler *ss_handler_system = nullptr;
+  physics_world *physics_world_sys = nullptr;
 
   float click_selection_max_sin = 2e-2f;
   std::vector<ray_query_data> selection_candidates;
@@ -206,6 +209,9 @@ protected:
   shader quad_program;
 
   math::vector2 scene_wnd_size, scene_wnd_pos;
+
+  // Deferred scene load — set during GUI, processed at start of next frame
+  std::optional<nlohmann::json> pending_scene_load;
 
   active_camera_manipulate_data cam_manip_data;
 

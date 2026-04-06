@@ -25,12 +25,12 @@ target_link_libraries(craft PRIVATE toolkit)
 target_include_directories(craft PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
-  motion_matching
-  motion_matching/main.cpp
+  motion_matching_loco
+  motion_matching/main_loco.cpp
   motion_matching/motion_matching.cpp
 )
-target_link_libraries(motion_matching PRIVATE toolkit)
-target_include_directories(motion_matching PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+target_link_libraries(motion_matching_loco PRIVATE toolkit)
+target_include_directories(motion_matching_loco PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
   camdmpp

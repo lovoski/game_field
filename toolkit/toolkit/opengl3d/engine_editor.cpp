@@ -1,5 +1,8 @@
 #include "toolkit/opengl3d/components/actor.hpp"
+#include "toolkit/opengl3d/components/collider.hpp"
 #include "toolkit/opengl3d/components/mesh.hpp"
+#include "toolkit/opengl3d/components/physics_constraint.hpp"
+#include "toolkit/opengl3d/components/rigidbody.hpp"
 #include "toolkit/opengl3d/engine.hpp"
 #include "toolkit/opengl3d/gui.hpp"
 
@@ -338,11 +341,10 @@ void engine3d::draw_main_menubar() {
         if (open_file_dialog("Deserialize scene file", {"*.scene"}, filepath)) {
           std::ifstream input(filepath);
           if (input.is_open()) {
-            auto data = nlohmann::json::parse(
+            pending_scene_load = nlohmann::json::parse(
                 std::string((std::istreambuf_iterator<char>(input)),
                             std::istreambuf_iterator<char>()));
-            deserialize(data);
-            SDL_Log("Load scene from %s", filepath.c_str());
+            SDL_Log("Scene load queued from %s", filepath.c_str());
           } else {
             SDL_Log("Failed to load scene from %s", filepath.c_str());
           }
@@ -848,6 +850,19 @@ void engine3d::draw_components_gui(entt::entity current_entity) {
     if (ImGui::CollapsingHeader("Skinned Mesh Bundle (Pannel)"))
       bundle_comp->draw_gui(registry, current_entity);
   }
+  if (auto rb_comp = registry.try_get<rigidbody>(current_entity)) {
+    if (ImGui::CollapsingHeader("Rigidbody"))
+      rb_comp->draw_gui(registry, current_entity);
+  }
+  if (auto col_comp = registry.try_get<collider>(current_entity)) {
+    if (ImGui::CollapsingHeader("Collider"))
+      col_comp->draw_gui(registry, current_entity);
+  }
+  if (auto constraint_comp =
+          registry.try_get<physics_constraint>(current_entity)) {
+    if (ImGui::CollapsingHeader("Physics Constraint"))
+      constraint_comp->draw_gui(registry, current_entity);
+  }
   ss_handler_system->proxy_draw_gui(registry, current_entity);
 }
 
@@ -858,6 +873,10 @@ void engine3d::draw_systems_gui() {
   }
   if (ImGui::BeginMenu("Transform Hierarchy System")) {
     transform_hierarchy_sys->draw_menu_gui();
+    ImGui::EndMenu();
+  }
+  if (ImGui::BeginMenu("Physics World System")) {
+    physics_world_sys->draw_menu_gui();
     ImGui::EndMenu();
   }
 }

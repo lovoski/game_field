@@ -66,7 +66,7 @@ public:
                      toolkit::opengl3d::camera &cam_comp) override {
     toolkit::opengl3d::draw_sphere(
         registry.get<toolkit::transform>(target).world_pos(), cam_comp.vp, 0.1f,
-        toolkit::math::vector3(1, 1, 1), false, 0.9f, false);
+        toolkit::math::vector3(1, 1, 1), false, 0.5f, false);
 
     auto &object_trans = registry.get<toolkit::transform>(entity);
     toolkit::opengl3d::draw_sphere(object_trans.world_pos(), cam_comp.vp, 0.1f,

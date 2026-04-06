@@ -7,7 +7,7 @@ This is my personal toolkit dedicated to computer graphics algorithm implementat
 This code base requires c++20 compatible compiler. I use vcpkg for most of the dependency management.
 
 ```cmd
-vcpkg install assimp glad zlib cgal sdl2 sdl2-image sdl2-ttf sdl2-mixer mujoco
+vcpkg install assimp glad zlib cgal sdl2 sdl2-image sdl2-ttf sdl2-mixer
 ```
 
 The default font can be found [here](https://drive.google.com/file/d/17pHVEJhTXmY_WpZ4PlKX7iFsDCJjwWYT/view?usp=sharing).
