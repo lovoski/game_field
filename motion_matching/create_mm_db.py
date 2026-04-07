@@ -3,6 +3,7 @@ import bvh
 import numpy as np
 import scipy.signal as signal
 
+FILE_PATH = os.path.dirname(os.path.realpath(__file__))
 
 def build_motion_db(files):
     Ypos = []
@@ -145,9 +146,9 @@ def build_motion_db(files):
 def compute_db_features(
     Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names
 ):
-    posJoints = np.array([names.index(n) for n in ["LeftToeBase", "RightToeBase"]])
+    posJoints = np.array([names.index(n) for n in ["LeftToe", "RightToe"]])
     velJoints = np.array(
-        [names.index(n) for n in ["LeftToeBase", "RightToeBase", "Hips"]]
+        [names.index(n) for n in ["LeftToe", "RightToe", "Hips"]]
     )
 
     YgloRot, YgloPos, YgloAng, YgloVel = bvh.fk_vel(Yrot, Ypos, Yang, Yvel, parents)
@@ -240,67 +241,25 @@ def create_mm_db(base_dir):
         Xscale=Xscale.astype(np.float32),
     )
 
-
-def process_interact_data(base_dir, output_dir):
-    for file in os.listdir(base_dir):
-        if not file.endswith(".bvh"):
-            continue
-        data = bvh.load(os.path.join(base_dir, file))
-        data["frametime"] = 1.0 / 60.0
-        data["positions"] = 0.01 * data["positions"]
-        data["offsets"] = 0.01 * data["offsets"]
-        nframes, njoints = data["rotations"].shape[0:2]
-        rotations = np.zeros((nframes * 2, njoints, 4), dtype=data["rotations"].dtype)
-        positions = np.zeros((nframes * 2, njoints, 3), dtype=data["positions"].dtype)
-
-        for f in range(1, nframes):
-            rotations[2 * f - 2] = data["rotations"][f - 1]
-            for j in range(njoints):
-                start_rot, end_rot = (
-                    data["rotations"][f - 1, j],
-                    data["rotations"][f, j],
-                )
-                if np.dot(start_rot, end_rot) < 0.0:
-                    end_rot *= -1
-                rotations[2 * f - 1, j] = 0.5 * start_rot + 0.5 * end_rot
-                rotations[2 * f - 1, j] /= np.linalg.norm(rotations[2 * f - 1, j])
-            rotations[2 * f] = data["rotations"][f]
-
-            positions[2 * f - 2] = data["positions"][f - 1]
-            positions[2 * f - 1] = (
-                data["positions"][f - 1] * 0.5 + data["positions"][f] * 0.5
-            )
-            positions[2 * f] = data["positions"][f]
-
-        positions[1] = positions[2]
-        rotations[1] = rotations[2]
-
-        data["offsets"][0] = 0
-        data["rotations"] = rotations
-        data["positions"] = positions
-
-        bvh.save(os.path.join(output_dir, file), data)
-
-
 def process_lafan1_data():
     files = [
         (
-            "motion_matching/data/lafan1_loco/pushAndStumble1_subject5.bvh",
+            os.path.join(FILE_PATH, "data/lafan1_loco/pushAndStumble1_subject5.bvh"),
             397,
             706,
         ),
         (
-            "motion_matching/data/lafan1_loco/run1_subject5.bvh",
+            os.path.join(FILE_PATH, "data/lafan1_loco/run1_subject5.bvh"),
             172,
             14136,
         ),
         (
-            "motion_matching/data/lafan1_loco/walk1_subject5.bvh",
+            os.path.join(FILE_PATH, "data/lafan1_loco/walk1_subject5.bvh"),
             160,
             15518,
         ),
     ]
-    os.makedirs('motion_matching/data/_lafan1_loco', exist_ok=True)
+    os.makedirs(os.path.join(FILE_PATH, 'data/_lafan1_loco'), exist_ok=True)
     for file, start, end in files:
         if not file.endswith(".bvh"):
             continue
@@ -310,45 +269,23 @@ def process_lafan1_data():
         data['offsets'][0] = 0
         data['positions'] = data['positions'][start:end]
         data['rotations'] = data['rotations'][start:end]
-        bvh.save(os.path.join('motion_matching/data/_lafan1_loco', os.path.basename(file)), data)
+        bvh.save(os.path.join(FILE_PATH, 'data/_lafan1_loco', os.path.basename(file)), data)
 
-
-def extract_motion_trajectory(base_dir, output_dir):
-    from scipy.spatial.transform import Rotation
-    from tqdm import tqdm
-
-    for file in tqdm(os.listdir(base_dir)):
-        if not file.endswith(".bvh"):
-            continue
-        data = bvh.load(os.path.join(base_dir, file))
-        grot, gpos = bvh.fk(
-            data["positions"], data["rotations"], data["parents"]
-        )
-        root_pos = gpos[:, 0]
-        root_rot = grot[:, 0]
-        nframes = root_pos.shape[0]
-
-        # we need:
-        # 1. the direction at each frame as the simulated input for left joystick
-        # 2. the root facing direction as the simulated input for right joystick
-
-        root_pos = np.array([1, 0, 1]) * root_pos
-        root_facing = np.zeros((nframes, 3))
-        for f in range(nframes):
-            facing_dir = Rotation.from_quat(root_rot[f, [1, 2, 3, 0]]).apply(
-                np.array([0, 0, 1])
-            )
-            facing_dir[1] = 0
-            facing_dir /= (np.linalg.norm(facing_dir) + 1e-5)
-            root_facing[f] = facing_dir
-        root_pos = signal.savgol_filter(root_pos, 31, 3, axis=0, mode='interp')
-        root_facing = signal.savgol_filter(root_facing, 61, 3, axis=0, mode='interp')
-        root_facing = root_facing / np.linalg.norm(root_facing, axis=1, keepdims=True)
-
-        with open(os.path.join(output_dir, file.replace('.bvh', '.txt')), 'w') as f:
-            for frame in range(root_pos.shape[0]):
-                f.write(f'{root_pos[frame, 0]:.3f} {root_pos[frame, 1]:.3f} {root_pos[frame, 2]:.3f} {root_facing[frame, 0]:.3f} {root_facing[frame, 1]:.3f} {root_facing[frame, 2]:.3f}\n')
-
+def formalize_tpose():
+    data = bvh.load(os.path.join(FILE_PATH, 'data/lafan1_tpose.bvh'))
+    data['positions'] = data['positions'][0:1]
+    data['rotations'] = data['rotations'][0:1]
+    data['positions'][0,0] = 0
+    data['offsets'][0] = 0
+    
+    grot, gpos = bvh.fk(data['rotations'], data['positions'], data['parents'])
+    height = np.abs(np.min(gpos[:,:,1]))
+    data['positions'][:,0,1] = height
+    
+    bvh.save(os.path.join(FILE_PATH, 'data/lafan1_tpose.bvh'), data)
 
 if __name__ == "__main__":
-    process_lafan1_data()
+    # formalize_tpose()
+    # process_lafan1_data()
+
+    create_mm_db(os.path.join(FILE_PATH, "data/_lafan1_loco"))

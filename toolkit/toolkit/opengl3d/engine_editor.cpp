@@ -1,8 +1,7 @@
 #include "toolkit/opengl3d/components/actor.hpp"
-#include "toolkit/opengl3d/components/collider.hpp"
 #include "toolkit/opengl3d/components/mesh.hpp"
+#include "toolkit/opengl3d/components/physics_body.hpp"
 #include "toolkit/opengl3d/components/physics_constraint.hpp"
-#include "toolkit/opengl3d/components/rigidbody.hpp"
 #include "toolkit/opengl3d/engine.hpp"
 #include "toolkit/opengl3d/gui.hpp"
 
@@ -850,13 +849,9 @@ void engine3d::draw_components_gui(entt::entity current_entity) {
     if (ImGui::CollapsingHeader("Skinned Mesh Bundle (Pannel)"))
       bundle_comp->draw_gui(registry, current_entity);
   }
-  if (auto rb_comp = registry.try_get<rigidbody>(current_entity)) {
-    if (ImGui::CollapsingHeader("Rigidbody"))
-      rb_comp->draw_gui(registry, current_entity);
-  }
-  if (auto col_comp = registry.try_get<collider>(current_entity)) {
-    if (ImGui::CollapsingHeader("Collider"))
-      col_comp->draw_gui(registry, current_entity);
+  if (auto pb_comp = registry.try_get<physics_body>(current_entity)) {
+    if (ImGui::CollapsingHeader("Physics Body"))
+      pb_comp->draw_gui(registry, current_entity);
   }
   if (auto constraint_comp =
           registry.try_get<physics_constraint>(current_entity)) {

@@ -5,6 +5,7 @@
 #include "toolkit/opengl3d/rasterize/shaders.hpp"
 
 #include "toolkit/opengl3d/experiments/spring_damper.hpp"
+#include "toolkit/opengl3d/experiments/character_controller_manipulate.hpp"
 
 #ifdef _WIN32
 #include <Windows.h>

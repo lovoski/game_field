@@ -45,7 +45,7 @@ REFLECT(dof6_axis_config, lower_limit, upper_limit, stiffness, damping,
 /**
  * Physics constraint (joint) component.
  *
- * Connects this entity's rigidbody to another entity's rigidbody.
+ * Connects this entity's physics_body to another entity's physics_body.
  * The constraint is always placed on the "child" body; `connected_entity`
  * references the "parent" body (like Unity's connectedBody).
  *
