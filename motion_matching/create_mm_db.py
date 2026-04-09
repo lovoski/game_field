@@ -12,12 +12,15 @@ def build_motion_db(files):
     Yang = []
     YrangeStarts = []
     YrangeStops = []
+    
+    joint_offsets = None
 
     for filename, start, stop in files:
 
         for mirrored in [True, False]:
 
             bvhData = bvh.load(filename)
+            joint_offsets = bvhData["offsets"] if joint_offsets is None else joint_offsets
 
             pos = bvhData["positions"][start:stop].copy()
             rot = bvhData["rotations"][start:stop].copy()
@@ -140,6 +143,7 @@ def build_motion_db(files):
         YrangeStops.astype(np.int32),
         parents.astype(np.int32),
         names.tolist(),
+        joint_offsets.astype(np.float32),
     )
 
 
@@ -213,7 +217,7 @@ def create_mm_db(base_dir):
         if not fn.endswith(".bvh"):
             continue
         files.append((os.path.join(base_dir, fn), 0, -1))
-    Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names = build_motion_db(
+    Ypos, Yrot, Yvel, Yang, YrangeStarts, YrangeStops, parents, names, joint_offsets = build_motion_db(
         files
     )
     X, Xoffset, Xscale = compute_db_features(
@@ -239,6 +243,7 @@ def create_mm_db(base_dir):
         X=X.astype(np.float32),
         Xoffset=Xoffset.astype(np.float32),
         Xscale=Xscale.astype(np.float32),
+        joint_offsets=joint_offsets.astype(np.float32),
     )
 
 def process_lafan1_data():
@@ -288,4 +293,4 @@ if __name__ == "__main__":
     # formalize_tpose()
     # process_lafan1_data()
 
-    create_mm_db(os.path.join(FILE_PATH, "data/_lafan1_loco"))
+    create_mm_db(os.path.join(FILE_PATH, "data/_lafan1_loco_repaired"))

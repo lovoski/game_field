@@ -146,18 +146,21 @@ void motion_matching_app::animate_player(float dt) {
       }
     }
 
+    // we assume the motion from database have identity joint rotation at tpose
+    std::vector<math::quat> apply_ori(actor_comp->ordered_entities.size(), math::quat::Identity());
     for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
       auto joint_entity = actor_comp->ordered_entities[i];
       auto &joint_trans = registry.get<transform>(joint_entity);
       if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
         int joint_data_idx = joint_name_to_idx[joint_trans.name];
+        apply_ori[i] = world_rot[joint_data_idx] * scene_tpose_ori[i];
         if (i == 0) {
           math::vector3 world_pos =
               global_trans[joint_data_idx].col(3).head<3>();
           joint_trans.set_world_pos(world_pos);
-          joint_trans.set_world_rot(world_rot[joint_data_idx]);
+          joint_trans.set_world_rot(apply_ori[i]);
         } else {
-          joint_trans.set_local_rot(local_rot[joint_data_idx]);
+          joint_trans.set_world_rot(apply_ori[i]);
         }
       }
     }
@@ -233,6 +236,7 @@ void motion_matching_app::handle_custom_initialization() {
     }
     player_entity = named_entities["player"];
     default_render_sys->resize(wnd_width, wnd_height);
+    transform_hierarchy_sys->update_transform(registry);
 
     // load motion matching db
     auto data = cnpy::npz_load("motion_matching/db.npz");
@@ -289,6 +293,14 @@ void motion_matching_app::handle_custom_initialization() {
     off_pos.resize(parents.size(), math::vector3::Zero());
     off_vel.resize(parents.size(), math::vector3::Zero());
     off_ang.resize(parents.size(), math::vector3::Zero());
+
+    auto &actor_comp = registry.get<actor>(player_entity);
+    scene_tpose_ori.resize(actor_comp.ordered_entities.size(), math::quat::Identity());
+    for (int i = 0; i < actor_comp.ordered_entities.size(); i++) {
+      auto joint_entity = actor_comp.ordered_entities[i];
+      auto &joint_trans = registry.get<transform>(joint_entity);
+      scene_tpose_ori[i] = joint_trans.world_rot();
+    }
 
     // load motion matching joint name mapping
     std::ifstream mapping_input("motion_matching/mapping.json");

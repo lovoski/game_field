@@ -61,6 +61,8 @@ private:
   std::vector<math::quat> off_rot;
   std::vector<math::vector3> off_pos, off_vel, off_ang;
 
+  std::vector<math::quat> scene_tpose_ori;
+
   std::vector<std::array<float, MM_FEATURE_DIM>> X;
   std::array<float, MM_FEATURE_DIM> Xoffset, Xscale;
   std::vector<std::vector<math::vector3>> Ypos, Yvel, Yang;

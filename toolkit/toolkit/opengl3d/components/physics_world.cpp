@@ -526,14 +526,13 @@ void physics_world::step(entt::registry &registry, float dt) {
   // ── Sync registrations: physics bodies ───────────────────────────────
   {
     std::set<entt::entity> live;
-    auto pb_view = registry.view<physics_body, transform>();
-    for (auto e : pb_view) {
-      live.insert(e);
-      auto &pb = pb_view.get<physics_body>(e);
-      if (pb.dirty && registered_bodies.count(e))
-        unregister_body(registry, e);
-      register_body(registry, e);
-    }
+    registry.view<physics_body, transform>().each(
+        [&](entt::entity e, physics_body &pb, transform &) {
+          live.insert(e);
+          if (pb.dirty && registered_bodies.count(e))
+            unregister_body(registry, e);
+          register_body(registry, e);
+        });
     std::vector<entt::entity> stale;
     for (auto e : registered_bodies)
       if (!live.count(e))
@@ -552,16 +551,15 @@ void physics_world::step(entt::registry &registry, float dt) {
   // ── Sync registrations: character controllers ────────────────────────
   {
     std::set<entt::entity> live;
-    auto cc_view = registry.view<character_controller, transform>();
-    for (auto e : cc_view) {
-      live.insert(e);
-      auto &cc = cc_view.get<character_controller>(e);
-      if (cc.dirty && registered_controllers.count(e)) {
-        unregister_controller(cc);
-        registered_controllers.erase(e);
-      }
-      register_controller(registry, e);
-    }
+    registry.view<character_controller, transform>().each(
+        [&](entt::entity e, character_controller &cc, transform &) {
+          live.insert(e);
+          if (cc.dirty && registered_controllers.count(e)) {
+            unregister_controller(cc);
+            registered_controllers.erase(e);
+          }
+          register_controller(registry, e);
+        });
     std::vector<entt::entity> stale;
     for (auto e : registered_controllers)
       if (!live.count(e))
@@ -577,19 +575,15 @@ void physics_world::step(entt::registry &registry, float dt) {
     return;
 
   // ── Push kinematic transforms to Bullet ──────────────────────────────
-  {
-    auto view = registry.view<physics_body, transform>();
-    for (auto e : view) {
-      auto &pb = view.get<physics_body>(e);
-      if (pb.type != body_type::KINEMATIC || !pb.bt_body)
-        continue;
-      auto &t = view.get<transform>(e);
-      btTransform bt_t = to_bt_transform(t.world_pos(), t.world_rot());
-      static_cast<btDefaultMotionState *>(pb.bt_motion_state)
-          ->setWorldTransform(bt_t);
-      static_cast<btRigidBody *>(pb.bt_body)->setWorldTransform(bt_t);
-    }
-  }
+  registry.view<physics_body, transform>().each(
+      [&](entt::entity e, physics_body &pb, transform &t) {
+        if (pb.type != body_type::KINEMATIC || !pb.bt_body)
+          return;
+        btTransform bt_t = to_bt_transform(t.world_pos(), t.world_rot());
+        static_cast<btDefaultMotionState *>(pb.bt_motion_state)
+            ->setWorldTransform(bt_t);
+        static_cast<btRigidBody *>(pb.bt_body)->setWorldTransform(bt_t);
+      });
 
   // ── Step simulation ──────────────────────────────────────────────────
   dynamics_world->getSolverInfo().m_numIterations = solver_iterations;
@@ -598,37 +592,29 @@ void physics_world::step(entt::registry &registry, float dt) {
   dynamics_world->stepSimulation(dt, max_substeps, fixed_timestep);
 
   // ── Pull dynamic transforms from Bullet ──────────────────────────────
-  {
-    auto view = registry.view<physics_body, transform>();
-    for (auto e : view) {
-      auto &pb = view.get<physics_body>(e);
-      if (pb.type != body_type::DYNAMIC || !pb.bt_body)
-        continue;
-      btTransform bt_t;
-      static_cast<btDefaultMotionState *>(pb.bt_motion_state)
-          ->getWorldTransform(bt_t);
-      auto &t = view.get<transform>(e);
-      t.set_world_pos(from_bt(bt_t.getOrigin()));
-      t.set_world_rot(from_bt(bt_t.getRotation()));
-    }
-  }
+  registry.view<physics_body, transform>().each(
+      [&](entt::entity e, physics_body &pb, transform &t) {
+        if (pb.type != body_type::DYNAMIC || !pb.bt_body)
+          return;
+        btTransform bt_t;
+        static_cast<btDefaultMotionState *>(pb.bt_motion_state)
+            ->getWorldTransform(bt_t);
+        t.set_world_pos(from_bt(bt_t.getOrigin()));
+        t.set_world_rot(from_bt(bt_t.getRotation()));
+      });
 
   // ── Sync controller transforms + grounded state ──────────────────────
-  {
-    auto view = registry.view<character_controller, transform>();
-    for (auto e : view) {
-      auto &cc = view.get<character_controller>(e);
-      if (!cc.bt_ghost_object)
-        continue;
-      auto *ghost =
-          static_cast<btPairCachingGhostObject *>(cc.bt_ghost_object);
-      auto *ctrl =
-          static_cast<btKinematicCharacterController *>(cc.bt_controller);
-      auto &t = view.get<transform>(e);
-      t.set_world_pos(from_bt(ghost->getWorldTransform().getOrigin()));
-      cc.grounded = ctrl->onGround();
-    }
-  }
+  registry.view<character_controller, transform>().each(
+      [&](entt::entity e, character_controller &cc, transform &t) {
+        if (!cc.bt_ghost_object)
+          return;
+        auto *ghost =
+            static_cast<btPairCachingGhostObject *>(cc.bt_ghost_object);
+        auto *ctrl =
+            static_cast<btKinematicCharacterController *>(cc.bt_controller);
+        t.set_world_pos(from_bt(ghost->getWorldTransform().getOrigin()));
+        cc.grounded = ctrl->onGround();
+      });
 
   // ── Readback velocities ──────────────────────────────────────────────
   {
