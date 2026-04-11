@@ -467,7 +467,6 @@ void engine3d::run() {
     auto &active_cam_comp = registry.get<camera>(active_camera);
 
     transform_hierarchy_sys->update_transform(registry);
-    default_render_sys->update_scene_buffers(registry);
     default_render_sys->preupdate(registry);
     if (!in_game_mode)
       active_camera_manipulate(dt);
@@ -478,6 +477,13 @@ void engine3d::run() {
       __start_logic_tick_counter++;
     else
       handle_game_logic_tick(dt);
+
+    // Flush transform and camera state after gameplay and camera-follow logic
+    // so scene meshes, skeleton debug, and custom debug draws render from the
+    // same frame state.
+    transform_hierarchy_sys->update_transform(registry);
+    default_render_sys->update_scene_buffers(registry);
+    default_render_sys->preupdate(registry);
 
     default_render_sys->push_custom_draw([&]() {
       physics_world_sys->debug_draw_world(registry, active_cam_comp.vp);

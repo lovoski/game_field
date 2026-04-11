@@ -70,3 +70,9 @@ if __name__ == "__main__":
     bvh.load(os.path.join(base_dir, "lafan1_tpose_baked.bvh")), 
     os.path.join(base_dir, '_lafan1_loco'), 
     os.path.join(base_dir, '_lafan1_loco_repaired'))
+
+  # migrate_tpose(
+  #   bvh.load(os.path.join(base_dir, "pfnn_tpose.bvh")), 
+  #   bvh.load(os.path.join(base_dir, "pfnn_tpose_baked.bvh")), 
+  #   os.path.join(base_dir, 'pfnn_processed'), 
+  #   os.path.join(base_dir, 'pfnn_processed_repaired'))

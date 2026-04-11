@@ -348,6 +348,8 @@ def load(filename, order=None):
     orients = np.array([]).reshape((0, 4))
     offsets = np.array([]).reshape((0, 3))
     parents = np.array([], dtype=int)
+    joint_channels = []
+    joint_orders = []
 
     # Parse the  file, line by line
     for line in f:
@@ -364,6 +366,8 @@ def load(filename, order=None):
             offsets = np.append(offsets, np.array([[0, 0, 0]]), axis=0)
             orients = np.append(orients, np.array([[1, 0, 0, 0]]), axis=0)
             parents = np.append(parents, active)
+            joint_channels.append(())
+            joint_orders.append(None)
             active = (len(parents) - 1)
             continue
 
@@ -385,13 +389,12 @@ def load(filename, order=None):
         chanmatch = re.match(r"\s*CHANNELS\s+(\d+)", line)
         if chanmatch:
             channels = int(chanmatch.group(1))
+            parts = tuple(line.split()[2:2 + channels])
+            joint_channels[active] = parts
             if order is None:
-                channelis = 0 if channels == 3 else 3
-                channelie = 3 if channels == 3 else 6
-                parts = line.split()[2 + channelis:2 + channelie]
-                if any([p not in channelmap for p in parts]):
-                    continue
-                order = "".join([channelmap[p] for p in parts])
+                rotation_parts = [channelmap[p] for p in parts if p in channelmap]
+                if rotation_parts:
+                    joint_orders[active] = "".join(rotation_parts)
             continue
 
         jmatch = re.match(r'^\s*JOINT\s+(.+?)(?:\s*\{)?\s*$', line)
@@ -400,6 +403,8 @@ def load(filename, order=None):
             offsets = np.append(offsets, np.array([[0, 0, 0]]), axis=0)
             orients = np.append(orients, np.array([[1, 0, 0, 0]]), axis=0)
             parents = np.append(parents, active)
+            joint_channels.append(())
+            joint_orders.append(None)
             active = (len(parents) - 1)
             continue
 
@@ -423,29 +428,60 @@ def load(filename, order=None):
         dmatch = line.strip().split()
         if dmatch:
             data_block = np.array(list(map(float, dmatch)))
-            N = len(parents)
             fi = i
-            if channels == 3:
-                positions[fi, 0:1] = data_block[0:3]
-                rotations[fi, :] = data_block[3:].reshape(N, 3)
-            elif channels == 6:
-                data_block = data_block.reshape(N, 6)
-                positions[fi, :] = data_block[:, 0:3]
-                rotations[fi, :] = data_block[:, 3:6]
-            elif channels == 9:
-                positions[fi, 0] = data_block[0:3]
-                data_block = data_block[3:].reshape(N - 1, 9)
-                rotations[fi, 1:] = data_block[:, 3:6]
-                positions[fi, 1:] += data_block[:, 0:3] * data_block[:, 6:9]
-            else:
-                raise Exception("Too many channels! %i" % channels)
+            expected_values = sum(len(joint_channel_names) for joint_channel_names in joint_channels)
+            if len(data_block) != expected_values:
+                raise ValueError(
+                    "Unexpected number of motion values in %s at frame %i: expected %i, got %i" % (
+                        filename, fi, expected_values, len(data_block)))
+
+            cursor = 0
+            for ji, joint_channel_names in enumerate(joint_channels):
+                joint_values = data_block[cursor:cursor + len(joint_channel_names)]
+                cursor += len(joint_channel_names)
+
+                joint_position = np.zeros(3)
+                joint_position_mask = np.zeros(3, dtype=bool)
+                joint_scale = np.ones(3)
+                joint_scale_mask = np.zeros(3, dtype=bool)
+                joint_rotation = []
+
+                for channel_name, channel_value in zip(joint_channel_names, joint_values):
+                    axis = ordermap[channel_name[0].lower()]
+                    if channel_name.endswith('position'):
+                        joint_position[axis] = channel_value
+                        joint_position_mask[axis] = True
+                    elif channel_name.endswith('rotation'):
+                        joint_rotation.append(channel_value)
+                    elif channel_name.endswith('scale'):
+                        joint_scale[axis] = channel_value
+                        joint_scale_mask[axis] = True
+                    else:
+                        raise ValueError("Unsupported BVH channel %s in %s" % (channel_name, filename))
+
+                if joint_position_mask.any():
+                    if ji != 0 and joint_scale_mask.any():
+                        positions[fi, ji] = offsets[ji] + joint_position * joint_scale
+                    else:
+                        positions[fi, ji, joint_position_mask] = joint_position[joint_position_mask]
+
+                if joint_rotation:
+                    rotations[fi, ji, :len(joint_rotation)] = joint_rotation
 
             i += 1
 
     f.close()
 
+    if order is None:
+        quaternions = eye(rotations.shape[:-1], dtype=rotations.dtype)
+        for ji, joint_order in enumerate(joint_orders):
+            if joint_order is not None:
+                quaternions[:, ji] = from_euler(np.radians(rotations[:, ji]), order=joint_order)
+    else:
+        quaternions = from_euler(np.radians(rotations), order=order)
+
     return {
-        'rotations': unroll(from_euler(np.radians(rotations), order=order)),
+        'rotations': unroll(quaternions),
         'positions': positions,
         'offsets': offsets,
         'parents': parents,

@@ -1,10 +1,10 @@
 #pragma once
 
 #include "toolkit/opengl3d/components/actor.hpp"
-#include "toolkit/opengl3d/engine.hpp"
-#include "toolkit/opengl3d/native_subsys.hpp"
 #include "toolkit/opengl3d/components/character_controller.hpp"
 #include "toolkit/opengl3d/components/physics_world.hpp"
+#include "toolkit/opengl3d/engine.hpp"
+#include "toolkit/opengl3d/native_subsys.hpp"
 #include "toolkit/system.hpp"
 
 class cc_manipulate : public toolkit::opengl3d::sub_system {
@@ -27,13 +27,13 @@ public:
   }
 
   void update(entt::registry &registry, float dt) override {
-    auto *cc = registry.try_get<toolkit::opengl3d::character_controller>(entity);
+    auto *cc =
+        registry.try_get<toolkit::opengl3d::character_controller>(entity);
     if (!cc)
       return;
 
     auto *app = registry.ctx().get<toolkit::iapp *>();
-    auto *pw =
-        app->get_sys<toolkit::opengl3d::physics_world>();
+    auto *pw = app->get_sys<toolkit::opengl3d::physics_world>();
     if (!pw)
       return;
 
@@ -67,6 +67,34 @@ public:
     angular_velocity =
         (angular_velocity + lambda * q_prev) * expf(-lambda * dt) - lambda * q;
     self_trans.set_world_rot(toolkit::math::rot_vec_to_quat(q) * qt);
+
+    // check collision events
+    for (auto &e : cc->events) {
+      if (e.type == toolkit::opengl3d::collision_event_type::COLLISION_ENTER) {
+        printf(
+            "Collision Enter with entity %d, name %s\n",
+            static_cast<int>(e.other_entity),
+            registry.try_get<toolkit::transform>(e.other_entity)
+                ? registry.get<toolkit::transform>(e.other_entity).name.c_str()
+                : "N/A");
+      } else if (e.type ==
+                 toolkit::opengl3d::collision_event_type::COLLISION_STAY) {
+        printf(
+            "Collision Stay with entity %d, name %s\n",
+            static_cast<int>(e.other_entity),
+            registry.try_get<toolkit::transform>(e.other_entity)
+                ? registry.get<toolkit::transform>(e.other_entity).name.c_str()
+                : "N/A");
+      } else if (e.type ==
+                 toolkit::opengl3d::collision_event_type::COLLISION_EXIT) {
+        printf(
+            "Collision Exit with entity %d, name %s\n",
+            static_cast<int>(e.other_entity),
+            registry.try_get<toolkit::transform>(e.other_entity)
+                ? registry.get<toolkit::transform>(e.other_entity).name.c_str()
+                : "N/A");
+      }
+    }
   }
 
   void draw_to_scene(entt::registry &registry, toolkit::transform &cam_trans,
@@ -103,7 +131,8 @@ public:
                 angular_velocity.y(), angular_velocity.z());
     ImGui::DragFloat("Half Life", &damper_half_life, 0.01f, 0.01f, 10.0f);
     ImGui::DragFloat("Move Speed", &move_speed, 0.1f, 0.0f, 50.0f);
-    auto *cc = registry.try_get<toolkit::opengl3d::character_controller>(entity);
+    auto *cc =
+        registry.try_get<toolkit::opengl3d::character_controller>(entity);
     if (cc)
       ImGui::Text("Grounded: %s", cc->grounded ? "true" : "false");
     if (ImGui::Button("Random target transform", {-1, 30})) {

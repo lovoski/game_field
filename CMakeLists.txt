@@ -37,6 +37,7 @@ add_executable(
   camdmpp/main.cpp
   camdmpp/camdmpp.cpp
   camdmpp/camdmpp_render.cpp
+  camdmpp/camdmpp_terrain.cpp
   camdmpp/diffusion.cpp
   camdmpp/onnx_utils.cpp
   camdmpp/ziggurat.cpp

@@ -30,7 +30,6 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   diffusion_steps = config["diffusion_steps"];
   joint_names = config["joint_names"].get<std::vector<std::string>>();
   joint_parents = config["joint_parents"].get<std::vector<int>>();
-  style_names = config["style_names"].get<std::vector<std::string>>();
   input_names = config["input_names"].get<std::vector<std::string>>();
   output_names = config["output_names"].get<std::vector<std::string>>();
   auto joint_offsets_data = config["joint_offsets"].get<std::vector<float>>();
@@ -49,6 +48,11 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
       config["posterior_mean_coef2"].get<std::vector<float>>();
   data_std = config["data_std"].get<std::vector<float>>();
   data_mean = config["data_mean"].get<std::vector<float>>();
+
+  // manually specified shapes
+  x_t_shape = config["x_t_shape"].get<std::vector<int64_t>>();
+  past_motion_shape = config["past_motion_shape"].get<std::vector<int64_t>>();
+  traj_shape = config["traj_shape"].get<std::vector<int64_t>>();
 
   // initialize the model
   Ort::SessionOptions session_options;
@@ -80,21 +84,11 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   print_onnx_node_details(session, allocator, true);  // Print input details
   print_onnx_node_details(session, allocator, false); // Print output details
 
-  // manually specified shapes
-  x_t_shape = {1, pose_token_dim, future_points};
-  past_motion_shape = {1, pose_token_dim, past_points};
-  style_idx_shape = {1};
-  traj_pos_shape = {1, 10};
-  traj_facing_shape = {1, 10};
-
   // initialize the conditioning inputs
   x_t_data = std::vector<float>(__shape_to_size(x_t_shape));
   past_motion_data =
       std::vector<float>(__shape_to_size(past_motion_shape), 0.0f);
-  traj_facing_data =
-      std::vector<float>(__shape_to_size(traj_facing_shape), 0.0f);
-  traj_pos_data = std::vector<float>(__shape_to_size(traj_pos_shape), 0.0f);
-  style_idx_data = std::vector<int64_t>(__shape_to_size(style_idx_shape), 0);
+  traj_data = std::vector<float>(__shape_to_size(traj_shape), 0.0f);
 
   // setup random number generator
   ziggurat::r4_nor_setup(ziggurat_kn, ziggurat_fn, ziggurat_wn);
@@ -133,16 +127,8 @@ std::vector<float> diffusion::run_model_inference() {
       past_motion_shape.data(), past_motion_shape.size())));
   // trajectory position condition
   inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, traj_pos_data.data(), traj_pos_data.size(),
-      traj_pos_shape.data(), traj_pos_shape.size())));
-  // trajectory facing direction condition
-  inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, traj_facing_data.data(), traj_facing_data.size(),
-      traj_facing_shape.data(), traj_facing_shape.size())));
-  // motion style discrete label condition
-  inputs.push_back(std::move(Ort::Value::CreateTensor<int64_t>(
-      memory_info, style_idx_data.data(), style_idx_data.size(),
-      style_idx_shape.data(), style_idx_shape.size())));
+      memory_info, traj_data.data(), traj_data.size(),
+      traj_shape.data(), traj_shape.size())));
 
   /* ---------------- Diffusion loop ---------------- */
   for (int t = diffusion_steps - 1; t >= 0; --t) {
