@@ -33,6 +33,15 @@ target_link_libraries(motion_matching_loco PRIVATE toolkit)
 target_include_directories(motion_matching_loco PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
+  controller
+  controller/main.cpp
+  controller/controller.cpp
+  controller/controller_render.cpp
+)
+target_link_libraries(controller PRIVATE toolkit)
+target_include_directories(controller PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+
+add_executable(
   camdmpp
   camdmpp/main.cpp
   camdmpp/camdmpp.cpp

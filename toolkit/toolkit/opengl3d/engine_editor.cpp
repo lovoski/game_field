@@ -858,6 +858,11 @@ void engine3d::draw_components_gui(entt::entity current_entity) {
     if (ImGui::CollapsingHeader("Physics Constraint"))
       constraint_comp->draw_gui(registry, current_entity);
   }
+  if (auto controller_comp =
+          registry.try_get<character_controller>(current_entity)) {
+    if (ImGui::CollapsingHeader("Controller"))
+      controller_comp->draw_gui(registry, current_entity);
+  }
   ss_handler_system->proxy_draw_gui(registry, current_entity);
 }
 

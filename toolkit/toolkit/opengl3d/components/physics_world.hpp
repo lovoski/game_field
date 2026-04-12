@@ -102,7 +102,6 @@ public:
   // --- Character controller ---
   void cc_move(character_controller &cc, math::vector3 displacement);
   void cc_set_position(character_controller &cc, math::vector3 world_pos);
-  void cc_set_velocity(character_controller &cc, math::vector3 vel);
 
   // --- Raycast ---
   struct raycast_hit {
@@ -152,6 +151,11 @@ private:
   void unregister_constraint(entt::entity e, physics_constraint &pc);
   void unregister_controller(character_controller &cc);
   void update_collision_events(entt::registry &registry);
+
+  static void on_physics_body_destroyed(entt::registry &registry,
+                                        entt::entity e);
+  static void on_character_controller_destroyed(entt::registry &registry,
+                                                entt::entity e);
 };
 DECLARE_SYSTEM(physics_world, gravity, fixed_timestep, max_substeps,
                solver_iterations, erp, erp2, ccd_threshold,

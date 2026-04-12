@@ -28,7 +28,6 @@ struct character_controller : public icomponent {
 
   // Runtime state (read-only, updated by physics_world)
   bool grounded = false;
-  math::vector3 velocity = math::vector3::Zero();
   std::vector<collision_event> events; // cleared each frame
 
   // Internal — managed by physics_world

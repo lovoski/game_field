@@ -12,9 +12,43 @@ static void set_bt_entity(btCollisionObject *obj, entt::entity e) {
   obj->setUserIndex(static_cast<int>(entt::to_integral(e)));
 }
 
+static physics_world *get_physics_world_from_ctx(entt::registry &registry) {
+  auto **world_ptr = registry.ctx().find<physics_world *>();
+  return (world_ptr && *world_ptr) ? *world_ptr : nullptr;
+}
+
+void physics_world::on_physics_body_destroyed(entt::registry &registry,
+                                              entt::entity e) {
+  auto *world = get_physics_world_from_ctx(registry);
+  if (!world || !world->dynamics_world)
+    return;
+  world->unregister_body(registry, e);
+}
+
+void physics_world::on_character_controller_destroyed(entt::registry &registry,
+                                                      entt::entity e) {
+  auto *world = get_physics_world_from_ctx(registry);
+  if (!world || !world->dynamics_world)
+    return;
+
+  if (auto *cc = registry.try_get<character_controller>(e))
+    world->unregister_controller(*cc);
+  world->registered_controllers.erase(e);
+}
+
 // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
 void physics_world::init0(entt::registry &registry) {
+  registry.ctx().insert_or_assign<physics_world *>(this);
+  registry.on_destroy<physics_body>()
+      .disconnect<&physics_world::on_physics_body_destroyed>();
+  registry.on_destroy<physics_body>()
+      .connect<&physics_world::on_physics_body_destroyed>();
+  registry.on_destroy<character_controller>()
+      .disconnect<&physics_world::on_character_controller_destroyed>();
+  registry.on_destroy<character_controller>()
+      .connect<&physics_world::on_character_controller_destroyed>();
+
   // Use larger manifold/contact-pool for better precision under load.
   btDefaultCollisionConstructionInfo cci;
   cci.m_defaultMaxPersistentManifoldPoolSize = 4096;
@@ -229,6 +263,8 @@ void physics_world::register_body(entt::registry &registry, entt::entity e) {
 }
 
 void physics_world::unregister_body(entt::registry &registry, entt::entity e) {
+  if (!dynamics_world)
+    return;
   if (!registered_bodies.count(e))
     return;
 
@@ -452,7 +488,7 @@ void physics_world::register_controller(entt::registry &registry,
       new btKinematicCharacterController(ghost, capsule, cc->step_height);
   ctrl->setMaxSlope(btRadians(cc->max_slope));
   ctrl->setGravity(btVector3(0, 0, 0));
-  ctrl->setMaxPenetrationDepth(0.03f);    // tighter penetration recovery
+  ctrl->setMaxPenetrationDepth(0.1f);     // relaxed to reduce ground jitter
   ctrl->setUseGhostSweepTest(true);       // sweep-based test for smoother movement
   cc->bt_controller = ctrl;
 
@@ -466,6 +502,8 @@ void physics_world::register_controller(entt::registry &registry,
 }
 
 void physics_world::unregister_controller(character_controller &cc) {
+  if (!dynamics_world)
+    return;
   if (cc.bt_controller) {
     dynamics_world->removeAction(
         static_cast<btKinematicCharacterController *>(cc.bt_controller));
@@ -505,15 +543,6 @@ void physics_world::cc_set_position(character_controller &cc,
   if (cc.bt_controller)
     static_cast<btKinematicCharacterController *>(cc.bt_controller)
         ->warp(to_bt(world_pos));
-}
-
-void physics_world::cc_set_velocity(character_controller &cc,
-                                    math::vector3 vel) {
-  if (!cc.bt_controller)
-    return;
-  static_cast<btKinematicCharacterController *>(cc.bt_controller)
-      ->setLinearVelocity(to_bt(vel));
-  cc.velocity = vel;
 }
 
 // ─── Main step ─────────────────────────────────────────────────────────────
@@ -610,10 +639,41 @@ void physics_world::step(entt::registry &registry, float dt) {
           return;
         auto *ghost =
             static_cast<btPairCachingGhostObject *>(cc.bt_ghost_object);
-        auto *ctrl =
-            static_cast<btKinematicCharacterController *>(cc.bt_controller);
         t.set_world_pos(from_bt(ghost->getWorldTransform().getOrigin()));
-        cc.grounded = ctrl->onGround();
+
+        // Ground check via downward raycast — more reliable than onGround()
+        // which depends on the controller's internal vertical velocity state
+        // and fails when gravity is managed externally.
+        cc.grounded = false;
+        btVector3 origin = ghost->getWorldTransform().getOrigin();
+        constexpr float kGroundSkin = 0.06f;
+        float cast_len = cc.height * 0.5f + kGroundSkin;
+        btVector3 ray_from = origin;
+        btVector3 ray_to = origin - btVector3(0, cast_len, 0);
+
+        struct ExcludeSelfRay
+            : public btCollisionWorld::ClosestRayResultCallback {
+          const btCollisionObject *exclude;
+          ExcludeSelfRay(const btVector3 &f, const btVector3 &t,
+                         const btCollisionObject *ex)
+              : ClosestRayResultCallback(f, t), exclude(ex) {}
+          btScalar addSingleResult(
+              btCollisionWorld::LocalRayResult &r,
+              bool normalInWorldSpace) override {
+            if (r.m_collisionObject == exclude)
+              return 1.0f;
+            return ClosestRayResultCallback::addSingleResult(
+                r, normalInWorldSpace);
+          }
+        };
+
+        ExcludeSelfRay cb(ray_from, ray_to, ghost);
+        dynamics_world->rayTest(ray_from, ray_to, cb);
+        if (cb.hasHit()) {
+          float cos_slope = btCos(btRadians(cc.max_slope));
+          float dot = cb.m_hitNormalWorld.dot(btVector3(0, 1, 0));
+          cc.grounded = (dot >= cos_slope);
+        }
       });
 
   // ── Readback velocities ──────────────────────────────────────────────
@@ -705,12 +765,19 @@ void physics_world::update_collision_events(entt::registry &registry) {
         bp->m_algorithm->getAllContactManifolds(manifolds);
         for (int mi = 0; mi < manifolds.size(); mi++) {
           btPersistentManifold *mf = manifolds[mi];
+          bool flipped = (mf->getBody0() != ghost);
           for (int j = 0; j < mf->getNumContacts(); j++) {
             btManifoldPoint &pt = mf->getContactPoint(j);
-            if (pt.getDistance() < 0.0f)
-              record_pair(e, other, from_bt(pt.getPositionWorldOnA()),
-                          from_bt(pt.m_normalWorldOnB),
-                          pt.getAppliedImpulse(), false);
+            // Relaxed threshold for ghost contacts: the kinematic CC
+            // resolves penetration before we read manifolds, so distances
+            // are often near 0 or slightly positive.
+            if (pt.getDistance() < 0.02f) {
+              math::vector3 cp = from_bt(pt.getPositionWorldOnB());
+              math::vector3 nm = from_bt(pt.m_normalWorldOnB);
+              if (flipped)
+                nm = -nm;
+              record_pair(e, other, cp, nm, pt.getAppliedImpulse(), false);
+            }
           }
         }
       }

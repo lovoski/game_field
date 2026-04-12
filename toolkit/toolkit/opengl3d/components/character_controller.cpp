@@ -19,8 +19,6 @@ void character_controller::draw_gui(entt::registry &registry,
   ImGui::Separator();
   ImGui::Text("Runtime");
   ImGui::Text("Grounded: %s", grounded ? "true" : "false");
-  ImGui::Text("Velocity: (%.2f, %.2f, %.2f)", velocity.x(), velocity.y(),
-              velocity.z());
   ImGui::Text("Events: %d", static_cast<int>(events.size()));
 
   if (changed)
