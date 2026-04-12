@@ -34,6 +34,7 @@ struct character_controller : public icomponent {
   void *bt_ghost_object = nullptr;
   void *bt_controller = nullptr;
   void *bt_shape = nullptr;
+  float pending_vertical = 0.0f; // vertical offset applied after step
   bool dirty = true;
 
   void draw_gui(entt::registry &registry, entt::entity entity) override;

@@ -20,10 +20,8 @@ private:
   float move_speed = 15.0f;
   math::vector3 player_velocity = math::vector3::Zero();
   math::vector3 move_input = math::vector3::Zero();
+  math::vector3 gravity = math::vector3(0.0f, -40.0f, 0.0f);
   void update_movement(float dt);
-
-  // gravity
-  math::vector3 gravity = math::vector3(0.0f, -9.81f, 0.0f);
 
   // camera
   float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,

@@ -25,8 +25,6 @@ void controller::handle_player_input(float dt) {
     hide_mouse = !hide_mouse;
     set_game_mode(true, hide_mouse);
   }
-  if (!hide_mouse)
-    return;
 
   update_movement(dt);
   update_camera(dt);
@@ -54,9 +52,11 @@ void controller::update_movement(float dt) {
   move_input = camera_forward_rot * move_input.normalized();
 
   player_velocity += gravity * dt;
-  if (player_cc.grounded && player_velocity.y() < 0.0f) {
-    player_velocity.y() = -1.0f;
-  }
+  if (player_cc.grounded && player_velocity.y() < 0.0f)
+    player_velocity.y() = 0.0f;
+
+  if (is_key_triggered(SDLK_SPACE) && player_cc.grounded)
+    player_velocity.y() = 15.0f;
 
   player_velocity.x() = move_input.x() * move_speed;
   player_velocity.z() = move_input.z() * move_speed;
@@ -65,6 +65,8 @@ void controller::update_movement(float dt) {
 
 void controller::update_camera(float dt) {
   auto delta = get_mouse_screen_delta();
+  if (!hide_mouse)
+    delta = math::vector2::Zero();
   camera_horizontal_angle -= mouse_sensitivity * delta.x();
   camera_vertical_angle += mouse_sensitivity * delta.y();
   camera_vertical_angle =

@@ -484,12 +484,16 @@ void physics_world::register_controller(entt::registry &registry,
   set_bt_entity(ghost, e);
   cc->bt_ghost_object = ghost;
 
-  auto *ctrl =
-      new btKinematicCharacterController(ghost, capsule, cc->step_height);
+  auto *ctrl = new btKinematicCharacterController(
+      ghost, capsule, cc->step_height, btVector3(0, 1, 0));
   ctrl->setMaxSlope(btRadians(cc->max_slope));
   ctrl->setGravity(btVector3(0, 0, 0));
-  ctrl->setMaxPenetrationDepth(0.1f);     // relaxed to reduce ground jitter
-  ctrl->setUseGhostSweepTest(true);       // sweep-based test for smoother movement
+  ctrl->setMaxPenetrationDepth(0.1f);
+  ctrl->setUseGhostSweepTest(true);
+  // Bullet's constructor hardcodes m_up to (0,0,1) then calls setUp(up),
+  // which rotates the ghost transform from Z-up to Y-up.  Restore it.
+  ghost->setWorldTransform(
+      to_bt_transform(trans->world_pos(), trans->world_rot()));
   cc->bt_controller = ctrl;
 
   dynamics_world->addCollisionObject(
@@ -528,8 +532,13 @@ void physics_world::cc_move(character_controller &cc,
                             math::vector3 displacement) {
   if (!cc.bt_controller)
     return;
+  // Horizontal goes through the swept walk direction (collision-tested).
+  // Vertical is stored and applied directly to the ghost after the step,
+  // bypassing the convex sweep that causes margin-induced slowdown.
+  btVector3 d = to_bt(displacement);
   static_cast<btKinematicCharacterController *>(cc.bt_controller)
-      ->setWalkDirection(to_bt(displacement));
+      ->setWalkDirection(btVector3(d.x(), 0, d.z()));
+  cc.pending_vertical = displacement.y();
 }
 
 void physics_world::cc_set_position(character_controller &cc,
@@ -639,14 +648,24 @@ void physics_world::step(entt::registry &registry, float dt) {
           return;
         auto *ghost =
             static_cast<btPairCachingGhostObject *>(cc.bt_ghost_object);
+
+        // Apply deferred vertical displacement directly to ghost position.
+        // This bypasses the convex sweep (which causes margin slowdown)
+        // and lets recoverFromPenetration handle ground contact next frame.
+        if (std::abs(cc.pending_vertical) > 1e-6f) {
+          btTransform gt = ghost->getWorldTransform();
+          gt.getOrigin().setY(gt.getOrigin().getY() + cc.pending_vertical);
+          ghost->setWorldTransform(gt);
+          cc.pending_vertical = 0.0f;
+        }
+
         t.set_world_pos(from_bt(ghost->getWorldTransform().getOrigin()));
 
-        // Ground check via downward raycast — more reliable than onGround()
-        // which depends on the controller's internal vertical velocity state
-        // and fails when gravity is managed externally.
+        // Ground check via downward raycast — supplements onGround()
+        // with a configurable slope check.
         cc.grounded = false;
         btVector3 origin = ghost->getWorldTransform().getOrigin();
-        constexpr float kGroundSkin = 0.06f;
+        constexpr float kGroundSkin = 0.02f;
         float cast_len = cc.height * 0.5f + kGroundSkin;
         btVector3 ray_from = origin;
         btVector3 ray_to = origin - btVector3(0, cast_len, 0);
