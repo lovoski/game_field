@@ -20,7 +20,10 @@ void controller::handle_engine_gui() {
   if (registry.valid(player_entity)) {
     if (auto *cc = registry.try_get<character_controller>(player_entity)) {
       ImGui::Text("Grounded: %s", cc->grounded ? "true" : "false");
+      ImGui::Text("Events: %d", static_cast<int>(cc->events.size()));
     }
+    ImGui::Text("Velocity: (%.2f, %.2f, %.2f)", player_velocity.x(),
+                player_velocity.y(), player_velocity.z());
   }
 
   ImGui::DragFloat("Camera Height", &camera_height, 0.01f, 0.0f, 5.0f);
