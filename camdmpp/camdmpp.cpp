@@ -12,20 +12,12 @@ math::vector3 shortest_arc_rot_vec(math::quat from, math::quat to) {
   return math::quat_to_rot_vec(from * to.inverse());
 }
 
-float wrap_degrees(float degrees) {
-  while (degrees > 180.0f)
-    degrees -= 360.0f;
-  while (degrees < -180.0f)
-    degrees += 360.0f;
-  return degrees;
-}
-
 math::vector2 apply_radial_deadzone(math::vector2 stick, float deadzone) {
   float mag = stick.norm();
   if (mag <= deadzone)
     return math::vector2::Zero();
-  float scaled_mag = std::clamp((mag - deadzone) / (1.0f - deadzone), 0.0f,
-                                1.0f);
+  float scaled_mag =
+      std::clamp((mag - deadzone) / (1.0f - deadzone), 0.0f, 1.0f);
   return stick / mag * scaled_mag;
 }
 
@@ -33,8 +25,7 @@ void camdmpp::handle_custom_initialization() {
   if (std::filesystem::exists("camdmpp/model.onnx") &&
       std::filesystem::exists("camdmpp/model.json") &&
       std::filesystem::exists("camdmpp/setup.scene") &&
-      std::filesystem::exists("camdmpp/tpose.bvh") &&
-      (get_game_controllers().size() > 0)) {
+      std::filesystem::exists("camdmpp/tpose.bvh")) {
     // load setup scene
     std::ifstream scene_input("camdmpp/setup.scene");
     if (scene_input.is_open()) {
@@ -55,22 +46,24 @@ void camdmpp::handle_custom_initialization() {
           << std::endl;
       return;
     }
-    set_game_mode(true, false);
+    set_game_mode(true, hide_mouse);
     player_entity = named_entities["player"];
     ground_entity = named_entities["ground"];
     default_render_sys->resize(wnd_width, wnd_height);
     transform_hierarchy_sys->update_transform(registry);
     build_terrain_sampler();
-    camera_follow_vel = math::vector3::Zero();
-    camera_follow_ang = math::vector3::Zero();
 
     // setup diffusion model
     model.setup("camdmpp/model.onnx", "camdmpp/model.json");
     i_past_motion.resize(model.pose_token_dim * model.past_points, 0.0f);
     i_traj.resize(model.traj_shape[1] * model.traj_shape[2], 0.0f);
-    // i_traj_pos.resize(10);
-    // i_traj_facing.resize(10);
-    // i_style_idx.resize(1);
+    _traj_world_pos.resize(model.traj_shape[1], math::vector3::Zero());
+    _traj_world_vel.resize(model.traj_shape[1], math::vector3::Zero());
+    _traj_world_dir.resize(model.traj_shape[1], math::world_forward);
+    _traj_world_height.resize(model.traj_shape[1]);
+    for (int i = 0; i < model.traj_shape[1]; i++) {
+      _traj_world_height[i].resize(model.lateral_offsets_m.size(), 0.0f);
+    }
 
     auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
     auto &player_trans = registry.get<transform>(player_entity);
@@ -83,9 +76,6 @@ void camdmpp::handle_custom_initialization() {
     initial_forward.y() = 0.0f;
     if (initial_forward.squaredNorm() > 1e-6f) {
       initial_forward.normalize();
-      cam_angle_horizontal = wrap_degrees(
-          math::rad_to_deg(std::atan2(-initial_forward.x(),
-                                      -initial_forward.z())));
     }
     // find mapping between network's prediction joint to actor's joint
     for (int i = 0; i < model.joint_names.size(); i++) {
@@ -162,160 +152,160 @@ void camdmpp::handle_game_logic_tick(float dt) {
   }
   __cur_time += dt;
 
-  // update application state based on user input
-  if (is_key_triggered(SDLK_ESCAPE))
-    quit_app_running();
-  // if (is_key_triggered(SDLK_j))
-  //   i_style_idx[0] = (i_style_idx[0] + 99) % 100;
-  // if (is_key_triggered(SDLK_k))
-  //   i_style_idx[0] = (i_style_idx[0] + 1) % 100;
-
-  // update the camera movement every logic tick after character update
-  {
-    auto &player_trans = registry.get<transform>(
-        registry.get<skinned_mesh_bundle>(player_entity).actor_entities[0]);
-    math::vector2 look_stick = math::vector2::Zero();
-    auto controllers = get_game_controllers();
-    if (!controllers.empty()) {
-      auto [_left_stick_raw, right_stick_raw, _left_trigger, _right_trigger] =
-          get_game_controller_analog_inputs(controllers[0]);
-      look_stick = apply_radial_deadzone(right_stick_raw, camera_turn_deadzone);
-    }
-
-    if (is_mouse_button_pressed(SDL_BUTTON_LEFT) &&
-        is_key_pressed(SDLK_LCTRL)) {
-      cam_angle_horizontal += dt * cam_move_speed * mouse_screen_delta.x();
-      cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
-    }
-    cam_angle_horizontal += dt * cam_stick_speed * look_stick.x();
-    cam_angle_vertical += dt * cam_stick_speed * look_stick.y();
-    cam_angle_horizontal = wrap_degrees(cam_angle_horizontal);
-    cam_angle_vertical = std::clamp(cam_angle_vertical, 5.0f, 45.0f);
-
-    const float yaw = math::deg_to_rad(cam_angle_horizontal);
-    const float pitch = math::deg_to_rad(cam_angle_vertical);
-    const float cos_pitch = std::cos(pitch);
-    math::vector3 cam_z(cos_pitch * std::sin(yaw), std::sin(pitch),
-                        cos_pitch * std::cos(yaw));
-    cam_z.normalize();
-
-    math::vector3 focus_pos =
-        player_trans.world_pos() + math::vector3(0.0f, cam_focus_height, 0.0f);
-    math::vector3 move_dir = desired_vel;
-    move_dir.y() = 0.0f;
-    if (move_dir.squaredNorm() > 1e-6f)
-      focus_pos += cam_look_ahead * move_dir.normalized();
-
-    math::vector3 cam_y(0.0, 1.0, 0.0);
-    math::vector3 cam_x = (cam_y.cross(cam_z)).normalized();
-    cam_y = (cam_z.cross(cam_x)).normalized();
-    math::matrix3 cam_rot = math::matrix3::Identity();
-    cam_rot << cam_x, cam_y, cam_z;
-    auto &cam_trans = registry.get<transform>(active_camera);
-    const math::quat target_rot = math::quat(cam_rot).normalized();
-    const math::vector3 target_pos = focus_pos + cam_z * cam_distance;
-
-    auto [new_pos, new_vel] = spring_damper_position(
-        cam_trans.world_pos(), camera_follow_vel, target_pos,
-        math::vector3::Zero(), dt, camera_follow_halflife);
-    camera_follow_vel = new_vel;
-    cam_trans.set_world_pos(new_pos);
-
-    auto [new_rot, new_ang] = spring_damper_rotation(
-        cam_trans.world_rot(), camera_follow_ang, target_rot,
-        math::vector3::Zero(), dt, camera_follow_halflife);
-    camera_follow_ang = new_ang;
-    cam_trans.set_world_rot(new_rot);
+  if (is_key_triggered(SDLK_ESCAPE)) {
+    hide_mouse = !hide_mouse;
+    set_game_mode(true, hide_mouse);
+  }
+  if (is_key_triggered(SDLK_f)) {
+    camera_as_facing_direction = !camera_as_facing_direction;
   }
 
+  update_camera(dt);
   default_render_sys->push_custom_draw([this]() { debug_draw(); });
 }
 
-void camdmpp::fixed_interval_logic() {
-  // make new predictions to the trajectory based on user input
-  predict_trajectory();
+void camdmpp::update_camera(float dt) {
+  auto delta = get_mouse_screen_delta();
+  if (!hide_mouse)
+    delta = math::vector2::Zero();
+  camera_horizontal_angle -= mouse_sensitivity * delta.x();
+  camera_vertical_angle += mouse_sensitivity * delta.y();
+  camera_vertical_angle =
+      std::clamp(camera_vertical_angle, min_vertical_angle, max_vertical_angle);
 
+  auto &player_trans = registry.get<transform>(player_entity);
+  auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
+  auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+  auto &root_trans = registry.get<transform>(player_actor.ordered_entities[0]);
+  auto &cam_trans = registry.get<transform>(active_camera);
+  math::vector3 cam_offset =
+      math::angle_axis(math::deg_to_rad(camera_horizontal_angle),
+                       math::world_up) *
+      math::angle_axis(math::deg_to_rad(-camera_vertical_angle),
+                       math::world_right) *
+      math::vector3(0.0f, 0.0f, camera_distance);
+  math::vector3 cam_pos = root_trans.world_pos() +
+                          math::vector3(0.0f, camera_height, 0.0f) + cam_offset;
+  math::matrix3 cam_rot_mat = math::matrix3::Identity();
+  math::vector3 _z = cam_offset.normalized();
+  math::vector3 _x = math::world_up.cross(_z).normalized();
+  math::vector3 _y = _z.cross(_x).normalized();
+  cam_rot_mat.col(0) = _x;
+  cam_rot_mat.col(1) = _y;
+  cam_rot_mat.col(2) = _z;
+  math::quat cam_rot = math::quat(cam_rot_mat);
+  cam_trans.set_world_pos(cam_pos);
+  cam_trans.set_world_rot(cam_rot);
+}
+
+void camdmpp::fixed_interval_logic() {
   // apply pose to the character, fill in caches for network input
   apply_pose_and_refill();
+
+  // make new predictions to the trajectory based on user input
+  predict_trajectory();
 
   // submit a new prediction when counter reaches a threashold
   predict_new_tokens();
 }
 
 void camdmpp::predict_trajectory() {
-  // TODO: the trajectory should be adapted
-  math::vector2 move_stick = math::vector2::Zero();
-  auto controllers = get_game_controllers();
-  if (!controllers.empty()) {
-    auto [left_stick_raw, _right_stick_raw, _left_trigger, _right_trigger] =
-        get_game_controller_analog_inputs(controllers[0]);
-    move_stick = apply_radial_deadzone(left_stick_raw, move_stick_deadzone);
-  }
+  auto &player_trans = registry.get<transform>(player_entity);
+  auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
+  auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+  auto &root_trans = registry.get<transform>(player_actor.ordered_entities[0]);
+  auto &camera_trans = registry.get<transform>(active_camera);
+  camera_forward = -math::vector3(camera_trans.local_forward().x(), 0.0f,
+                                  camera_trans.local_forward().z())
+                        .normalized();
+  math::vector3 root_forward = root_trans.world_rot() * math::vector3(0, 0, 1);
+  root_forward.y() = 0.0f;
+  root_forward.normalize();
 
-  const float yaw = math::deg_to_rad(cam_angle_horizontal);
-  const math::vector3 cam_forward(-std::sin(yaw), 0.0f, -std::cos(yaw));
-  const math::vector3 cam_right(std::cos(yaw), 0.0f, -std::sin(yaw));
-  const math::vector3 move_input =
-      cam_right * move_stick.x() - cam_forward * move_stick.y();
+  math::quat camera_forward_rot =
+      math::from_to_rot(math::vector3(0.0f, 0.0f, -1.0f), camera_forward);
+  move_input = math::vector3::Zero();
+  if (is_key_pressed(SDLK_w))
+    move_input += math::vector3(0.0f, 0.0f, -1.0f);
+  if (is_key_pressed(SDLK_s))
+    move_input += math::vector3(0.0f, 0.0f, 1.0f);
+  if (is_key_pressed(SDLK_a))
+    move_input += math::vector3(-1.0f, 0.0f, 0.0f);
+  if (is_key_pressed(SDLK_d))
+    move_input += math::vector3(1.0f, 0.0f, 0.0f);
+  move_input = camera_forward_rot * move_input.normalized();
 
-  math::quat desired_rot;
-  desired_vel = velocity_scale * move_input;
-  if (move_input.squaredNorm() > 1e-6f)
-    desired_dir = move_input.normalized();
-  desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
-  for (int i = 0; i < 5; i++) {
-    auto [vel, acc] = spring_damper_position(
-        char_root_world_vel, char_root_world_acc, desired_vel,
-        math::vector3::Zero(), traj_sample_time * (i + 1), vel_halflife);
-    auto [rot, ang] = spring_damper_rotation(
-        proj_char_root_world_rot, char_root_world_ang, desired_rot,
-        math::vector3::Zero(), traj_sample_time * (i + 1), rot_halflife);
-    _traj_world_vel[i] = vel;
-    if (i == 0) {
+  player_vel = (player_curr_pos - player_last_pos) / fixed_interval;
+  player_last_pos = player_curr_pos;
+  player_curr_pos = math::vector3(root_trans.world_pos().x(), 0.0f,
+                                  root_trans.world_pos().z());
+  math::vector3 target_vel = sim_move_speed_walk * move_input;
+  math::vector3 target_dir = camera_forward;
+  if (!camera_as_facing_direction)
+    target_dir =
+        target_vel.norm() > 1e-6f ? target_vel.normalized() : root_forward;
+
+  math::vector3 sim_vel = player_vel, player_to_sim_acc = math::vector3::Zero();
+  for (int i = 0; i < model.future_points; i++) {
+    math::vector3 vel_diff = target_vel - sim_vel;
+    bool is_accelerating = vel_diff.dot(target_vel) > 0;
+    float acc_mag = is_accelerating ? sim_acceleration : sim_deceleration;
+    math::vector3 acc = vel_diff.norm() < acc_mag * fixed_interval
+                            ? vel_diff / fixed_interval
+                            : math::vector3(vel_diff.normalized() * acc_mag);
+
+    if (i == 0)
       _traj_world_pos[i] =
-          (char_root_world_vel + vel) * 0.5f * traj_sample_time +
-          char_root_world_pos;
-    } else {
-      _traj_world_pos[i] = (_traj_world_vel[i - 1] + _traj_world_vel[i]) *
-                               0.5f * traj_sample_time +
-                           _traj_world_pos[i - 1];
-    }
-    _traj_world_dir[i] = (rot * math::vector3(0, 0, 1));
+          (2 * sim_vel + acc * fixed_interval) * 0.5f * fixed_interval +
+          player_curr_pos;
+    else
+      _traj_world_pos[i] =
+          (2 * sim_vel + acc * fixed_interval) * 0.5f * fixed_interval +
+          _traj_world_pos[i - 1];
+    _traj_world_dir[i] = target_dir;
     _traj_world_dir[i].y() = 0.0f;
-    if (_traj_world_dir[i].squaredNorm() > 1e-6f)
-      _traj_world_dir[i].normalize();
-    else
-      _traj_world_dir[i] = desired_dir;
-    _traj_world_pos[i].y() = 0.0f;
+    _traj_world_dir[i].normalize();
 
-    // sample terrain height
-    math::vector3 _terrain_left = math::world_up.cross(_traj_world_dir[i]);
-    if (_terrain_left.squaredNorm() > 1e-6f)
-      _terrain_left.normalize();
-    else
-      _terrain_left = math::vector3(1, 0, 0);
-    math::vector2 terrain_left(_terrain_left.x(), _terrain_left.z());
+    sim_vel += acc * fixed_interval;
 
-    const math::vector2 center_xz(_traj_world_pos[i].x(),
-                                  _traj_world_pos[i].z());
-    const math::vector2 left_xz =
-        center_xz + terrain_probe_half_width * terrain_left;
-    const math::vector2 right_xz =
-        center_xz - terrain_probe_half_width * terrain_left;
-    const float center_height = sample_terrain_height(center_xz, 0.0f);
-    const float left_height = sample_terrain_height(left_xz, center_height);
-    const float right_height = sample_terrain_height(right_xz, center_height);
-
-    _traj_world_pos[i].y() = center_height;
-    _traj_world_height[i] =
-        math::vector3(center_height, left_height, right_height);
+    // // track simulated body with velocity spring
+    // auto [_vel, _acc] =
+    //     spring_damper_position(player_vel, player_to_sim_acc, sim_vel,
+    //     math::vector3::Zero(),
+    //                            fixed_interval, vel_halflife);
+    // if (i == 0)
+    //   _traj_world_pos[i] =
+    //       (player_vel + _vel) * 0.5f * fixed_interval + player_curr_pos;
+    // else
+    //   _traj_world_pos[i] =
+    //       (player_vel + _vel) * 0.5f * fixed_interval + _traj_world_pos[i -
+    //       1];
+    // _traj_world_dir[i] = target_dir;
+    // _traj_world_dir[i].y() = 0.0f;
+    // _traj_world_dir[i].normalize();
+    // player_vel = _vel;
+    // player_to_sim_acc = _acc;
   }
+
+  resample_trajectory_on_terrain(
+      math::vector2(player_curr_pos.x(), player_curr_pos.z()),
+      sample_terrain_height(
+          math::vector2(root_trans.world_pos().x(), root_trans.world_pos().z()),
+          0.0f));
 }
 
 void camdmpp::apply_pose_and_refill() {
   auto &player_trans = registry.get<transform>(player_entity);
   auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
   auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+  auto &root_trans = registry.get<transform>(player_actor.ordered_entities[0]);
+  math::vector3 char_pos = root_trans.world_pos();
+  math::vector3 proj_char_facing =
+      root_trans.world_rot() * math::vector3(0, 0, 1);
+  proj_char_facing.y() = 0.0f;
+  proj_char_facing.normalize();
+  math::quat proj_char_rot =
+      math::from_to_rot(math::vector3(0, 0, 1), proj_char_facing);
 
   printf("applied_frames=%d\n", applied_frames);
 
@@ -327,21 +317,18 @@ void camdmpp::apply_pose_and_refill() {
     if (ai == 0) {
       // root joint
       if (root_rel_pos_cache[applied_frames].norm() > 1e-5f) {
-        char_root_world_pos =
-            char_root_world_pos +
-            proj_char_root_world_rot * root_rel_pos_cache[applied_frames];
+        char_pos =
+            char_pos + proj_char_rot * root_rel_pos_cache[applied_frames];
       }
-      char_root_world_pos.y() =
+      char_pos.y() =
           root_height_cache[applied_frames] +
           sample_terrain_height(math::vector2(joint_trans.world_pos().x(),
                                               joint_trans.world_pos().z()),
                                 0.0f);
-      proj_char_root_world_rot =
-          root_rel_rot_cache[applied_frames] * proj_char_root_world_rot;
-      joint_trans.set_world_pos(char_root_world_pos);
+      proj_char_rot = root_rel_rot_cache[applied_frames] * proj_char_rot;
+      joint_trans.set_world_pos(char_pos);
       joint_trans.set_world_rot(
-          proj_char_root_world_rot *
-          joint_rotation_cache[applied_frames][da_entry_idx]);
+          proj_char_rot * joint_rotation_cache[applied_frames][da_entry_idx]);
     } else {
       joint_trans.set_local_rot(
           joint_rotation_cache[applied_frames][da_entry_idx]);
@@ -352,19 +339,46 @@ void camdmpp::apply_pose_and_refill() {
 
   // update network input cache
   // input trajectory
-  for (int i = 0; i < 5; i++) {
-    auto _traj_pos = proj_char_root_world_rot.inverse() *
-                     (_traj_world_pos[i] - char_root_world_pos);
-    auto _traj_facing = proj_char_root_world_rot.inverse() * _traj_world_dir[i];
+  for (int i = 0; i < model.future_points; i++) {
+    auto _traj_pos = proj_char_rot.inverse() * (_traj_world_pos[i] - char_pos);
+    // auto _traj_vel = proj_char_rot.inverse() * _traj_world_vel[i];
+    auto _traj_facing = proj_char_rot.inverse() * _traj_world_dir[i];
     auto _traj_height = _traj_world_height[i];
-    i_traj[7 * i + 0] = _traj_pos.x();
-    i_traj[7 * i + 1] = _traj_pos.z();
-    // TODO: normalize the height
-    i_traj[7 * i + 2] = _traj_height[0] - _traj_world_height[0].x(); // center
-    i_traj[7 * i + 3] = _traj_height[1] - _traj_world_height[0].y(); // left
-    i_traj[7 * i + 4] = _traj_height[2] - _traj_world_height[0].z(); // right
-    i_traj[7 * i + 5] = _traj_facing.x();
-    i_traj[7 * i + 6] = _traj_facing.z();
+    i_traj[model.traj_shape[2] * i + 0] = _traj_pos.x();
+    i_traj[model.traj_shape[2] * i + 1] = _traj_pos.z();
+
+    // i_traj[model.traj_shape[2] * i + 2] = _traj_vel.x();
+    // i_traj[model.traj_shape[2] * i + 3] = _traj_vel.y();
+    // i_traj[model.traj_shape[2] * i + 4] = _traj_vel.z();
+
+    for (int j = 0; j < model.lateral_offsets_m.size(); j++) {
+      if (i < model.future_points - 1)
+        i_traj[model.traj_shape[2] * i + 2 + j] =
+            _traj_world_height[i + 1][j] - _traj_world_height[i][j];
+      else
+        i_traj[model.traj_shape[2] * i + 2 + j] =
+            i_traj[model.traj_shape[2] * (i - 1) + 2 + j];
+
+      i_traj[model.traj_shape[2] * i + 5 + j] =
+          _traj_height[j] - _traj_world_height[0][model.terrain_center_idx];
+    }
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 5] =
+        _traj_facing.x();
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 6] =
+        _traj_facing.z();
+    // gait
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 7] =
+        0.0f; // stand
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 8] =
+        0.8f; // walk
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 9] =
+        0.2f; // jog_run
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 10] =
+        0.0f; // crouch_crawl
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 11] =
+        0.0f; // jump
+    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 12] =
+        0.0f; // unknown
   }
 
   // increase the apply frame counter

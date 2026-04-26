@@ -51,15 +51,49 @@ void controller::update_movement(float dt) {
     move_input += math::vector3(1.0f, 0.0f, 0.0f);
   move_input = camera_forward_rot * move_input.normalized();
 
-  player_velocity += gravity * dt;
-  if (player_cc.grounded && player_velocity.y() < 0.0f)
-    player_velocity.y() = 0.0f;
+  // handle gravity and jumping
+  {
+    player_velocity += gravity * dt;
+    if (player_cc.grounded && player_velocity.y() < 0.0f)
+      player_velocity.y() = 0.0f;
 
-  if (is_key_triggered(SDLK_SPACE) && player_cc.grounded)
-    player_velocity.y() = 15.0f;
+    if (is_key_triggered(SDLK_SPACE) && player_cc.grounded)
+      player_velocity.y() = jump_speed;
+  }
 
-  player_velocity.x() = move_input.x() * move_speed;
-  player_velocity.z() = move_input.z() * move_speed;
+  // handle horizontal movement
+  {
+    math::vector3 planar_velocity =
+        math::vector3(player_velocity.x(), 0.0f, player_velocity.z());
+    float prev_vel_mag = planar_velocity.norm();
+    math::vector3 target_vel = move_input * move_speed;
+    math::vector3 vel_diff = target_vel - planar_velocity;
+    bool is_accelerating = vel_diff.dot(move_input) > 0.0f;
+    float lateral_acc_mag =
+        is_accelerating ? acceleration * (1.0f - directional_acceleration)
+                        : deceleration;
+    float directional_acc_mag =
+        is_accelerating ? acceleration * directional_acceleration : 0.0f;
+    math::vector3 lateral_acc = vel_diff.normalized() * lateral_acc_mag;
+    if (lateral_acc_mag * dt > vel_diff.norm())
+      lateral_acc = vel_diff / dt;
+    math::vector3 directional_acc =
+        vel_diff.norm() > 1e-8f
+            ? math::vector3(vel_diff.normalized() * directional_acc_mag)
+            : math::vector3::Zero();
+    math::vector3 acc = lateral_acc + directional_acc;
+    // clamp to avoid overshooting
+    planar_velocity = vel_diff.dot(acc * dt) < vel_diff.dot(vel_diff)
+                          ? planar_velocity + dt * acc
+                          : target_vel;
+    float max_vel_mag = std::max(prev_vel_mag, target_vel.norm());
+    // clamp velocity to the maximum of last velocity and target velocity
+    if (planar_velocity.norm() > max_vel_mag)
+      planar_velocity = planar_velocity.normalized() * max_vel_mag;
+    player_velocity.x() = planar_velocity.x();
+    player_velocity.z() = planar_velocity.z();
+  }
+
   physics_world_sys->cc_move(player_cc, player_velocity * dt);
 }
 

@@ -17,7 +17,9 @@ private:
   entt::entity player_entity = entt::null;
 
   // input
-  float move_speed = 15.0f;
+  float move_speed = 15.0f, jump_speed = 15.0f;
+  float acceleration = 60.0f, deceleration = 30.0f;
+  float directional_acceleration = 0.0f, turn_strength = 0.0f;
   math::vector3 player_velocity = math::vector3::Zero();
   math::vector3 move_input = math::vector3::Zero();
   math::vector3 gravity = math::vector3(0.0f, -40.0f, 0.0f);
@@ -27,8 +29,8 @@ private:
   float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,
         camera_distance = 5.0f, camera_height = 0.0f, mouse_sensitivity = 0.2f,
         camera_follow_speed = 8.0f;
-  float min_vertical_angle = -20.0f, max_vertical_angle = 60.0f;
-  math::vector3 camera_forward; // read only
+  float min_vertical_angle = -20.0f, max_vertical_angle = 80.0f;
+  math::vector3 camera_forward;
   void update_camera(float dt);
 
   // debug render

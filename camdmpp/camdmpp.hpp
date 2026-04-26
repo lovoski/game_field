@@ -13,17 +13,33 @@ public:
   void handle_engine_gui() override;
 
 private:
-  // application variables
-  bool debug_draw_trajectory = true, debug_draw_skeleton = true,
-       draw_ground_mesh = true;
-  float cam_move_speed = 60.0f, cam_stick_speed = 120.0f,
-        cam_distance = 6.0f;
-  float cam_angle_horizontal = 0.0f, cam_angle_vertical = 15.0f;
-  float camera_follow_halflife = 0.25f;
-  float cam_focus_height = 0.9f, cam_look_ahead = 0.1f;
-  float move_stick_deadzone = 0.18f, camera_turn_deadzone = 0.15f;
-  math::vector3 camera_follow_vel = math::vector3::Zero(),
-                camera_follow_ang = math::vector3::Zero();
+  bool hide_mouse = true;
+  bool camera_as_facing_direction = true;
+
+  // camera related
+  float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,
+        camera_distance = 5.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f,
+        camera_follow_speed = 8.0f;
+  math::vector3 camera_forward;
+  float min_vertical_angle = -20.0f, max_vertical_angle = 80.0f;
+  void update_camera(float dt);
+
+  // user input and trajectory prediction related
+  math::vector3 move_input = math::vector3::Zero();
+  math::vector3 player_last_pos = math::vector3::Zero(),
+                player_curr_pos = math::vector3::Zero();
+  // use a velocity spring to track the simulation body movement predicted from
+  // player velocity and user input
+  float sim_acceleration = 5.0f, sim_deceleration = 5.0f,
+        sim_move_speed_walk = 1.0f, sim_move_speed_run = 5.0f;
+  math::vector3 player_vel = math::vector3::Zero(),
+                player_ang = math::vector3::Zero();
+  float vel_halflife = 0.2f, rot_halflife = 0.2f,
+        traj_sample_time = 1.0f / 5.0f;
+  std::vector<math::vector3> _traj_world_vel, _traj_world_pos, _traj_world_dir;
+  std::vector<std::vector<float>> _traj_world_height;
+  math::vector3 desired_vel = math::vector3::Zero(),
+                desired_dir = math::vector3(0, 0, 1);
 
   std::int64_t __cur_exec_fixed = 0;
   double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
@@ -44,7 +60,7 @@ private:
   unsigned int switch_prediction_interval = 20;
 
   // Caches for character's state, converted from model_output
-  static const int cache_size = 100;
+  static const int cache_size = 220;
   std::array<std::vector<math::quat>, cache_size> joint_rotation_cache;
   std::array<math::vector3, cache_size> root_rel_pos_cache;
   std::array<math::quat, cache_size> root_rel_rot_cache;
@@ -57,12 +73,6 @@ private:
   // reached.
   bool use_front_buffer = true;
 
-  // Used for trajectory update and root position update
-  math::vector3 char_root_world_pos = math::vector3::Zero(),
-                char_root_world_vel = math::vector3::Zero(),
-                char_root_world_acc = math::vector3::Zero(),
-                char_root_world_ang = math::vector3::Zero();
-  math::quat proj_char_root_world_rot = math::quat::Identity();
   std::vector<math::quat> char_repair_c;
   std::vector<int> char_joint_parents;
   std::map<int, int> char_data_to_actor;
@@ -72,31 +82,16 @@ private:
   // std::vector<float> i_traj_facing; // (1, 10)
   // std::vector<float> i_traj_pos;    // (1, 10)
   // std::vector<float> i_style_idx;   // (1, 1)
-  std::vector<float> i_traj; // (1, 5, 7), [pos_x, pos_z, height_c, height_l,
+  std::vector<float> i_traj; // (1, 40, x), [pos_x, pos_z, height_c, height_l,
                              // height_r, fac_x, fac_z]
 
-  // Trajectory predicted from user input with spring damper heuristics
-  float vel_halflife = 0.2f, rot_halflife = 0.2f,
-        traj_sample_time = 1.0f / 5.0f, velocity_scale = 15.0f;
-  std::array<math::vector3, 5> _traj_world_vel, _traj_world_pos,
-      _traj_world_dir, _traj_world_height;
-  math::vector3 desired_vel = math::vector3::Zero(),
-                desired_dir = math::vector3(0, 0, 1);
-
-  struct terrain_triangle {
-    math::vector3 p0 = math::vector3::Zero(), p1 = math::vector3::Zero(),
-                  p2 = math::vector3::Zero();
-    math::vector2 xz0 = math::vector2::Zero(), xz1 = math::vector2::Zero(),
-                  xz2 = math::vector2::Zero();
-  };
-  float terrain_probe_half_width = 0.2f;
   float terrain_default_height = 0.0f;
   math::vector2 terrain_grid_min = math::vector2::Zero(),
                 terrain_grid_max = math::vector2::Zero(),
-                terrain_grid_cell_size = math::vector2::Ones();
+                terrain_grid_cell_size = math::vector2::Ones(),
+                terrain_grid_inv_cell_size = math::vector2::Ones();
   int terrain_grid_width = 0, terrain_grid_depth = 0;
-  std::vector<terrain_triangle> terrain_triangles;
-  std::vector<std::vector<int>> terrain_grid_cells;
+  std::vector<float> terrain_height_map;
 
   /**
    * Three things are done inside this function:
@@ -109,9 +104,13 @@ private:
   void build_terrain_sampler();
   float sample_terrain_height(const math::vector2 &xz,
                               float fallback_height) const;
-  static bool sample_terrain_triangle(const terrain_triangle &triangle,
-                                      const math::vector2 &xz, float &height);
+  float sample_terrain_path_length(const math::vector2 &start_xz,
+                                   float start_height,
+                                   const math::vector2 &direction,
+                                   float planar_distance) const;
 
+  void resample_trajectory_on_terrain(const math::vector2 &start_xz,
+                                      float start_height);
   void predict_trajectory();
   void apply_pose_and_refill();
   void predict_new_tokens();

@@ -28,10 +28,12 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   future_points = config["future_points"];
   pose_token_dim = config["pose_token_dim"];
   diffusion_steps = config["diffusion_steps"];
+  terrain_center_idx = config["terrain_center_idx"];
   joint_names = config["joint_names"].get<std::vector<std::string>>();
   joint_parents = config["joint_parents"].get<std::vector<int>>();
   input_names = config["input_names"].get<std::vector<std::string>>();
   output_names = config["output_names"].get<std::vector<std::string>>();
+  lateral_offsets_m = config["lateral_offsets_m"].get<std::vector<float>>();
   auto joint_offsets_data = config["joint_offsets"].get<std::vector<float>>();
   joint_offsets.resize(joint_num, toolkit::math::vector3::Zero());
   for (int i = 0; i < joint_num; i++) {

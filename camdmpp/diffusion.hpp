@@ -44,12 +44,13 @@ public:
   std::vector<float> traj_data;
 
   nlohmann::json config;
-  int joint_num, past_points, pose_token_dim, future_points, diffusion_steps;
+  int joint_num, past_points, pose_token_dim, future_points, diffusion_steps,
+      terrain_center_idx;
   std::vector<int> joint_parents;
   std::vector<std::string> joint_names;
   std::vector<toolkit::math::vector3> joint_offsets;
   std::vector<float> posterior_log_variance_clipped, posterior_mean_coef1,
-      posterior_mean_coef2;
+      posterior_mean_coef2, lateral_offsets_m;
 
   std::vector<float> data_std, data_mean;
   std::vector<std::string> input_names, output_names;
