@@ -52,7 +52,7 @@ public:
   std::vector<float> posterior_log_variance_clipped, posterior_mean_coef1,
       posterior_mean_coef2, lateral_offsets_m;
 
-  std::vector<float> data_std, data_mean;
+  std::vector<float> data_std, data_mean, traj_std, traj_mean;
   std::vector<std::string> input_names, output_names;
   std::vector<std::int64_t> x_t_shape, past_motion_shape, traj_shape;
 

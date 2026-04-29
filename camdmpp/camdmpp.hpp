@@ -16,6 +16,10 @@ private:
   bool hide_mouse = true;
   bool camera_as_facing_direction = true;
 
+  // character locomotion states
+  bool char_running = false, char_crouching = false;
+  void update_character_states(float dt);
+
   // camera related
   float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,
         camera_distance = 5.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f,
@@ -31,7 +35,7 @@ private:
   // use a velocity spring to track the simulation body movement predicted from
   // player velocity and user input
   float sim_acceleration = 5.0f, sim_deceleration = 5.0f,
-        sim_move_speed_walk = 1.0f, sim_move_speed_run = 5.0f;
+        sim_move_speed_walk = 1.5f, sim_move_speed_run = 3.0f;
   math::vector3 player_vel = math::vector3::Zero(),
                 player_ang = math::vector3::Zero();
   float vel_halflife = 0.2f, rot_halflife = 0.2f,
@@ -55,9 +59,9 @@ private:
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied
-  unsigned int submit_prediction_interval = 15;
+  unsigned int submit_prediction_interval = 5;
   // In each prediction, how many frames are used
-  unsigned int switch_prediction_interval = 20;
+  unsigned int switch_prediction_interval = 10;
 
   // Caches for character's state, converted from model_output
   static const int cache_size = 220;

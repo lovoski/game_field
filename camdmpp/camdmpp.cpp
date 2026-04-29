@@ -161,7 +161,22 @@ void camdmpp::handle_game_logic_tick(float dt) {
   }
 
   update_camera(dt);
+  update_character_states(dt);
   default_render_sys->push_custom_draw([this]() { debug_draw(); });
+}
+
+void camdmpp::update_character_states(float dt) {
+  if (is_key_pressed(SDLK_LSHIFT))
+    char_running = true;
+  else
+    char_running = false;
+
+  if (is_key_pressed(SDLK_LCTRL)) {
+    char_crouching = true;
+    char_running = false;
+  } else {
+    char_crouching = false;
+  }
 }
 
 void camdmpp::update_camera(float dt) {
@@ -239,7 +254,8 @@ void camdmpp::predict_trajectory() {
   player_last_pos = player_curr_pos;
   player_curr_pos = math::vector3(root_trans.world_pos().x(), 0.0f,
                                   root_trans.world_pos().z());
-  math::vector3 target_vel = sim_move_speed_walk * move_input;
+  math::vector3 target_vel =
+      (char_running ? sim_move_speed_run : sim_move_speed_walk) * move_input;
   math::vector3 target_dir = camera_forward;
   if (!camera_as_facing_direction)
     target_dir =
@@ -354,7 +370,8 @@ void camdmpp::apply_pose_and_refill() {
     for (int j = 0; j < model.lateral_offsets_m.size(); j++) {
       if (i < model.future_points - 1)
         i_traj[model.traj_shape[2] * i + 2 + j] =
-            _traj_world_height[i + 1][j] - _traj_world_height[i][j];
+            (_traj_world_height[i + 1][j] - _traj_world_height[i][j]) /
+            fixed_interval;
       else
         i_traj[model.traj_shape[2] * i + 2 + j] =
             i_traj[model.traj_shape[2] * (i - 1) + 2 + j];
@@ -370,15 +387,22 @@ void camdmpp::apply_pose_and_refill() {
     i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 7] =
         0.0f; // stand
     i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 8] =
-        0.8f; // walk
+        char_running ? 0.2f : 0.8f; // walk
     i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 9] =
-        0.2f; // jog_run
+        char_running ? 0.8f : 0.2f; // jog_run
     i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 10] =
-        0.0f; // crouch_crawl
+        char_crouching ? 1.0f : 0.0f; // crouch_crawl
     i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 11] =
         0.0f; // jump
     i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 12] =
         0.0f; // unknown
+
+    // normalize trajectory input
+    for (int k = 0; k < model.traj_shape[2]; k++) {
+      i_traj[model.traj_shape[2] * i + k] =
+          (i_traj[model.traj_shape[2] * i + k] - model.traj_mean[k]) /
+          std::max(model.traj_std[k], 1e-2f);
+    }
   }
 
   // increase the apply frame counter

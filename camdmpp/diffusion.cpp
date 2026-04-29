@@ -50,6 +50,8 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
       config["posterior_mean_coef2"].get<std::vector<float>>();
   data_std = config["data_std"].get<std::vector<float>>();
   data_mean = config["data_mean"].get<std::vector<float>>();
+  traj_std = config["traj_std"].get<std::vector<float>>();
+  traj_mean = config["traj_mean"].get<std::vector<float>>();
 
   // manually specified shapes
   x_t_shape = config["x_t_shape"].get<std::vector<int64_t>>();
