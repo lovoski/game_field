@@ -59,3 +59,12 @@ target_include_directories(
   ${PROJECT_SOURCE_DIR}
   ${ONNXRUNTIME_INCLUDE_DIR}
 )
+
+add_executable(
+  animator
+  animator/main.cpp
+  animator/animator.cpp
+  animator/animator_render.cpp
+)
+target_link_libraries(animator PRIVATE toolkit ${ONNXRUNTIME_LIBRARY})
+target_include_directories(animator PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
