@@ -19,7 +19,7 @@ private:
 
   // camera related
   float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,
-        camera_distance = 5.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f,
+        camera_distance = 2.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f,
         camera_follow_speed = 8.0f;
   math::vector3 camera_forward;
   float min_vertical_angle = -20.0f, max_vertical_angle = 80.0f;

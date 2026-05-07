@@ -326,108 +326,160 @@ def to_euler(x, order='xyz'):
         raise NotImplementedError(f"Rotation order {order} not implemented")
 
 
-def load(filename, order=None):
+def _end_site_mask(data):
+    mask = np.zeros(len(data['parents']), dtype=bool)
+    end_sites = data.get('end_sites')
+    if end_sites is None:
+        return mask
+
+    end_sites = np.asarray(end_sites)
+    if end_sites.shape == mask.shape:
+        return end_sites.astype(bool, copy=True)
+
+    if end_sites.ndim == 1 and np.issubdtype(end_sites.dtype, np.integer):
+        mask[end_sites] = True
+        return mask
+
+    raise ValueError(
+        "Unexpected end_sites shape %s for %i joints" % (end_sites.shape, len(data['parents'])))
+
+
+def _children_by_parent(parents):
+    children = [[] for _ in range(len(parents))]
+    for joint_index in range(1, len(parents)):
+        parent_index = parents[joint_index]
+        if parent_index >= 0:
+            children[parent_index].append(joint_index)
+    return children
+
+
+def _write_end_site(f, t, offset):
+    f.write("%sEnd Site\n" % t)
+    f.write("%s{\n" % t)
+    t += '\t'
+    f.write("%sOFFSET %f %f %f\n" % (t, offset[0], offset[1], offset[2]))
+    t = t[:-1]
+    f.write("%s}\n" % t)
+
+
+def load(filename, order=None, load_end_sites=False):
     """
     Load bvh motion data file.
 
-    returns:
+    Args:
+        filename: BVH filepath.
+        order: Optional shared rotation order override.
+        load_end_sites: When true, each BVH End Site is loaded as an extra joint.
+
+    Returns:
         rotations: rotation in wxyz quaternion, be reminded scipy rotation use xyzw order
         positions: one joint's local position to its parent
         offsets: one joint's local position defined in hierarchy section, use positions instead
+        end_sites: boolean mask for joints that originated from BVH End Site blocks
         parents: numpy array for one joint's parent index
         names: list of string for joint names
         frametime: time duration of a frame
     """
-    f = open(filename, "r")
-
     i = 0
     active = -1
     end_site = False
 
     names = []
-    orients = np.array([]).reshape((0, 4))
-    offsets = np.array([]).reshape((0, 3))
-    parents = np.array([], dtype=int)
+    offsets = []
+    parents = []
     joint_channels = []
     joint_orders = []
+    end_sites = []
 
-    # Parse the  file, line by line
-    for line in f:
-        
-        if line == '\n':
-            continue
-        
-        if "HIERARCHY" in line: continue
-        if "MOTION" in line: continue
+    def add_joint(name, parent, offset=None, is_end_site=False):
+        names.append(name)
+        offsets.append([0.0, 0.0, 0.0] if offset is None else list(offset))
+        parents.append(parent)
+        joint_channels.append(())
+        joint_orders.append(None)
+        end_sites.append(is_end_site)
+        return len(parents) - 1
 
-        rmatch = re.match(r'^\s*ROOT\s+(.+?)(?:\s*\{)?\s*$', line)
-        if rmatch:
-            names.append(rmatch.group(1).strip())
-            offsets = np.append(offsets, np.array([[0, 0, 0]]), axis=0)
-            orients = np.append(orients, np.array([[1, 0, 0, 0]]), axis=0)
-            parents = np.append(parents, active)
-            joint_channels.append(())
-            joint_orders.append(None)
-            active = (len(parents) - 1)
-            continue
+    def next_end_site_name(parent_index):
+        base_name = "%s_EndSite" % names[parent_index]
+        name = base_name
+        suffix = 1
+        while name in names:
+            name = "%s_%i" % (base_name, suffix)
+            suffix += 1
+        return name
 
-        if "{" in line: continue
+    with open(filename, "r") as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped:
+                continue
 
-        if "}" in line:
-            if end_site:
-                end_site = False
-            else:
-                active = parents[active]
-            continue
+            if stripped == "HIERARCHY" or stripped == "MOTION":
+                continue
 
-        offmatch = re.match(r"\s*OFFSET\s+([\-\d\.e]+)\s+([\-\d\.e]+)\s+([\-\d\.e]+)", line)
-        if offmatch:
-            if not end_site:
-                offsets[active] = np.array([list(map(float, offmatch.groups()))])
-            continue
+            rmatch = re.match(r'^\s*ROOT\s+(.+?)(?:\s*\{)?\s*$', line)
+            if rmatch:
+                active = add_joint(rmatch.group(1).strip(), active)
+                continue
 
-        chanmatch = re.match(r"\s*CHANNELS\s+(\d+)", line)
-        if chanmatch:
-            channels = int(chanmatch.group(1))
-            parts = tuple(line.split()[2:2 + channels])
-            joint_channels[active] = parts
-            if order is None:
-                rotation_parts = [channelmap[p] for p in parts if p in channelmap]
-                if rotation_parts:
-                    joint_orders[active] = "".join(rotation_parts)
-            continue
+            if "{" in line:
+                continue
 
-        jmatch = re.match(r'^\s*JOINT\s+(.+?)(?:\s*\{)?\s*$', line)
-        if jmatch:
-            names.append(jmatch.group(1).strip())
-            offsets = np.append(offsets, np.array([[0, 0, 0]]), axis=0)
-            orients = np.append(orients, np.array([[1, 0, 0, 0]]), axis=0)
-            parents = np.append(parents, active)
-            joint_channels.append(())
-            joint_orders.append(None)
-            active = (len(parents) - 1)
-            continue
+            if "}" in line:
+                if end_site:
+                    if load_end_sites and active >= 0 and end_sites[active]:
+                        active = parents[active]
+                    end_site = False
+                else:
+                    active = parents[active]
+                continue
 
-        if "End Site" in line:
-            end_site = True
-            continue
+            offmatch = re.match(r"\s*OFFSET\s+([\-\d\.e]+)\s+([\-\d\.e]+)\s+([\-\d\.e]+)", line)
+            if offmatch:
+                parsed_offset = list(map(float, offmatch.groups()))
+                if end_site:
+                    if load_end_sites:
+                        active = add_joint(next_end_site_name(active), active, parsed_offset, is_end_site=True)
+                    continue
 
-        fmatch = re.match(r"\s*Frames:\s+(\d+)", line)
-        if fmatch:
-            fnum = int(fmatch.group(1))
-            positions = offsets[np.newaxis].repeat(fnum, axis=0)
-            rotations = np.zeros((fnum, len(orients), 3))
-            continue
+                offsets[active] = parsed_offset
+                continue
 
-        fmatch = re.match(r"\s*Frame Time:\s+([\d\.]+)", line)
-        if fmatch:
-            frametime = float(fmatch.group(1))
-            continue
+            chanmatch = re.match(r"\s*CHANNELS\s+(\d+)", line)
+            if chanmatch:
+                channels = int(chanmatch.group(1))
+                parts = tuple(line.split()[2:2 + channels])
+                joint_channels[active] = parts
+                if order is None:
+                    rotation_parts = [channelmap[p] for p in parts if p in channelmap]
+                    if rotation_parts:
+                        joint_orders[active] = "".join(rotation_parts)
+                continue
 
-        # split by all posible intervals
-        dmatch = line.strip().split()
-        if dmatch:
-            data_block = np.array(list(map(float, dmatch)))
+            jmatch = re.match(r'^\s*JOINT\s+(.+?)(?:\s*\{)?\s*$', line)
+            if jmatch:
+                active = add_joint(jmatch.group(1).strip(), active)
+                continue
+
+            if "End Site" in line or "End site" in line:
+                end_site = True
+                continue
+
+            fmatch = re.match(r"\s*Frames:\s+(\d+)", line)
+            if fmatch:
+                fnum = int(fmatch.group(1))
+                offset_array = np.asarray(offsets, dtype=np.float64)
+                positions = offset_array[np.newaxis].repeat(fnum, axis=0)
+                rotations = np.zeros((fnum, len(offsets), 3), dtype=np.float64)
+                continue
+
+            fmatch = re.match(r"\s*Frame Time:\s+([\d\.]+)", line)
+            if fmatch:
+                frametime = float(fmatch.group(1))
+                continue
+
+            data_block = np.array(list(map(float, stripped.split())))
             fi = i
             expected_values = sum(len(joint_channel_names) for joint_channel_names in joint_channels)
             if len(data_block) != expected_values:
@@ -461,7 +513,7 @@ def load(filename, order=None):
 
                 if joint_position_mask.any():
                     if ji != 0 and joint_scale_mask.any():
-                        positions[fi, ji] = offsets[ji] + joint_position * joint_scale
+                        positions[fi, ji] = np.asarray(offsets[ji]) + joint_position * joint_scale
                     else:
                         positions[fi, ji, joint_position_mask] = joint_position[joint_position_mask]
 
@@ -469,8 +521,6 @@ def load(filename, order=None):
                     rotations[fi, ji, :len(joint_rotation)] = joint_rotation
 
             i += 1
-
-    f.close()
 
     if order is None:
         quaternions = eye(rotations.shape[:-1], dtype=rotations.dtype)
@@ -483,194 +533,219 @@ def load(filename, order=None):
     return {
         'rotations': unroll(quaternions),
         'positions': positions,
-        'offsets': offsets,
-        'parents': parents,
+        'offsets': np.asarray(offsets, dtype=np.float64),
+        'end_sites': np.asarray(end_sites, dtype=bool),
+        'parents': np.asarray(parents, dtype=int),
         'names': names,
         'frametime': frametime
     }
-    
-    
-def save_joint(f, data, t, i, save_order, order='zyx', save_positions=False):
-    
+
+
+def save_joint(f, names, offsets, children, end_sites, t, i, save_order, order='zyx', save_positions=False, save_end_sites=False):
     save_order.append(i)
-    
-    f.write("%sJOINT %s\n" % (t, data['names'][i]))
+
+    f.write("%sJOINT %s\n" % (t, names[i]))
     f.write("%s{\n" % t)
     t += '\t'
-  
-    f.write("%sOFFSET %f %f %f\n" % (t, data['offsets'][i,0], data['offsets'][i,1], data['offsets'][i,2]))
-    
+
+    f.write("%sOFFSET %f %f %f\n" % (t, offsets[i,0], offsets[i,1], offsets[i,2]))
+
     if save_positions:
-        f.write("%sCHANNELS 6 Xposition Yposition Zposition %s %s %s \n" % (t, 
-            channelmap_inv[order[0]], channelmap_inv[order[1]], channelmap_inv[order[2]]))
+        f.write("%sCHANNELS 6 Xposition Yposition Zposition %s %s %s \n" % (
+            t, channelmap_inv[order[0]], channelmap_inv[order[1]], channelmap_inv[order[2]]))
     else:
-        f.write("%sCHANNELS 3 %s %s %s\n" % (t, 
-            channelmap_inv[order[0]], channelmap_inv[order[1]], channelmap_inv[order[2]]))
-    
-    end_site = True
-    
-    for j in range(len(data['parents'])):
-        if data['parents'][j] == i:
-            t = save_joint(f, data, t, j, save_order, order=order, save_positions=save_positions)
-            end_site = False
-    
-    if end_site:
-        f.write("%sEnd Site\n" % t)
-        f.write("%s{\n" % t)
-        t += '\t'
-        f.write("%sOFFSET %f %f %f\n" % (t, 0.0, 0.0, 0.0))
-        t = t[:-1]
-        f.write("%s}\n" % t)
-  
+        f.write("%sCHANNELS 3 %s %s %s\n" % (
+            t, channelmap_inv[order[0]], channelmap_inv[order[1]], channelmap_inv[order[2]]))
+
+    wrote_child = False
+    for child in children[i]:
+        if save_end_sites and end_sites[child]:
+            if children[child]:
+                raise ValueError("End Site joint %s cannot have children" % names[child])
+            _write_end_site(f, t, offsets[child])
+            wrote_child = True
+            continue
+
+        t = save_joint(
+            f, names, offsets, children, end_sites, t, child, save_order,
+            order=order, save_positions=save_positions, save_end_sites=save_end_sites)
+        wrote_child = True
+
+    if not wrote_child:
+        _write_end_site(f, t, np.zeros(3, dtype=offsets.dtype))
+
     t = t[:-1]
     f.write("%s}\n" % t)
-    
-    return t
-    
 
-def save(filename, data, save_positions=False):
+    return t
+
+
+def save(filename, data, save_positions=False, save_end_sites=False):
     order = 'zyx'
     frametime = data['frametime']
-    
-    with open(filename, 'w') as f:
+    names = data['names']
+    offsets = np.asarray(data['offsets'])
+    positions = np.asarray(data['positions'])
+    rotations = np.asarray(data['rotations'])
+    parents = np.asarray(data['parents'], dtype=int)
+    end_sites = _end_site_mask(data)
+    children = _children_by_parent(parents)
 
+    if save_end_sites and end_sites[0]:
+        raise ValueError("Root joint cannot be saved as End Site")
+
+    with open(filename, 'w') as f:
         t = ""
         f.write("%sHIERARCHY\n" % t)
-        f.write("%sROOT %s\n" % (t, data['names'][0]))
+        f.write("%sROOT %s\n" % (t, names[0]))
         f.write("%s{\n" % t)
         t += '\t'
 
-        f.write("%sOFFSET %f %f %f\n" % (t, data['offsets'][0,0], data['offsets'][0,1], data['offsets'][0,2]) )
-        f.write("%sCHANNELS 6 Xposition Yposition Zposition %s %s %s \n" % 
-            (t, channelmap_inv[order[0]], channelmap_inv[order[1]], channelmap_inv[order[2]]))
+        f.write("%sOFFSET %f %f %f\n" % (t, offsets[0,0], offsets[0,1], offsets[0,2]))
+        f.write("%sCHANNELS 6 Xposition Yposition Zposition %s %s %s \n" % (
+            t, channelmap_inv[order[0]], channelmap_inv[order[1]], channelmap_inv[order[2]]))
 
         save_order = [0]
-            
-        for i in range(len(data['parents'])):
-            if data['parents'][i] == 0:
-                t = save_joint(f, data, t, i, save_order, order=order, save_positions=save_positions)
-      
+        wrote_root_child = False
+        for child in children[0]:
+            if save_end_sites and end_sites[child]:
+                if children[child]:
+                    raise ValueError("End Site joint %s cannot have children" % names[child])
+                _write_end_site(f, t, offsets[child])
+                wrote_root_child = True
+                continue
+
+            t = save_joint(
+                f, names, offsets, children, end_sites, t, child, save_order,
+                order=order, save_positions=save_positions, save_end_sites=save_end_sites)
+            wrote_root_child = True
+
+        if not wrote_root_child:
+            _write_end_site(f, t, np.zeros(3, dtype=offsets.dtype))
+
         t = t[:-1]
         f.write("%s}\n" % t)
 
-        rots, poss = 180.0/np.pi*to_euler(data['rotations'], order[::-1]) , data['positions']
+        rots = 180.0 / np.pi * to_euler(rotations, order[::-1])
 
         f.write("MOTION\n")
-        f.write("Frames: %i\n" % len(rots));
-        f.write("Frame Time: %f\n" % frametime);
-        
+        f.write("Frames: %i\n" % len(rots))
+        f.write("Frame Time: %f\n" % frametime)
+
         for i in range(rots.shape[0]):
             for j in save_order:
-                
                 if save_positions or j == 0:
-                
                     f.write("%f %f %f %f %f %f " % (
-                        poss[i,j,0],                  poss[i,j,1],                  poss[i,j,2], 
+                        positions[i,j,0], positions[i,j,1], positions[i,j,2],
                         rots[i,j,ordermap[order[0]]], rots[i,j,ordermap[order[1]]], rots[i,j,ordermap[order[2]]]))
-                
                 else:
-                    
                     f.write("%f %f %f " % (
                         rots[i,j,ordermap[order[0]]], rots[i,j,ordermap[order[1]]], rots[i,j,ordermap[order[2]]]))
 
             f.write("\n")
 
-def mirrored_motion(data):
-  mirror_bones = []
-  pos = data['positions'].copy()
-  rot = data['rotations'].copy()
-  for ni, n in enumerate(data["names"]):
-      if "Right" in n and n.replace("Right", "Left") in data["names"]:
-          mirror_bones.append(
-              data["names"].index(n.replace("Right", "Left"))
-          )
-      elif "Left" in n and n.replace("Left", "Right") in data["names"]:
-          mirror_bones.append(
-              data["names"].index(n.replace("Left", "Right"))
-          )
-      else:
-          mirror_bones.append(ni)
-  mirror_bones = np.array(mirror_bones)
-  gloRot, gloPos = fk(rot, pos, data["parents"])
-  gloPos = np.array([-1, 1, 1]) * gloPos[:, mirror_bones]
-  gloRot = np.array([1, 1, -1, -1]) * gloRot[:, mirror_bones]
-  rot, pos = ik(gloRot, gloPos, data["parents"])
 
-  m_data = data.copy()
-  m_data['rotations'] = rot.copy()
-  m_data['positions'] = pos.copy()
-  return m_data
+def mirrored_motion(data):
+    mirror_bones = []
+    pos = data['positions'].copy()
+    rot = data['rotations'].copy()
+    end_sites = _end_site_mask(data)
+    for ni, n in enumerate(data["names"]):
+        if "Right" in n and n.replace("Right", "Left") in data["names"]:
+            mirror_bones.append(data["names"].index(n.replace("Right", "Left")))
+        elif "Left" in n and n.replace("Left", "Right") in data["names"]:
+            mirror_bones.append(data["names"].index(n.replace("Left", "Right")))
+        else:
+            mirror_bones.append(ni)
+    mirror_bones = np.array(mirror_bones)
+    gloRot, gloPos = fk(rot, pos, data["parents"])
+    gloPos = np.array([-1, 1, 1]) * gloPos[:, mirror_bones]
+    gloRot = np.array([1, 1, -1, -1]) * gloRot[:, mirror_bones]
+    rot, pos = ik(gloRot, gloPos, data["parents"])
+
+    m_data = data.copy()
+    m_data['rotations'] = rot.copy()
+    m_data['positions'] = pos.copy()
+    m_data['end_sites'] = end_sites[mirror_bones].copy()
+    return m_data
+
 
 def remove_joint(data, joint_name):
-  """
-  Remove the given joint and all its children if exists
-  """
-  nframes = data['rotations'].shape[0]
-  njoints = len(data['names'])
-  children = []
-  for i in range(njoints):
-    children.append([])
-    if data['parents'][i] != -1:
-      children[data['parents'][i]].append(i)
-  joint_idx = data['names'].index(joint_name)
-  joints_to_be_removed = []
-  s = [joint_idx]
-  while len(s) > 0:
-    last = s.pop()
-    joints_to_be_removed.append(last)
-    for c in children[last]:
-      s.append(c)
-  old_id_to_new = {}
-  for i in range(njoints):
-    if joints_to_be_removed.count(i) == 0:
-      old_id_to_new[i] = len(old_id_to_new.items())
-  rotations = np.zeros((nframes, njoints-len(joints_to_be_removed), 4))
-  positions = np.zeros((nframes, njoints-len(joints_to_be_removed), 3))
-  offsets = np.zeros((njoints-len(joints_to_be_removed), 3))
-  names, parents = [], []
-  for k, v in old_id_to_new.items():
-    rotations[:,v] = data['rotations'][:,k]
-    positions[:,v] = data['positions'][:,k]
-    offsets[v] = data['offsets'][k]
-    names.append(data['names'][k])
-    if data['parents'][k] == -1:
-      parents.append(-1)
-    else:
-      parents.append(old_id_to_new[data['parents'][k]])
-  return {
-    'rotations': rotations,
-    'positions': positions,
-    'offsets': offsets,
-    'names': names,
-    'parents': parents,
-    'frametime': data['frametime']
-  }
+    """
+    Remove the given joint and all its children if exists
+    """
+    nframes = data['rotations'].shape[0]
+    njoints = len(data['names'])
+    end_sites = _end_site_mask(data)
+    children = []
+    for i in range(njoints):
+        children.append([])
+        if data['parents'][i] != -1:
+            children[data['parents'][i]].append(i)
+    joint_idx = data['names'].index(joint_name)
+    joints_to_be_removed = []
+    s = [joint_idx]
+    while len(s) > 0:
+        last = s.pop()
+        joints_to_be_removed.append(last)
+        for c in children[last]:
+            s.append(c)
+    old_id_to_new = {}
+    for i in range(njoints):
+        if joints_to_be_removed.count(i) == 0:
+            old_id_to_new[i] = len(old_id_to_new.items())
+    rotations = np.zeros((nframes, njoints-len(joints_to_be_removed), 4))
+    positions = np.zeros((nframes, njoints-len(joints_to_be_removed), 3))
+    offsets = np.zeros((njoints-len(joints_to_be_removed), 3))
+    new_end_sites = np.zeros(njoints-len(joints_to_be_removed), dtype=bool)
+    names, parents = [], []
+    for k, v in old_id_to_new.items():
+        rotations[:,v] = data['rotations'][:,k]
+        positions[:,v] = data['positions'][:,k]
+        offsets[v] = data['offsets'][k]
+        new_end_sites[v] = end_sites[k]
+        names.append(data['names'][k])
+        if data['parents'][k] == -1:
+            parents.append(-1)
+        else:
+            parents.append(old_id_to_new[data['parents'][k]])
+    return {
+        'rotations': rotations,
+        'positions': positions,
+        'offsets': offsets,
+        'end_sites': new_end_sites,
+        'names': names,
+        'parents': parents,
+        'frametime': data['frametime']
+    }
+
 
 def resample_motion(data, target_fps=60):
-  nframes = data['rotations'].shape[0]
-  njoints = len(data['parents'])
-  duration = nframes * data['frametime']
-  target_frametime = 1.0/target_fps
-  target_nframes = int(np.floor(duration / target_frametime))
-  rotations = np.zeros((target_nframes, njoints, 4))
-  positions = np.zeros((target_nframes, njoints, 3))
-  for i in range(target_nframes):
-    timestamp = i*target_frametime
-    start = np.clip(int(np.floor(timestamp/data['frametime'])), 0, nframes-1)
-    end = np.clip(start+1, 0, nframes-1)
-    blending_alpha = np.clip((timestamp-start*data['frametime'])/data['frametime'], 0.0, 1.0)
-    positions[i,:] = data['positions'][start,:]*(1.0-blending_alpha)+data['positions'][end,:]*blending_alpha
-    for j in range(njoints):
-      if np.dot(data['rotations'][start,j], data['rotations'][end,j]) < 0:
-        rotations[i,j] = data['rotations'][start,j]*(1.0-blending_alpha)-data['rotations'][end,j]*blending_alpha
-      else:
-        rotations[i,j] = data['rotations'][start,j]*(1.0-blending_alpha)+data['rotations'][end,j]*blending_alpha
-      rotations[i,j] /= (np.linalg.norm(rotations[i,j])+1e-8)
-  return {
-    'rotations': rotations,
-    'positions': positions,
-    'offsets': data['offsets'],
-    'names': data['names'],
-    'parents': data['parents'],
-    'frametime': target_frametime
-  }
+    nframes = data['rotations'].shape[0]
+    njoints = len(data['parents'])
+    duration = nframes * data['frametime']
+    target_frametime = 1.0 / target_fps
+    target_nframes = int(np.floor(duration / target_frametime))
+    rotations = np.zeros((target_nframes, njoints, 4))
+    positions = np.zeros((target_nframes, njoints, 3))
+    for i in range(target_nframes):
+        timestamp = i * target_frametime
+        start = np.clip(int(np.floor(timestamp / data['frametime'])), 0, nframes - 1)
+        end = np.clip(start + 1, 0, nframes - 1)
+        blending_alpha = np.clip((timestamp - start * data['frametime']) / data['frametime'], 0.0, 1.0)
+        positions[i,:] = data['positions'][start,:] * (1.0 - blending_alpha) + data['positions'][end,:] * blending_alpha
+        for j in range(njoints):
+            if np.dot(data['rotations'][start,j], data['rotations'][end,j]) < 0:
+                rotations[i,j] = data['rotations'][start,j] * (1.0 - blending_alpha) - data['rotations'][end,j] * blending_alpha
+            else:
+                rotations[i,j] = data['rotations'][start,j] * (1.0 - blending_alpha) + data['rotations'][end,j] * blending_alpha
+            rotations[i,j] /= (np.linalg.norm(rotations[i,j]) + 1e-8)
+    return {
+        'rotations': rotations,
+        'positions': positions,
+        'offsets': data['offsets'],
+        'end_sites': _end_site_mask(data).copy(),
+        'names': data['names'],
+        'parents': data['parents'],
+        'frametime': target_frametime
+    }

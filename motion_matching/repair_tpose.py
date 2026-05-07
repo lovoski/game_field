@@ -21,7 +21,7 @@ def migrate_tpose(tpose0, tpose1, base_dir, output_dir):
 
   for file in os.listdir(base_dir):
     if file.endswith('.bvh'):
-      data = bvh.load(os.path.join(base_dir, file))
+      data = bvh.load(os.path.join(base_dir, file), load_end_sites=True)
       nframes, njoints = data['rotations'].shape[:2]
       grot,_ = bvh.fk(data['rotations'], data['positions'], data['parents'])
       repaired_ori = np.zeros_like(data['rotations'])
@@ -35,14 +35,14 @@ def migrate_tpose(tpose0, tpose1, base_dir, output_dir):
             data['rotations'][f,i] = (Rotation.from_quat(repaired_ori[f,data['parents'][i],[1,2,3,0]]).inv()*Rotation.from_quat(repaired_ori[f,i,[1,2,3,0]])).as_quat()[[3,0,1,2]]
       data['offsets'] = tpose1['offsets']
       print(f"save repaired motion to {os.path.join(output_dir, file)}")
-      bvh.save(os.path.join(output_dir, file), data)
+      bvh.save(os.path.join(output_dir, file), data, save_end_sites=True)
 
 def bake_tpose(filepath, output_path):
   """
   bake the first frame of the bvh file to the rest pose, and save the repaired motion to output_path.
   """
   
-  data = bvh.load(filepath)
+  data = bvh.load(filepath, load_end_sites=True)
   grot, gpos = bvh.fk(data['rotations'], data['positions'], data['parents'])
   baked_rot = np.zeros_like(data['rotations'][0:1])
   baked_pos = np.zeros_like(data['positions'][0:1])
@@ -58,18 +58,18 @@ def bake_tpose(filepath, output_path):
   data['rotations'] = baked_rot
   data['positions'] = baked_pos
   data['offsets'] = baked_offset
-  bvh.save(output_path, data)
+  bvh.save(output_path, data, save_end_sites=True)
 
 if __name__ == "__main__":
   base_dir = os.path.join(FILE_PATH, "data")
   
-  bake_tpose(os.path.join(base_dir, "__test_quad_tpose.bvh"), os.path.join(base_dir, "__test_quad_tpose_baked.bvh"))
-  
+  bake_tpose(os.path.join(base_dir, "dog_subset_tpose.bvh"), os.path.join(base_dir, "dog_subset_tpose_baked.bvh"))
+
   migrate_tpose(
-    bvh.load(os.path.join(base_dir, "__test_quad_tpose.bvh")), 
-    bvh.load(os.path.join(base_dir, "__test_quad_tpose_baked.bvh")), 
-    os.path.join(base_dir, '__test'), 
-    os.path.join(base_dir, '__test_repaired'))
+    bvh.load(os.path.join(base_dir, "dog_subset_tpose.bvh"), load_end_sites=True), 
+    bvh.load(os.path.join(base_dir, "dog_subset_tpose_baked.bvh"), load_end_sites=True), 
+    os.path.join(base_dir, 'dog_subset'), 
+    os.path.join(base_dir, 'dog_subset_repaired'))
   
   # migrate_tpose(
   #   bvh.load(os.path.join(base_dir, "lafan1_tpose.bvh")), 
