@@ -7,164 +7,213 @@ namespace toolkit::opengl3d {
 
 void motion_matching_app::animate_player(float dt) {
   auto actor_comp = registry.try_get<actor>(player_entity);
-  auto controllers = get_game_controllers();
-  if ((controllers.size() > 0) && (actor_comp != nullptr)) {
-    // input and trajectory
-    auto [left_stick_raw, right_stick_raw, left_trigger, right_trigger] =
-        get_game_controller_analog_inputs(controllers[0]);
-    math::vector3 left_stick(left_stick_raw.x(), 0.0f, left_stick_raw.y());
-    math::vector3 right_stick(right_stick_raw.x(), 0.0f, right_stick_raw.y());
-    desired_vel = 5 * left_stick;
-    if (left_stick.norm() > 0.01f)
-      desired_dir = left_stick.normalized();
-    if (right_stick.norm() > 0.01f)
-      desired_dir = right_stick.normalized();
-    desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
+  if (actor_comp == nullptr)
+    return;
 
-    // fill in the trajectory data
-    std::array<math::vector3, 3> traj_world_vel;
-    for (int i = 0; i < 3; i++) {
-      auto [vel, acc] = spring_damper_position(
-          context.root_world_vel, context.root_world_acc, desired_vel,
-          math::vector3::Zero(), traj_sample_time * (i + 1), vel_halflife);
-      auto [rot, ang] = spring_damper_rotation(
-          context.root_world_rot, context.root_world_ang, desired_rot,
-          math::vector3::Zero(), traj_sample_time * (i + 1), rot_halflife);
-      traj_world_vel[i] = vel;
-      if (i == 0)
-        context.traj_world_pos[i] =
-            (context.root_world_vel + vel) * 0.5 * traj_sample_time * (i + 1) +
-            context.root_world_pos;
-      else
-        context.traj_world_pos[i] =
-            (traj_world_vel[i - 1] + traj_world_vel[i]) * 0.5 *
-                traj_sample_time +
-            context.traj_world_pos[i - 1];
-      context.traj_world_dir[i] = (rot * math::vector3(0, 0, 1)).normalized();
-    }
+  // input and trajectory
+  auto &camera_trans = registry.get<transform>(active_camera);
+  camera_forward = -math::vector3(camera_trans.local_forward().x(), 0.0f,
+                                  camera_trans.local_forward().z())
+                        .normalized();
+  math::vector3 root_forward = context.root_world_rot * math::vector3(0, 0, 1);
+  root_forward.y() = 0.0f;
+  root_forward.normalize();
 
-    // search
-    if (search_timer <= 0.0f) {
-      auto Xquery = compute_runtime_feature(anim_frame, context);
+  math::quat camera_forward_rot =
+      math::from_to_rot(math::vector3(0.0f, 0.0f, -1.0f), camera_forward);
+  move_input = math::vector3::Zero();
+  if (is_key_pressed(SDLK_w))
+    move_input += math::vector3(0.0f, 0.0f, -1.0f);
+  if (is_key_pressed(SDLK_s))
+    move_input += math::vector3(0.0f, 0.0f, 1.0f);
+  if (is_key_pressed(SDLK_a))
+    move_input += math::vector3(-1.0f, 0.0f, 0.0f);
+  if (is_key_pressed(SDLK_d))
+    move_input += math::vector3(1.0f, 0.0f, 0.0f);
+  if (move_input.norm() > 1e-6f)
+    move_input.normalize();
+  move_input = camera_forward_rot * move_input;
 
-      best_range = anim_range;
-      best_frame = anim_frame;
+  desired_vel = (is_key_pressed(SDLK_LSHIFT) ? move_speed_run
+                                             : move_speed_walk) *
+                move_input;
+  desired_dir = camera_as_facing_direction
+                    ? camera_forward
+                    : (desired_vel.norm() > 1e-6f ? desired_vel.normalized()
+                                                   : root_forward);
+  desired_rot = math::from_to_rot(math::vector3(0, 0, 1), desired_dir);
 
-      float best;
-      if (best_frame < YrangeStops[best_range] - search_time) {
-        best = feature_dist(Xquery, X[best_frame]) - current_bias;
-      } else
-        best = std::numeric_limits<float>::max();
+  // fill in the trajectory data
+  std::array<math::vector3, 3> traj_world_vel;
+  for (int i = 0; i < 3; i++) {
+    auto [vel, acc] = spring_damper_position(
+        context.root_world_vel, context.root_world_acc, desired_vel,
+        math::vector3::Zero(), traj_sample_time * (i + 1), vel_halflife);
+    auto [rot, ang] = spring_damper_rotation(
+        context.root_world_rot, context.root_world_ang, desired_rot,
+        math::vector3::Zero(), traj_sample_time * (i + 1), rot_halflife);
+    traj_world_vel[i] = vel;
+    if (i == 0)
+      context.traj_world_pos[i] =
+          (context.root_world_vel + vel) * 0.5 * traj_sample_time * (i + 1) +
+          context.root_world_pos;
+    else
+      context.traj_world_pos[i] =
+          (traj_world_vel[i - 1] + traj_world_vel[i]) * 0.5 *
+              traj_sample_time +
+          context.traj_world_pos[i - 1];
+    context.traj_world_dir[i] = (rot * math::vector3(0, 0, 1)).normalized();
+  }
 
-      for (int range_idx = 0; range_idx < YrangeStarts.size(); range_idx++) {
-        // search each range for the optimal feature
-        for (int feat_idx = YrangeStarts[range_idx];
-             feat_idx < YrangeStops[range_idx] - 60; feat_idx++) {
-          float dist = feature_dist(Xquery, X[feat_idx]);
-          if (dist < best) {
-            best = dist;
-            best_range = range_idx;
-            best_frame = feat_idx;
-          }
+  // search
+  if (search_timer <= 0.0f) {
+    auto Xquery = compute_runtime_feature(anim_frame, context);
+
+    best_range = anim_range;
+    best_frame = anim_frame;
+
+    float best;
+    if (best_frame < YrangeStops[best_range] - search_time) {
+      best = feature_dist(Xquery, X[best_frame]) - current_bias;
+    } else
+      best = std::numeric_limits<float>::max();
+
+    for (int range_idx = 0; range_idx < YrangeStarts.size(); range_idx++) {
+      // search each range for the optimal feature
+      for (int feat_idx = YrangeStarts[range_idx];
+           feat_idx < YrangeStops[range_idx] - 60; feat_idx++) {
+        float dist = feature_dist(Xquery, X[feat_idx]);
+        if (dist < best) {
+          best = dist;
+          best_range = range_idx;
+          best_frame = feat_idx;
         }
       }
-
-      if ((best_range != anim_range) || (best_frame != anim_frame)) {
-        // make transition to the new motion
-        inertialize_transition_position(off_pos, off_vel, Ypos[anim_frame],
-                                        Yvel[anim_frame], Ypos[best_frame],
-                                        Yvel[best_frame]);
-        inertialize_transition_rotation(off_rot, off_ang, Yrot[anim_frame],
-                                        Yang[anim_frame], Yrot[best_frame],
-                                        Yang[best_frame]);
-
-        anim_range = best_range;
-        anim_frame = best_frame;
-      }
-
-      ent_start_rot = context.root_world_rot;
-      db_start_rot = Yrot[best_frame][0];
-
-      search_timer = search_time;
     }
-    anim_frame = std::clamp(anim_frame + 1.0f,
-                            static_cast<float>(YrangeStarts[anim_range]),
-                            static_cast<float>(YrangeStops[anim_range] - 1));
-    search_timer -= dt;
 
-    if (anim_frame >= YrangeStops[anim_range] - 4)
-      search_timer = 0.0f;
+    if ((best_range != anim_range) || (best_frame != anim_frame)) {
+      // make transition to the new motion
+      inertialize_transition_position(off_pos, off_vel, Ypos[anim_frame],
+                                      Yvel[anim_frame], Ypos[best_frame],
+                                      Yvel[best_frame]);
+      inertialize_transition_rotation(off_rot, off_ang, Yrot[anim_frame],
+                                      Yang[anim_frame], Yrot[best_frame],
+                                      Yang[best_frame]);
 
-    context.root_world_rot =
-        (Yrot[anim_frame][0] * (db_start_rot.inverse())) * ent_start_rot;
-    context.root_world_vel =
-        context.root_world_rot *
-        (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
-    if (context.root_world_vel.norm() < 0.015)
-      context.root_world_vel = math::vector3::Zero();
-    context.root_world_pos =
-        context.root_world_pos + context.root_world_vel * dt;
-
-    // update the rest of the pose
-    data_joints_world_pos.resize(parents.size());
-    // Ypos -> local position
-    // Yrot -> local rotation
-    std::vector<math::matrix4> local_trans(parents.size()),
-        global_trans(parents.size());
-    std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
-        world_rot(parents.size(), math::quat::Identity());
-    std::vector<math::vector3> local_pos(parents.size(), math::vector3::Zero()),
-        old_local_pos(parents.size(), math::vector3::Zero());
-    math::vector3 scale_value = math::vector3::Ones();
-    float iner_halflife = 0.075;
-    for (int i = 0; i < parents.size(); i++) {
-      auto [op, ov, out_pos, out_vel] = inertialize_update_position(
-          off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
-          iner_halflife, dt);
-      auto [orf, oa, out_rot, out_ang] = inertialize_update_rotation(
-          off_rot[i], off_ang[i], Yrot[anim_frame][i], Yang[anim_frame][i],
-          iner_halflife, dt);
-      off_pos[i] = op;
-      off_vel[i] = ov;
-      off_rot[i] = orf;
-      off_ang[i] = oa;
-      local_rot[i] = out_rot;
-      local_pos[i] = out_pos;
-      local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
+      anim_range = best_range;
+      anim_frame = best_frame;
     }
-    old_local_pos = local_pos;
-    for (int i = 0; i < parents.size(); i++) {
-      if (parents[i] != -1) {
-        global_trans[i] = global_trans[parents[i]] * local_trans[i];
-        world_rot[i] = world_rot[parents[i]] * local_rot[i];
+
+    ent_start_rot = context.root_world_rot;
+    db_start_rot = Yrot[best_frame][0];
+
+    search_timer = search_time;
+  }
+  anim_frame = std::clamp(anim_frame + 1.0f,
+                          static_cast<float>(YrangeStarts[anim_range]),
+                          static_cast<float>(YrangeStops[anim_range] - 1));
+  search_timer -= dt;
+
+  if (anim_frame >= YrangeStops[anim_range] - 4)
+    search_timer = 0.0f;
+
+  context.root_world_rot =
+      (Yrot[anim_frame][0] * (db_start_rot.inverse())) * ent_start_rot;
+  context.root_world_vel = context.root_world_rot *
+                           (Yrot[anim_frame][0].inverse() * Yvel[anim_frame][0]);
+  if (context.root_world_vel.norm() < 0.015)
+    context.root_world_vel = math::vector3::Zero();
+  context.root_world_pos = context.root_world_pos + context.root_world_vel * dt;
+
+  // update the rest of the pose
+  data_joints_world_pos.resize(parents.size());
+  // Ypos -> local position
+  // Yrot -> local rotation
+  std::vector<math::matrix4> local_trans(parents.size()),
+      global_trans(parents.size());
+  std::vector<math::quat> local_rot(parents.size(), math::quat::Identity()),
+      world_rot(parents.size(), math::quat::Identity());
+  std::vector<math::vector3> local_pos(parents.size(), math::vector3::Zero()),
+      old_local_pos(parents.size(), math::vector3::Zero());
+  math::vector3 scale_value = math::vector3::Ones();
+  float iner_halflife = 0.075;
+  for (int i = 0; i < parents.size(); i++) {
+    auto [op, ov, out_pos, out_vel] = inertialize_update_position(
+        off_pos[i], off_vel[i], Ypos[anim_frame][i], Yvel[anim_frame][i],
+        iner_halflife, dt);
+    auto [orf, oa, out_rot, out_ang] = inertialize_update_rotation(
+        off_rot[i], off_ang[i], Yrot[anim_frame][i], Yang[anim_frame][i],
+        iner_halflife, dt);
+    off_pos[i] = op;
+    off_vel[i] = ov;
+    off_rot[i] = orf;
+    off_ang[i] = oa;
+    local_rot[i] = out_rot;
+    local_pos[i] = out_pos;
+    local_trans[i] = math::compose_transform(out_pos, out_rot, scale_value);
+  }
+  old_local_pos = local_pos;
+  for (int i = 0; i < parents.size(); i++) {
+    if (parents[i] != -1) {
+      global_trans[i] = global_trans[parents[i]] * local_trans[i];
+      world_rot[i] = world_rot[parents[i]] * local_rot[i];
+    } else {
+      // replace the transform of simulation object with the user controlled
+      // variables
+      global_trans[i] = math::compose_transform(
+          context.root_world_pos, context.root_world_rot, scale_value);
+      world_rot[i] = context.root_world_rot;
+    }
+  }
+
+  // we assume the motion from database have identity joint rotation at tpose
+  std::vector<math::quat> apply_ori(actor_comp->ordered_entities.size(),
+                                    math::quat::Identity());
+  for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
+    auto joint_entity = actor_comp->ordered_entities[i];
+    auto &joint_trans = registry.get<transform>(joint_entity);
+    if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
+      int joint_data_idx = joint_name_to_idx[joint_trans.name];
+      apply_ori[i] = world_rot[joint_data_idx] * scene_tpose_ori[i];
+      if (i == 0) {
+        math::vector3 world_pos = global_trans[joint_data_idx].col(3).head<3>();
+        joint_trans.set_world_pos(world_pos);
+        joint_trans.set_world_rot(apply_ori[i]);
       } else {
-        // replace the transform of simulation object with the user controlled
-        // variables
-        global_trans[i] = math::compose_transform(
-            context.root_world_pos, context.root_world_rot, scale_value);
-        world_rot[i] = context.root_world_rot;
-      }
-    }
-
-    // we assume the motion from database have identity joint rotation at tpose
-    std::vector<math::quat> apply_ori(actor_comp->ordered_entities.size(), math::quat::Identity());
-    for (int i = 0; i < actor_comp->ordered_entities.size(); i++) {
-      auto joint_entity = actor_comp->ordered_entities[i];
-      auto &joint_trans = registry.get<transform>(joint_entity);
-      if (joint_name_to_idx.find(joint_trans.name) != joint_name_to_idx.end()) {
-        int joint_data_idx = joint_name_to_idx[joint_trans.name];
-        apply_ori[i] = world_rot[joint_data_idx] * scene_tpose_ori[i];
-        if (i == 0) {
-          math::vector3 world_pos =
-              global_trans[joint_data_idx].col(3).head<3>();
-          joint_trans.set_world_pos(world_pos);
-          joint_trans.set_world_rot(apply_ori[i]);
-        } else {
-          joint_trans.set_world_rot(apply_ori[i]);
-        }
+        joint_trans.set_world_rot(apply_ori[i]);
       }
     }
   }
+}
+
+void motion_matching_app::update_camera(float) {
+  auto delta = get_mouse_screen_delta();
+  if (!mouse_hidden)
+    delta = math::vector2::Zero();
+  camera_horizontal_angle -= mouse_sensitivity * delta.x();
+  camera_vertical_angle += mouse_sensitivity * delta.y();
+  camera_vertical_angle =
+      std::clamp(camera_vertical_angle, min_vertical_angle, max_vertical_angle);
+
+  auto &player_trans = registry.get<transform>(player_entity);
+  auto &cam_trans = registry.get<transform>(active_camera);
+  math::vector3 cam_offset =
+      math::angle_axis(math::deg_to_rad(camera_horizontal_angle),
+                       math::world_up) *
+      math::angle_axis(math::deg_to_rad(-camera_vertical_angle),
+                       math::world_right) *
+      math::vector3(0.0f, 0.0f, camera_distance);
+  math::vector3 cam_pos = player_trans.world_pos() +
+                          math::vector3(0.0f, camera_height, 0.0f) + cam_offset;
+  math::matrix3 cam_rot_mat = math::matrix3::Identity();
+  math::vector3 _z = cam_offset.normalized();
+  math::vector3 _x = math::world_up.cross(_z).normalized();
+  math::vector3 _y = _z.cross(_x).normalized();
+  cam_rot_mat.col(0) = _x;
+  cam_rot_mat.col(1) = _y;
+  cam_rot_mat.col(2) = _z;
+  cam_trans.set_world_pos(cam_pos);
+  cam_trans.set_world_rot(math::quat(cam_rot_mat));
 }
 
 void motion_matching_app::handle_game_logic_tick(float dt) {
@@ -177,37 +226,20 @@ void motion_matching_app::handle_game_logic_tick(float dt) {
   }
   __cur_time += dt;
 
-  // update camera position
-  auto &player_trans = registry.get<transform>(player_entity);
-  cam_angle_horizontal -= dt * cam_move_speed * mouse_screen_delta.x();
-  cam_angle_vertical += dt * cam_move_speed * mouse_screen_delta.y();
-  cam_angle_vertical = std::clamp(cam_angle_vertical, -10.0f, 80.0f);
-  float cos_z = cos(math::deg_to_rad(cam_angle_vertical));
-  math::vector3 cam_z =
-      math::vector3(cos_z * sin(math::deg_to_rad(cam_angle_horizontal)),
-                    sin(math::deg_to_rad(cam_angle_vertical)),
-                    cos_z * cos(math::deg_to_rad(cam_angle_horizontal)))
-          .normalized();
-  math::vector3 cam_y(0.0, 1.0, 0.0);
-  math::vector3 cam_x = (cam_y.cross(cam_z)).normalized();
-  cam_y = (cam_z.cross(cam_x)).normalized();
-  math::matrix3 cam_rot = math::matrix3::Identity();
-  cam_rot << cam_x, cam_y, cam_z;
-  auto &cam_trans = registry.get<transform>(active_camera);
-  cam_trans.set_world_rot(math::quat(cam_rot));
-  cam_trans.set_world_pos(player_trans.world_pos() + cam_z * 3);
-
   // handle interaction input
-  if (is_key_triggered(SDLK_ESCAPE))
-    quit_app_running();
-  if (is_key_triggered(SDLK_1)) {
+  if (is_key_triggered(SDLK_ESCAPE)) {
     mouse_hidden = !mouse_hidden;
     set_game_mode(true, mouse_hidden);
   }
+  if (is_key_triggered(SDLK_f)) {
+    camera_as_facing_direction = !camera_as_facing_direction;
+  }
+
+  update_camera(dt);
 }
 
 void motion_matching_app::handle_custom_initialization() {
-  set_game_mode(true, false);
+  set_game_mode(true, mouse_hidden);
   if (std::filesystem::exists("motion_matching/db.npz") &&
       std::filesystem::exists("motion_matching/mapping.json") &&
       std::filesystem::exists("motion_matching/setup.scene")) {

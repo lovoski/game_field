@@ -493,6 +493,8 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
           scene_buffer_apply_mesh_skinning_program.set_bool(
               "gBlended",
               mesh_with_active_bs.count(bundle.mesh_entities[k]) > 0);
+          scene_buffer_apply_mesh_skinning_program.set_int(
+              "gSkinningAlgorithm", bundle.skinning_algorithm);
           scene_buffer_apply_mesh_skinning_program.dispatch(
               (data.vertices.size() + work_group_size - 1) / work_group_size, 1,
               1);

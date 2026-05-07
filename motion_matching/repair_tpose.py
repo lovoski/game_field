@@ -63,13 +63,19 @@ def bake_tpose(filepath, output_path):
 if __name__ == "__main__":
   base_dir = os.path.join(FILE_PATH, "data")
   
-  bake_tpose(os.path.join(base_dir, "lafan1_tpose.bvh"), os.path.join(base_dir, "lafan1_tpose_baked.bvh"))
+  bake_tpose(os.path.join(base_dir, "__test_quad_tpose.bvh"), os.path.join(base_dir, "__test_quad_tpose_baked.bvh"))
   
   migrate_tpose(
-    bvh.load(os.path.join(base_dir, "lafan1_tpose.bvh")), 
-    bvh.load(os.path.join(base_dir, "lafan1_tpose_baked.bvh")), 
-    os.path.join(base_dir, '_lafan1_loco'), 
-    os.path.join(base_dir, '_lafan1_loco_repaired'))
+    bvh.load(os.path.join(base_dir, "__test_quad_tpose.bvh")), 
+    bvh.load(os.path.join(base_dir, "__test_quad_tpose_baked.bvh")), 
+    os.path.join(base_dir, '__test'), 
+    os.path.join(base_dir, '__test_repaired'))
+  
+  # migrate_tpose(
+  #   bvh.load(os.path.join(base_dir, "lafan1_tpose.bvh")), 
+  #   bvh.load(os.path.join(base_dir, "lafan1_tpose_baked.bvh")), 
+  #   os.path.join(base_dir, '_lafan1_loco'), 
+  #   os.path.join(base_dir, '_lafan1_loco_repaired'))
 
   # migrate_tpose(
   #   bvh.load(os.path.join(base_dir, "pfnn_tpose.bvh")), 

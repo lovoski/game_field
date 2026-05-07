@@ -31,6 +31,11 @@ void skinned_mesh_bundle::try_setup() {
 
 void skinned_mesh_bundle::draw_gui(entt::registry &registry,
                                    entt::entity entity) {
+  if (skinning_algorithm < SKINNING_LBS ||
+      skinning_algorithm > SKINNING_DUAL_QUATERNION)
+    skinning_algorithm = SKINNING_LBS;
+  combo("Skinning", skinning_algorithm, {"LBS", "Dual Quaternion"});
+
   if (ImGui::TreeNode(
           str_format("Actor (count: %d)", actor_entities.size()).c_str())) {
     ImGui::Checkbox("Draw Skeleton", &actor_draw_skeleton);

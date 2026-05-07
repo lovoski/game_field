@@ -220,8 +220,8 @@ void camdmpp::fixed_interval_logic() {
   // make new predictions to the trajectory based on user input
   predict_trajectory();
 
-  // submit a new prediction when counter reaches a threashold
-  predict_new_tokens();
+  // // submit a new prediction when counter reaches a threashold
+  // predict_new_tokens();
 }
 
 void camdmpp::predict_trajectory() {
@@ -351,6 +351,9 @@ void camdmpp::apply_pose_and_refill() {
     }
     da_entry_idx++;
   }
+  ik_value_right = std::clamp(ik_right_cache[applied_frames], 0.0f, 1.0f);
+  ik_value_left = std::clamp(ik_left_cache[applied_frames], 0.0f, 1.0f);
+  std::cout << ik_value_right << ", " << ik_value_left << std::endl;
   player_trans.force_update_hierarchy();
 
   // update network input cache
@@ -360,42 +363,42 @@ void camdmpp::apply_pose_and_refill() {
     // auto _traj_vel = proj_char_rot.inverse() * _traj_world_vel[i];
     auto _traj_facing = proj_char_rot.inverse() * _traj_world_dir[i];
     auto _traj_height = _traj_world_height[i];
-    i_traj[model.traj_shape[2] * i + 0] = _traj_pos.x();
-    i_traj[model.traj_shape[2] * i + 1] = _traj_pos.z();
+    // i_traj[model.traj_shape[2] * i + 0] = _traj_pos.x();
+    // i_traj[model.traj_shape[2] * i + 1] = _traj_pos.z();
 
     // i_traj[model.traj_shape[2] * i + 2] = _traj_vel.x();
     // i_traj[model.traj_shape[2] * i + 3] = _traj_vel.y();
     // i_traj[model.traj_shape[2] * i + 4] = _traj_vel.z();
 
-    for (int j = 0; j < model.lateral_offsets_m.size(); j++) {
-      if (i < model.future_points - 1)
-        i_traj[model.traj_shape[2] * i + 2 + j] =
-            (_traj_world_height[i + 1][j] - _traj_world_height[i][j]) /
-            fixed_interval;
-      else
-        i_traj[model.traj_shape[2] * i + 2 + j] =
-            i_traj[model.traj_shape[2] * (i - 1) + 2 + j];
+    // for (int j = 0; j < model.lateral_offsets_m.size(); j++) {
+    //   if (i < model.future_points - 1)
+    //     i_traj[model.traj_shape[2] * i + 2 + j] =
+    //         (_traj_world_height[i + 1][j] - _traj_world_height[i][j]) /
+    //         fixed_interval;
+    //   else
+    //     i_traj[model.traj_shape[2] * i + 2 + j] =
+    //         i_traj[model.traj_shape[2] * (i - 1) + 2 + j];
 
-      i_traj[model.traj_shape[2] * i + 5 + j] =
-          _traj_height[j] - _traj_world_height[0][model.terrain_center_idx];
-    }
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 5] =
-        _traj_facing.x();
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 6] =
-        _traj_facing.z();
-    // gait
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 7] =
-        0.0f; // stand
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 8] =
-        char_running ? 0.2f : 0.8f; // walk
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 9] =
-        char_running ? 0.8f : 0.2f; // jog_run
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 10] =
-        char_crouching ? 1.0f : 0.0f; // crouch_crawl
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 11] =
-        0.0f; // jump
-    i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 12] =
-        0.0f; // unknown
+    //   i_traj[model.traj_shape[2] * i + 5 + j] =
+    //       _traj_height[j] - _traj_world_height[0][model.terrain_center_idx];
+    // }
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 5] =
+    //     _traj_facing.x();
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 6] =
+    //     _traj_facing.z();
+    // // gait
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 7] =
+    //     0.0f; // stand
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 8] =
+    //     char_running ? 0.2f : 0.8f; // walk
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 9] =
+    //     char_running ? 0.8f : 0.2f; // jog_run
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 10] =
+    //     char_crouching ? 1.0f : 0.0f; // crouch_crawl
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 11] =
+    //     0.0f; // jump
+    // i_traj[model.traj_shape[2] * i + model.lateral_offsets_m.size() + 12] =
+    //     0.0f; // unknown
 
     // normalize trajectory input
     for (int k = 0; k < model.traj_shape[2]; k++) {
@@ -498,6 +501,16 @@ void camdmpp::predict_new_tokens() {
             model_output[(rot_channel_size + 9) * model.future_points + f] *
                 model.data_std[rot_channel_size + 9] +
             model.data_mean[rot_channel_size + 9];
+
+        // fill in ik values
+        ik_right_cache[buffer_start_idx + f] =
+            model_output[(rot_channel_size + 10) * model.future_points + f] *
+                model.data_std[rot_channel_size + 10] +
+            model.data_mean[rot_channel_size + 10];
+        ik_left_cache[buffer_start_idx + f] =
+            model_output[(rot_channel_size + 11) * model.future_points + f] *
+                model.data_std[rot_channel_size + 11] +
+            model.data_mean[rot_channel_size + 11];
       }
 
       // inertial blending over the predicted motion
@@ -537,6 +550,12 @@ void camdmpp::predict_new_tokens() {
           }
         }
       }
+
+      // ik foot locking blending
+      if (enable_foot_locking) {}
+
+      // motion terrain adjustment
+      if (enable_motion_terrain_adjustment) {}
     });
   }
 }

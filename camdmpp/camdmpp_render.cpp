@@ -42,6 +42,13 @@ void camdmpp::handle_engine_gui() {
   //             model.style_names[cur_style_idx].c_str(), cur_style_idx);
   ImGui::Text("Buffer In Use: %s", use_front_buffer ? "Front" : "Back");
   ImGui::Text("Inference Time: %.3f ms", display_inference_time);
+  ImGui::Text("Applied Frames: %d", applied_frames);
+
+  ImGui::SeparatorText("Post Processing");
+  ImGui::Checkbox("Enable Foot Locking", &enable_foot_locking);
+  ImGui::Checkbox("Motion Terrain Adjustment", &enable_motion_terrain_adjustment);
+  ImGui::Text("IK Value Right: %.3f", ik_value_right);
+  ImGui::Text("IK Value Left:  %.3f", ik_value_left);
 
   ImGui::End();
 }
@@ -98,6 +105,23 @@ void camdmpp::debug_draw() {
                             sample_terrain_height(proj_char_pos_xz, 0.0f),
                             proj_char_pos_xz.y()),
               cam_comp.vp, 0.03f, Purple, false, 1.0f, true);
+
+  // ik
+  for (int i = 0; i < player_actor.ordered_entities.size(); i++) {
+    auto &joint_trans =
+        registry.get<transform>(player_actor.ordered_entities[i]);
+    if (joint_trans.name == "RightToeBase") {
+      draw_sphere(joint_trans.world_pos(), cam_comp.vp, 0.04f,
+                  Purple * ik_value_right + White * (1.0f - ik_value_right), false,
+                  1.0f, false);
+    } else if (joint_trans.name == "LeftToeBase") {
+      draw_sphere(joint_trans.world_pos(), cam_comp.vp, 0.04f,
+                  Purple * ik_value_left + White * (1.0f - ik_value_left), false,
+                  1.0f, false);
+    } else {
+      continue;
+    }
+  }
 }
 
 }; // namespace toolkit::opengl3d

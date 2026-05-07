@@ -29,11 +29,16 @@ public:
   void animate_player(float dt);
 
 private:
-  bool mouse_hidden = false;
+  bool mouse_hidden = true;
+  bool camera_as_facing_direction = true;
   entt::entity player_entity = entt::null;
-  float cam_move_speed = 100.0f;
-  float cam_angle_horizontal = 0.0f, cam_angle_vertical = 30.0f;
-  float joystick_deadzone = 0.2f;
+  float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,
+        camera_distance = 3.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f;
+  float min_vertical_angle = -10.0f, max_vertical_angle = 80.0f;
+  math::vector3 camera_forward = math::vector3(0.0f, 0.0f, -1.0f);
+  math::vector3 move_input = math::vector3::Zero();
+  float move_speed_walk = 2.5f, move_speed_run = 5.0f;
+  void update_camera(float dt);
 
   std::int64_t __cur_exec_fixed = 0;
   double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;

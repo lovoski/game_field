@@ -12,6 +12,11 @@ enum material_type {
   TRANSPARENT,
 };
 
+enum skinning_algorithm_type {
+  SKINNING_LBS = 0,
+  SKINNING_DUAL_QUATERNION = 1,
+};
+
 struct material_data {
   // render type to a texture, so we can use branching in a huge shader to
   // render different materials.
@@ -72,6 +77,7 @@ struct skinned_mesh_bundle : public icomponent {
   framebuffer shadowmap_fb;
   texture shadowmap_depth;
   bool gl_initialized = false;
+  int skinning_algorithm = SKINNING_LBS;
   math::matrix4 shadow_vp;
   std::array<math::vector4, 6> vis_planes;
   void try_setup();
@@ -98,8 +104,8 @@ struct skinned_mesh_bundle : public icomponent {
   math::vector3 bb_min = math::vector3::Zero(), bb_max = math::vector3::Zero();
   std::vector<entt::entity> bone_entities, mesh_entities;
 };
-DECLARE_COMPONENT(skinned_mesh_bundle, data, bone_entities, mesh_entities,
-                  actor_entities, actor_draw, actor_axes_length,
+DECLARE_COMPONENT(skinned_mesh_bundle, data, skinning_algorithm, bone_entities,
+                  mesh_entities, actor_entities, actor_draw, actor_axes_length,
                   actor_bone_alpha, actor_draw_skeleton, actor_draw_axes,
                   actor_draw_spheres, actor_draw_names, actor_bones_on_top,
                   actor_bone_color)

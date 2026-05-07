@@ -16,6 +16,13 @@ private:
   bool hide_mouse = true;
   bool camera_as_facing_direction = true;
 
+  // motion terrain adjustment
+  bool enable_motion_terrain_adjustment = true;
+
+  // ik related values
+  bool enable_foot_locking = true;
+  float ik_value_left = 0.0f, ik_value_right = 0.0f;
+
   // character locomotion states
   bool char_running = false, char_crouching = false;
   void update_character_states(float dt);
@@ -59,9 +66,9 @@ private:
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied
-  unsigned int submit_prediction_interval = 5;
+  unsigned int submit_prediction_interval = 6;
   // In each prediction, how many frames are used
-  unsigned int switch_prediction_interval = 10;
+  unsigned int switch_prediction_interval = 12;
 
   // Caches for character's state, converted from model_output
   static const int cache_size = 220;
@@ -69,6 +76,7 @@ private:
   std::array<math::vector3, cache_size> root_rel_pos_cache;
   std::array<math::quat, cache_size> root_rel_rot_cache;
   std::array<float, cache_size> root_height_cache;
+  std::array<float, cache_size> ik_left_cache, ik_right_cache;
   // The update of model output is performed in a "double buffer" way, the async
   // inference is dispatched when "submit_prediction_interval" is reached, after
   // the inference finishes, the newly predicted output will be store in the
