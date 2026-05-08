@@ -2,6 +2,7 @@
 
 #include "diffusion.hpp"
 
+#include "toolkit/opengl3d/components/actor.hpp"
 #include "toolkit/opengl3d/engine.hpp"
 
 namespace toolkit::opengl3d {
@@ -28,7 +29,7 @@ private:
   void update_character_states(float dt);
 
   // camera related
-  float camera_horizontal_angle = 0.0f, camera_vertical_angle = 30.0f,
+  float camera_horizontal_angle = 180.0f, camera_vertical_angle = 30.0f,
         camera_distance = 5.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f,
         camera_follow_speed = 8.0f;
   math::vector3 camera_forward;
@@ -51,10 +52,13 @@ private:
   std::vector<std::vector<float>> _traj_world_height;
   math::vector3 desired_vel = math::vector3::Zero(),
                 desired_dir = math::vector3(0, 0, 1);
+  math::quat network_root_rot = math::quat::Identity();
 
+  // system setup related
   std::int64_t __cur_exec_fixed = 0;
   double __cur_time = 0.0f, fixed_interval = 1.0f / 60.0f;
   entt::entity player_entity = entt::null, ground_entity = entt::null;
+  entt::entity left_thigh_entity = entt::null, right_thigh_entity = entt::null;
   float display_inference_time = 0.0f;
 
   // blending parameters

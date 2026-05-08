@@ -12,7 +12,7 @@ void animator::handle_engine_gui() {
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
   ImGui::SeparatorText("Statistics");
-  ImGui::DragFloat("Motion Time Scale", &motion_time_scale, 0.01f, 0.0f, 10.0f);
+  ImGui::DragFloat("Motion Time Scale", &motion_time_scale, 0.01f, -10.0f, 10.0f);
   ImGui::Text("Motion Frames: %d", motion_data.local_rot.size());
   ImGui::Text("Motion Time: %.3f s / %.3f s", motion_time,
               motion_data.frametime * motion_data.local_rot.size());

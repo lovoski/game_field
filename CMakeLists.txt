@@ -45,6 +45,7 @@ add_executable(
   camdmpp
   camdmpp/main.cpp
   camdmpp/camdmpp.cpp
+  camdmpp/camdmpp_sys.cpp
   camdmpp/camdmpp_render.cpp
   camdmpp/camdmpp_terrain.cpp
   camdmpp/diffusion.cpp
