@@ -45,7 +45,7 @@ private:
   // use a velocity spring to track the simulation body movement predicted from
   // player velocity and user input
   float sim_acceleration = 5.0f, sim_deceleration = 5.0f,
-        sim_move_speed_walk = 0.9f, sim_move_speed_run = 1.7f;
+        sim_move_speed_walk = 1.0f, sim_move_speed_run = 1.7f;
   math::vector3 player_vel = math::vector3::Zero(),
                 player_ang = math::vector3::Zero();
   float vel_halflife = 0.2f, rot_halflife = 0.1f,
@@ -137,7 +137,8 @@ private:
 
   // post processing
   std::array<entt::entity, 4> biped_chain_left, biped_chain_right;
-  void postprocessing_ik();
+  void postprocessing_ik(int buffer_start_idx, int transition_from_idx,
+                         int frame_count);
 };
 
 }; // namespace toolkit::opengl3d

@@ -150,11 +150,10 @@ void camdmpp::apply_pose_and_refill() {
         char_pos =
             char_pos + network_root_y_comp * root_rel_pos_cache[applied_frames];
       }
-      char_pos.y() =
-          root_height_cache[applied_frames] +
-          sample_terrain_height(math::vector2(joint_trans.world_pos().x(),
-                                              joint_trans.world_pos().z()),
-                                0.0f);
+      char_pos.y() = root_height_cache[applied_frames] +
+                     sample_terrain_height(
+                         math::vector2(char_pos.x(), char_pos.z()),
+                         joint_trans.world_pos().y());
       network_root_y_comp =
           root_rel_rot_cache[applied_frames] * network_root_y_comp;
       network_root_rot = network_root_y_comp *
@@ -248,17 +247,28 @@ void camdmpp::predict_new_tokens() {
   // only start new prediction when condition met
   if (applied_frames ==
       (submit_prediction_interval + (use_front_buffer ? 0 : cache_size / 2))) {
+    const bool submitted_from_front_buffer = use_front_buffer;
+    const int target_buffer_start_idx = use_front_buffer ? cache_size / 2 : 0;
+    const int transition_from_idx =
+        (use_front_buffer ? 0 : cache_size / 2) + switch_prediction_interval - 1;
+
     // fill in model input data
     model.past_motion_data = i_past_motion;
     model.traj_data = i_traj;
     printf("Dispatch inference when applied_frames=%d\n", applied_frames);
-    model.submit_inference([this](std::vector<float> model_output,
-                                  float inference_time) {
+    model.submit_inference([this, submitted_from_front_buffer,
+                            target_buffer_start_idx, transition_from_idx](
+                               std::vector<float> model_output,
+                               float inference_time) {
       printf("Inference finished when applied_frames=%d, update pose cache\n",
              applied_frames);
+      if (use_front_buffer != submitted_from_front_buffer) {
+        std::cout << "Discard late inference result after prediction buffer "
+                     "swap."
+                  << std::endl;
+        return;
+      }
       display_inference_time = inference_time;
-      // keep using current active buffer, swap when one runs out
-      int buffer_start_idx = (use_front_buffer ? (cache_size / 2) : 0);
 
       // reset the past motion input
       for (int pf = 0; pf < model.past_points; pf++) {
@@ -297,10 +307,10 @@ void camdmpp::predict_new_tokens() {
           if (di == 0) {
             // joint_rotation_cache[buffer_start_idx + f][da_entry_idx] =
             //     pred_world_rot[di] * char_repair_c[ai];
-            joint_rotation_cache[buffer_start_idx + f][da_entry_idx] =
+            joint_rotation_cache[target_buffer_start_idx + f][da_entry_idx] =
                 pred_world_rot[di];
           } else {
-            joint_rotation_cache[buffer_start_idx + f][da_entry_idx] =
+            joint_rotation_cache[target_buffer_start_idx + f][da_entry_idx] =
                 (pred_world_rot[model.joint_parents[di]] *
                  char_repair_c[char_joint_parents[ai]])
                     .inverse() *
@@ -311,7 +321,7 @@ void camdmpp::predict_new_tokens() {
 
         // fill in relative root position
         for (int k = 0; k < 3; k++) {
-          root_rel_pos_cache[buffer_start_idx + f](k) =
+          root_rel_pos_cache[target_buffer_start_idx + f](k) =
               model_output[(rot_channel_size + k) * model.future_points + f] *
                   model.data_std[rot_channel_size + k] +
               model.data_mean[rot_channel_size + k];
@@ -323,21 +333,23 @@ void camdmpp::predict_new_tokens() {
                   model.data_std[rot_channel_size + k] +
               model.data_mean[rot_channel_size + k];
         }
-        root_rel_rot_cache[buffer_start_idx + f] = repr6d_to_quat(tmp_data6d);
-        // root_rel_rot_cache[buffer_start_idx + f] = math::quat::Identity();
+        root_rel_rot_cache[target_buffer_start_idx + f] =
+            repr6d_to_quat(tmp_data6d);
+        // root_rel_rot_cache[target_buffer_start_idx + f] =
+        // math::quat::Identity();
 
         // fill in root height (relative offset from character root to terrain)
-        root_height_cache[buffer_start_idx + f] =
+        root_height_cache[target_buffer_start_idx + f] =
             model_output[(rot_channel_size + 9) * model.future_points + f] *
                 model.data_std[rot_channel_size + 9] +
             model.data_mean[rot_channel_size + 9];
 
         // fill in ik values
-        ik_right_cache[buffer_start_idx + f] =
+        ik_right_cache[target_buffer_start_idx + f] =
             model_output[(rot_channel_size + 10) * model.future_points + f] *
                 model.data_std[rot_channel_size + 10] +
             model.data_mean[rot_channel_size + 10];
-        ik_left_cache[buffer_start_idx + f] =
+        ik_left_cache[target_buffer_start_idx + f] =
             model_output[(rot_channel_size + 11) * model.future_points + f] *
                 model.data_std[rot_channel_size + 11] +
             model.data_mean[rot_channel_size + 11];
@@ -345,10 +357,8 @@ void camdmpp::predict_new_tokens() {
 
       // inertial blending over the predicted motion
       if (enable_inertia_blending) {
-        int ib_from_idx = (use_front_buffer ? switch_prediction_interval - 1
-                                            : switch_prediction_interval - 1 +
-                                                  cache_size / 2);
-        int ib_to_idx = (use_front_buffer ? cache_size / 2 : 0);
+        int ib_from_idx = transition_from_idx;
+        int ib_to_idx = target_buffer_start_idx;
         std::vector<math::vector3> ib_off_rot(char_data_to_actor.size(),
                                               math::vector3::Zero()),
             ib_off_ang(char_data_to_actor.size(), math::vector3::Zero());
@@ -383,7 +393,8 @@ void camdmpp::predict_new_tokens() {
 
       // ik foot locking blending
       if (enable_foot_locking)
-        postprocessing_ik();
+        postprocessing_ik(target_buffer_start_idx, transition_from_idx,
+                          model.future_points);
 
       // // motion terrain adjustment
       // if (enable_motion_terrain_adjustment) {}
