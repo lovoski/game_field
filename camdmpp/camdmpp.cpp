@@ -40,14 +40,6 @@ void camdmpp::predict_trajectory() {
                                   camera_trans.local_forward().z())
                         .normalized();
 
-  // auto &left_thigh_trans = registry.get<transform>(left_thigh_entity);
-  // auto &right_thigh_trans = registry.get<transform>(right_thigh_entity);
-  // math::vector3 root_forward =
-  //     math::vector3(0.0f, 1.0f, 0.0f)
-  //         .cross(right_thigh_trans.world_pos() -
-  //         left_thigh_trans.world_pos());
-  // root_forward.y() = 0.0f;
-  // root_forward.normalize();
   math::vector3 root_forward = network_root_rot * math::vector3(0, 0, 1);
   root_forward.y() = 0.0f;
   root_forward.normalize();
@@ -69,6 +61,11 @@ void camdmpp::predict_trajectory() {
   player_last_pos = player_curr_pos;
   player_curr_pos = math::vector3(root_trans.world_pos().x(), 0.0f,
                                   root_trans.world_pos().z());
+
+  player_ang = shortest_arc_rot_vec(player_last_rot, player_curr_rot) / fixed_interval;
+  player_last_rot = player_curr_rot;
+  player_curr_rot = math::from_to_rot(math::vector3(0, 0, 1), root_forward);
+
   math::vector3 target_vel =
       (char_running ? sim_move_speed_run : sim_move_speed_walk) * move_input;
   math::vector3 target_dir = camera_forward;
@@ -77,6 +74,17 @@ void camdmpp::predict_trajectory() {
         target_vel.norm() > 1e-6f ? target_vel.normalized() : root_forward;
 
   math::vector3 sim_vel = player_vel, player_to_sim_acc = math::vector3::Zero();
+
+  auto q0 = math::from_to_rot(math::vector3(0, 0, 1), root_forward);
+  auto qt = math::from_to_rot(math::vector3(0, 0, 1), target_dir);
+  if (q0.dot(qt) < 0.0f)
+    qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
+  toolkit::math::vector3 q =
+      toolkit::math::quat_to_rot_vec(q0 * qt.inverse());
+  math::vector3 angular_velocity = player_ang;
+  const float e = 2.71828f;
+  float lambda = log(2) / (rot_halflife * log(e));
+
   for (int i = 0; i < model.future_points; i++) {
     math::vector3 vel_diff = target_vel - sim_vel;
     bool is_accelerating = vel_diff.dot(target_vel) > 0;
@@ -94,7 +102,15 @@ void camdmpp::predict_trajectory() {
           (2 * sim_vel + acc * fixed_interval) * 0.5f * fixed_interval +
           _traj_world_pos[i - 1];
     }
-    _traj_world_dir[i] = target_dir;
+
+    // damp current root forward towards target dir
+    auto q_prev = q;
+    q = (q_prev + (angular_velocity + lambda * q_prev) * fixed_interval) *
+        exp(-lambda * fixed_interval);
+    angular_velocity =
+        (angular_velocity + lambda * q_prev) * exp(-lambda * fixed_interval) - lambda * q;
+
+    _traj_world_dir[i] = (math::rot_vec_to_quat(q) * qt) * math::vector3(0, 0, 1);
     _traj_world_dir[i].y() = 0.0f;
     _traj_world_dir[i].normalize();
 
@@ -115,21 +131,6 @@ void camdmpp::apply_pose_and_refill() {
   auto &root_trans = registry.get<transform>(player_actor.ordered_entities[0]);
   math::vector3 char_pos = root_trans.world_pos();
 
-  // math::vector3 _char_facing = root_trans.world_rot() * math::vector3(0, 0,
-  // 1); _char_facing.y() = 0.0f; _char_facing.normalize(); math::quat
-  // y_rot_comp =
-  //     math::from_to_rot(math::vector3(0, 0, 1), _char_facing);
-
-  // auto &left_thigh_trans = registry.get<transform>(left_thigh_entity);
-  // auto &right_thigh_trans = registry.get<transform>(right_thigh_entity);
-  // math::vector3 root_forward =
-  //     math::vector3(0.0f, 1.0f, 0.0f)
-  //         .cross(right_thigh_trans.world_pos() -
-  //         left_thigh_trans.world_pos());
-  // root_forward.y() = 0.0f;
-  // root_forward.normalize();
-  // math::quat root_proj_rot = math::from_to_rot(math::vector3(0, 0, 1),
-  // root_forward);
   math::vector3 root_forward = network_root_rot * math::vector3(0, 0, 1);
   root_forward.y() = 0.0f;
   root_forward.normalize();
@@ -154,11 +155,12 @@ void camdmpp::apply_pose_and_refill() {
           sample_terrain_height(math::vector2(joint_trans.world_pos().x(),
                                               joint_trans.world_pos().z()),
                                 0.0f);
-      network_root_y_comp = root_rel_rot_cache[applied_frames] * network_root_y_comp;
-      network_root_rot = network_root_y_comp * joint_rotation_cache[applied_frames][da_entry_idx];
+      network_root_y_comp =
+          root_rel_rot_cache[applied_frames] * network_root_y_comp;
+      network_root_rot = network_root_y_comp *
+                         joint_rotation_cache[applied_frames][da_entry_idx];
       joint_trans.set_world_pos(char_pos);
-      joint_trans.set_world_rot(
-          network_root_rot * char_repair_c[ai]);
+      joint_trans.set_world_rot(network_root_rot * char_repair_c[ai]);
     } else {
       joint_trans.set_local_rot(
           joint_rotation_cache[applied_frames][da_entry_idx]);
@@ -173,7 +175,8 @@ void camdmpp::apply_pose_and_refill() {
   // update network input cache
   // input trajectory
   for (int i = 0; i < model.future_points; i++) {
-    auto _traj_pos = network_root_y_comp.inverse() * (_traj_world_pos[i] - char_pos);
+    auto _traj_pos =
+        network_root_y_comp.inverse() * (_traj_world_pos[i] - char_pos);
     auto _traj_facing = network_root_y_comp.inverse() * _traj_world_dir[i];
     auto _traj_height = _traj_world_height[i];
 
@@ -198,13 +201,14 @@ void camdmpp::apply_pose_and_refill() {
         _traj_facing.z();
 
     // gait
-    if (false) {
+    if (true) {
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 4] =
           0.0f; // stand
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 5] =
-          char_running ? 0.2f : 0.8f; // walk
+          (char_running ? 0.0f : 1.0f) * (char_crouching ? 0.0f : 1.0f); // walk
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 6] =
-          char_running ? 0.8f : 0.2f; // jog_run
+          (char_running ? 1.0f : 0.0f) *
+          (char_crouching ? 0.0f : 1.0f); // jog_run
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 7] =
           char_crouching ? 1.0f : 0.0f; // crouch_crawl
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 8] =
@@ -378,12 +382,11 @@ void camdmpp::predict_new_tokens() {
       }
 
       // ik foot locking blending
-      if (enable_foot_locking) {
-      }
+      if (enable_foot_locking)
+        postprocessing_ik();
 
-      // motion terrain adjustment
-      if (enable_motion_terrain_adjustment) {
-      }
+      // // motion terrain adjustment
+      // if (enable_motion_terrain_adjustment) {}
     });
   }
 }

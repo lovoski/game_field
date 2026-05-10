@@ -20,6 +20,20 @@ struct _bone_matrix_block {
   math::matrix4 offset_mat;
 };
 
+namespace {
+
+math::vector3 direction_to_sun_from_angles(float horizontal_degree,
+                                           float vertical_degree) {
+  float sun_v_rad = vertical_degree / 180.0f * 3.1415927f;
+  float sun_h_rad = horizontal_degree / 180.0f * 3.1415927f;
+  return math::vector3(std::cos(sun_v_rad) * std::sin(sun_h_rad),
+                       std::sin(sun_v_rad),
+                       std::cos(sun_v_rad) * std::cos(sun_h_rad))
+      .normalized();
+}
+
+} // namespace
+
 void defered_render_system::draw_menu_gui() {
   ImGui::MenuItem("Grid", nullptr, nullptr, false);
   ImGui::Checkbox("Show Grid", &should_draw_grid);
@@ -27,8 +41,15 @@ void defered_render_system::draw_menu_gui() {
   ImGui::Separator();
 
   ImGui::MenuItem("Background", nullptr, nullptr, false);
-  ImGui::Checkbox("Use Pure Color", &use_pure_color_bg);
-  color_edit_3("Pure Color", bg_color);
+  const char *background_modes[] = {"Physical Atmosphere", "Pure Color"};
+  int background_mode = use_pure_color_bg ? 1 : 0;
+  if (ImGui::Combo("Background Mode", &background_mode, background_modes,
+                   IM_ARRAYSIZE(background_modes))) {
+    use_pure_color_bg = background_mode == 1;
+  }
+  if (use_pure_color_bg) {
+    color_edit_3("Background Color", bg_color);
+  }
   ImGui::Separator();
 
   ImGui::MenuItem("Debug", nullptr, nullptr, false);
@@ -65,13 +86,82 @@ void defered_render_system::draw_menu_gui() {
                                              0.1f, -180.0f, 180.0f, "%.3f");
   sun_parameter_modified |=
       ImGui::DragFloat("Sun Vertical Angle", &sun_v, 0.1f, 0.0f, 90.0f, "%.3f");
-  ImGui::DragFloat("Sun Gamma", &ss_model.sun_gamma, 0.01f, 1.0f, 10.0f);
   if (sun_parameter_modified) {
-    float sun_v_rad = sun_v / 180 * 3.1415927f;
-    float sun_h_rad = sun_h / 180 * 3.1415927f;
-    math::vector3 sun_dir(cos(sun_v_rad) * cos(sun_h_rad),
-                          cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
-    ss_model.update(sun_dir, sun_turbidity);
+    ss_model.update(direction_to_sun_from_angles(sun_h, sun_v), sun_turbidity);
+  }
+
+  ImGui::MenuItem("Physical Atmosphere", nullptr, nullptr, false);
+  bool atmosphere_modified = false;
+  atmosphere_modified |= ImGui::Checkbox("Enable Atmosphere", &atmosphere.enabled);
+  atmosphere_modified |= ImGui::Checkbox("Sun Disk", &atmosphere.enable_sun_disk);
+  atmosphere_modified |= ImGui::Checkbox("Aerial Perspective",
+                                         &atmosphere.enable_aerial_perspective);
+  atmosphere_modified |= ImGui::DragFloat("Sun Intensity",
+                                          &atmosphere.sun_intensity, 0.1f,
+                                          0.0f, 200.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Atmosphere Exposure",
+                                          &atmosphere.exposure, 0.01f, 0.01f,
+                                          10.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Display Gamma", &atmosphere.gamma,
+                                          0.01f, 1.0f, 4.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Rayleigh Strength",
+                                          &atmosphere.rayleigh_strength, 0.01f,
+                                          0.0f, 8.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Mie Strength",
+                                          &atmosphere.mie_strength, 0.01f,
+                                          0.0f, 8.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Ozone Absorption",
+                                          &atmosphere.ozone_strength, 0.01f,
+                                          0.0f, 8.0f, "%.3f");
+  atmosphere_modified |= ImGui::SliderFloat("Mie Anisotropy",
+                                            &atmosphere.mie_anisotropy, -0.2f,
+                                            0.95f, "%.3f");
+  atmosphere_modified |= ImGui::InputInt("View Samples", &atmosphere.view_samples);
+  atmosphere.view_samples = std::clamp(atmosphere.view_samples, 2, 64);
+  atmosphere_modified |= ImGui::InputInt("Light Samples", &atmosphere.light_samples);
+  atmosphere.light_samples = std::clamp(atmosphere.light_samples, 2, 16);
+  atmosphere_modified |= ImGui::DragFloat("World Unit To Km",
+                                          &atmosphere.world_to_km, 0.0001f,
+                                          0.000001f, 0.1f, "%.6f");
+  atmosphere_modified |= ImGui::DragFloat("Observer Height Km",
+                                          &atmosphere.observer_height_km,
+                                          0.001f, 0.0f, 10.0f, "%.4f");
+  atmosphere_modified |= ImGui::DragFloat("Ground Level", &atmosphere.ground_level,
+                                          0.01f, -10000.0f, 10000.0f, "%.3f");
+
+  ImGui::MenuItem("Volumetric Fog", nullptr, nullptr, false);
+  atmosphere_modified |= ImGui::Checkbox("Enable Volumetric Fog",
+                                         &atmosphere.enable_volumetric_fog);
+  atmosphere_modified |= ImGui::DragFloat("Fog Density", &atmosphere.fog_density,
+                                          0.0001f, 0.0f, 1.0f, "%.5f");
+  atmosphere_modified |= ImGui::DragFloat("Fog Height Falloff",
+                                          &atmosphere.fog_height_falloff,
+                                          0.001f, 0.0f, 1.0f, "%.4f");
+  atmosphere_modified |= ImGui::SliderFloat("Fog Forward Scatter",
+                                            &atmosphere.fog_anisotropy, 0.0f,
+                                            1.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Fog Sun Strength",
+                                          &atmosphere.fog_sun_strength, 0.01f,
+                                          0.0f, 10.0f, "%.3f");
+  atmosphere_modified |= ImGui::DragFloat("Fog Ambient Strength",
+                                          &atmosphere.fog_ambient_strength,
+                                          0.01f, 0.0f, 10.0f, "%.3f");
+  atmosphere_modified |= color_edit_3("Fog Tint", atmosphere.fog_tint);
+
+  ImGui::MenuItem("HDRI Environment Map", nullptr, nullptr, false);
+  atmosphere_modified |= ImGui::Checkbox("Enable HDRI Cubemap",
+                                         &atmosphere.enable_environment_map);
+  atmosphere_modified |= ImGui::Checkbox("Auto Rebuild HDRI",
+                                         &atmosphere.auto_update_environment_map);
+  atmosphere_modified |= ImGui::InputInt("HDRI Resolution",
+                                         &atmosphere.environment_resolution);
+  atmosphere.environment_resolution =
+      std::clamp(atmosphere.environment_resolution, 16, 1024);
+  if (ImGui::Button("Rebuild HDRI Environment", {-1, 30})) {
+    force_environment_map_update = true;
+  }
+  if (atmosphere_modified) {
+    ss_model.set_settings(atmosphere);
   }
 
   ImGui::MenuItem("Skinned Character Shadow Maps", nullptr, nullptr, false);
@@ -175,17 +265,17 @@ void defered_render_system::init0(entt::registry &registry) {
       quad_vs, static_mesh_light_mask_fs);
   fxaa_program.compile_shader_from_source(quad_vs, fxaa_fs);
 
-  float sun_v_rad = sun_v / 180 * 3.1415927f;
-  float sun_h_rad = sun_h / 180 * 3.1415927f;
-  math::vector3 sun_dir(cos(sun_v_rad) * cos(sun_h_rad),
-                        cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad));
-  ss_model.update(sun_dir, sun_turbidity);
+  ss_model.set_settings(atmosphere);
+  ss_model.update(direction_to_sun_from_angles(sun_h, sun_v), sun_turbidity);
 
   // ---------- call resize after all initialzation finishes ----------
   resize(canvas_width, canvas_height);
 }
 
 void defered_render_system::init1(entt::registry &registry) {
+  ss_model.set_settings(atmosphere);
+  ss_model.update(direction_to_sun_from_angles(sun_h, sun_v), sun_turbidity);
+  force_environment_map_update = true;
   resize(canvas_width, canvas_height);
 }
 
@@ -563,11 +653,9 @@ void defered_render_system::update_scene_buffers(entt::registry &registry) {
 }
 
 void defered_render_system::update_scene_lights(entt::registry &registry) {
-  float sun_v_rad = sun_v / 180 * 3.1415927f;
-  float sun_h_rad = sun_h / 180 * 3.1415927f;
-  sun_direction =
-      -math::vector3(cos(sun_v_rad) * sin(sun_h_rad), sin(sun_v_rad),
-                     cos(sun_v_rad) * cos(sun_h_rad));
+  math::vector3 to_sun = direction_to_sun_from_angles(sun_h, sun_v);
+  sun_direction = -to_sun;
+  ss_model.update(to_sun, sun_turbidity);
 }
 
 void defered_render_system::resize_csm_buffer() {
@@ -699,6 +787,13 @@ void defered_render_system::update_scene_data_structures(
 void defered_render_system::render(entt::registry &registry,
                                    transform &cam_trans, camera &cam_comp) {
   update_scene_lights(registry);
+
+  if (atmosphere.enable_environment_map &&
+      (atmosphere.auto_update_environment_map || force_environment_map_update)) {
+    ss_model.update_environment_map(cam_trans.world_pos(),
+                                    force_environment_map_update);
+    force_environment_map_update = false;
+  }
 
   // compute CSM cascade VP matrices
   if (enable_sun && enable_csm && cam_comp.perspective) {
@@ -924,13 +1019,14 @@ void defered_render_system::render(entt::registry &registry,
   {
     cbuffer.bind();
     cbuffer.set_viewport(0, 0, canvas_width, canvas_height);
+    const math::vector3 clear_color =
+        use_pure_color_bg ? bg_color : math::vector3(0.0f, 0.0f, 0.0f);
+    glClearColor(clear_color.x(), clear_color.y(), clear_color.z(), 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glClearColor(0, 0, 0, 1);
 
     glDisable(GL_DEPTH_TEST);
     if (!use_pure_color_bg) {
       ss_model.render(cam_comp.vp, cam_trans.world_pos());
-    } else {
     }
     glEnable(GL_DEPTH_TEST);
 
@@ -947,6 +1043,8 @@ void defered_render_system::render(entt::registry &registry,
                                        gbuffer_depth_tex.get_handle(), 5);
     defered_default_pass.set_texture2d("cbuffer_depth",
                                        cbuffer_depth.get_handle(), 6);
+    defered_default_pass.set_vec3("view_pos", cam_trans.world_pos());
+    ss_model.setup_uniforms(defered_default_pass);
     quad_draw_call();
 
     // ------------------- debug rendering -------------------

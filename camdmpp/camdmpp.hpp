@@ -40,13 +40,15 @@ private:
   math::vector3 move_input = math::vector3::Zero();
   math::vector3 player_last_pos = math::vector3::Zero(),
                 player_curr_pos = math::vector3::Zero();
+  math::quat player_last_rot = math::quat::Identity(),
+             player_curr_rot = math::quat::Identity();
   // use a velocity spring to track the simulation body movement predicted from
   // player velocity and user input
   float sim_acceleration = 5.0f, sim_deceleration = 5.0f,
-        sim_move_speed_walk = 1.5f, sim_move_speed_run = 3.0f;
+        sim_move_speed_walk = 0.9f, sim_move_speed_run = 1.7f;
   math::vector3 player_vel = math::vector3::Zero(),
                 player_ang = math::vector3::Zero();
-  float vel_halflife = 0.2f, rot_halflife = 0.2f,
+  float vel_halflife = 0.2f, rot_halflife = 0.1f,
         traj_sample_time = 1.0f / 5.0f;
   std::vector<math::vector3> _traj_world_vel, _traj_world_pos, _traj_world_dir;
   std::vector<std::vector<float>> _traj_world_height;
@@ -91,7 +93,7 @@ private:
 
   std::vector<math::quat> char_repair_c;
   std::vector<int> char_joint_parents;
-  std::map<int, int> char_data_to_actor;
+  std::map<int, int> char_data_to_actor, tpose_to_data;
 
   // Caches for network input
   std::vector<float> i_past_motion; // (1, pose_token_dim, past_points)
@@ -132,6 +134,10 @@ private:
   void predict_new_tokens();
 
   void debug_draw();
+
+  // post processing
+  std::array<entt::entity, 4> biped_chain_left, biped_chain_right;
+  void postprocessing_ik();
 };
 
 }; // namespace toolkit::opengl3d

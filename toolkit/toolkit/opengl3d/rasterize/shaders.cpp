@@ -1,4 +1,5 @@
 #include "toolkit/opengl3d/rasterize/shaders.hpp"
+#include "toolkit/opengl3d/effects/sky.hpp"
 
 std::string gbuffer_geometry_pass_vs = R"(
 #version 450 core
@@ -179,7 +180,7 @@ void main() {
   // gAlbedo = vec4(texCoord.x,texCoord.y,0.0,1.0);
 }
 )";
-std::string defered_default_pass_fs = R"(
+std::string defered_default_pass_fs = std::string(R"(
 #version 430 core
 
 uniform sampler2D pos_tex;
@@ -190,10 +191,13 @@ uniform sampler2D light_mask;
 
 uniform sampler2D gbuffer_depth;
 uniform sampler2D cbuffer_depth;
+uniform vec3 view_pos;
 
 in vec2 texcoord;
 
 out vec4 frag_color;
+
+)") + toolkit::opengl3d::physical_atmosphere_glsl() + R"(
 
 void main() {
   vec4 mask_value = texture(mask_tex, texcoord);
@@ -211,10 +215,12 @@ void main() {
   float light_value = texture(light_mask, texcoord).r;
   vec3 albedo = texture(albedo_tex, texcoord).xyz;
 
-  // vec3 frag_world_pos = texture(pos_tex, texcoord);
+  vec3 frag_world_pos = texture(pos_tex, texcoord).xyz;
   // vec3 frag_world_normal = texture(normal_tex, texcoord).xyz * 2.0 - vec3(1.0);
 
-  frag_color = vec4(clamp(albedo * light_value * wireframe, 0.0, 1.0), 1.0);
+  vec3 color = albedo * light_value * wireframe;
+  color = atmosphere_apply_to_scene(color, view_pos, frag_world_pos);
+  frag_color = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 )";
 

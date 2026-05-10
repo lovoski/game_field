@@ -29,6 +29,9 @@ public:
   void save_color_buffer_as_png(std::string filepath);
 
   texture get_target_texture() const { return color_tex; }
+  const texture &get_environment_map() const {
+    return ss_model.environment_map();
+  }
 
   void draw_menu_gui() override;
 
@@ -58,7 +61,9 @@ public:
   math::vector3 sun_color = math::vector3(0.9, 0.9, 0.9);
   // direction point away from the sun
   math::vector3 sun_direction;
-  preetham_sun_sky ss_model;
+  atmosphere_settings atmosphere;
+  physical_atmosphere_sky ss_model;
+  bool force_environment_map_update = true;
 
 protected:
   unsigned int canvas_width = 1920, canvas_height = 1080;
@@ -125,7 +130,7 @@ protected:
 DECLARE_SYSTEM(defered_render_system, should_draw_grid, grid_spacing,
                should_draw_debug, enable_ao_pass, ao_filter_size,
                ao_filter_sigma, ssao_noise_scale, ssao_radius, enable_sun,
-               sun_v, sun_h, sun_turbidity, sun_color, enable_csm,
+               sun_v, sun_h, sun_turbidity, sun_color, atmosphere, enable_csm,
                num_cascades, csm_depth_dim, pcf_kernal_size, csm_split_lambda,
                csm_normal_offset_scale, csm_bias_scale, shadowmap_max_bias,
                shadowmap_min_bias, enable_fxaa, canvas_width, canvas_height,

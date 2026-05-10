@@ -32,6 +32,14 @@ void animator::handle_custom_initialization() {
     transform_hierarchy_sys->update_transform(registry);
 
     motion_data = assets::load_bvh("animator/motion.bvh");
+    for (int i = 0; i < data_tpose.names.size(); i++) {
+      for (int j = 0; j < motion_data.names.size(); j++) {
+        if (motion_data.names[j] == data_tpose.names[i]) {
+          tpose_data_motion_data[i] = j;
+          break;
+        }
+      }
+    }
 
     auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
     auto &player_trans = registry.get<transform>(player_entity);
@@ -45,7 +53,6 @@ void animator::handle_custom_initialization() {
     if (initial_forward.squaredNorm() > 1e-6f) {
       initial_forward.normalize();
     }
-    // find mapping between network's prediction joint to actor's joint
     for (int i = 0; i < data_tpose.names.size(); i++) {
       if (player_actor.name_to_entity.find(data_tpose.names[i]) !=
           player_actor.name_to_entity.end()) {
@@ -123,15 +130,18 @@ void animator::handle_game_logic_tick(float dt) {
           registry.get<transform>(player_actor.ordered_entities[ai]);
       if (ai == 0) {
         // root joint
-        joint_trans.set_world_pos(motion_data.local_pos[frame0][di] *
-                                      (1 - alpha) +
-                                  motion_data.local_pos[frame1][di] * alpha);
+        joint_trans.set_world_pos(
+            motion_data.local_pos[frame0][tpose_data_motion_data[di]] *
+                (1 - alpha) +
+            motion_data.local_pos[frame1][tpose_data_motion_data[di]] * alpha);
         joint_trans.set_world_rot(
-            motion_data.local_rot[frame0][di].slerp(
-                alpha, motion_data.local_rot[frame1][di]) *
+            motion_data.local_rot[frame0][tpose_data_motion_data[di]].slerp(
+                alpha,
+                motion_data.local_rot[frame1][tpose_data_motion_data[di]]) *
             char_repair_c[ai]);
       } else {
-        joint_trans.set_world_rot(world_rot[di] * char_repair_c[ai]);
+        joint_trans.set_world_rot(world_rot[tpose_data_motion_data[di]] *
+                                  char_repair_c[ai]);
       }
       da_entry_idx++;
     }
@@ -168,7 +178,8 @@ void animator::update_camera(float dt) {
       math::vector3(0.0f, 0.0f, camera_distance);
   math::vector3 cam_pos = root_trans.world_pos() +
                           math::vector3(0.0f, camera_height, 0.0f) + cam_offset;
-  // math::vector3 cam_pos = math::vector3(0.0f, camera_height, 0.0f) + cam_offset;
+  // math::vector3 cam_pos = math::vector3(0.0f, camera_height, 0.0f) +
+  // cam_offset;
   math::matrix3 cam_rot_mat = math::matrix3::Identity();
   math::vector3 _z = cam_offset.normalized();
   math::vector3 _x = math::world_up.cross(_z).normalized();

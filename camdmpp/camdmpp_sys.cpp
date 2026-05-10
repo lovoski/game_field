@@ -36,6 +36,14 @@ void camdmpp::handle_custom_initialization() {
     transform_hierarchy_sys->update_transform(registry);
     build_terrain_sampler();
 
+    // setup ik chains
+    biped_chain_left = {
+        named_entities["left_thigh"], named_entities["left_shin"],
+        named_entities["left_foot"], named_entities["left_toe"]};
+    biped_chain_right = {
+        named_entities["right_thigh"], named_entities["right_shin"],
+        named_entities["right_foot"], named_entities["right_toe"]};
+
     // setup diffusion model
     model.setup("camdmpp/model.onnx", "camdmpp/model.json");
     i_past_motion.resize(model.pose_token_dim * model.past_points, 0.0f);
@@ -106,6 +114,14 @@ void camdmpp::handle_custom_initialization() {
           auto &joint_trans =
               registry.get<transform>(player_actor.ordered_entities[j]);
           char_repair_c[j] = tpose_ori[k].inverse() * joint_trans.world_rot();
+          break;
+        }
+      }
+    }
+    for (int i = 0; i < data_tpose.names.size(); i++) {
+      for (int j = 0; j < model.joint_names.size(); j++) {
+        if (model.joint_names[j] == data_tpose.names[i]) {
+          tpose_to_data[i] = j;
           break;
         }
       }
@@ -208,6 +224,22 @@ void camdmpp::update_camera(float dt) {
   math::quat cam_rot = math::quat(cam_rot_mat);
   cam_trans.set_world_pos(cam_pos);
   cam_trans.set_world_rot(cam_rot);
+}
+
+void camdmpp::postprocessing_ik() {
+  auto &bundle_data = registry.get<skinned_mesh_bundle>(player_entity);
+  auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
+  auto &root_trans = registry.get<transform>(player_actor.ordered_entities[0]);
+  math::vector3 char_pos = root_trans.world_pos();
+
+  math::vector3 root_forward = network_root_rot * math::vector3(0, 0, 1);
+  root_forward.y() = 0.0f;
+  root_forward.normalize();
+  math::quat network_root_y_comp =
+      math::from_to_rot(math::vector3(0, 0, 1), root_forward);
+  
+  // get fk positions
+  
 }
 
 }; // namespace toolkit::opengl3d

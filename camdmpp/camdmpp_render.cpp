@@ -10,7 +10,12 @@ void camdmpp::handle_engine_gui() {
   ImGui::Begin("Settings", nullptr,
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
+  ImGui::SeparatorText("Inertia Blending");
   ImGui::Checkbox("Camera As Facing Direction", &camera_as_facing_direction);
+  ImGui::DragFloat("Rotation HL", &rot_halflife, 0.001f, 0.0f, 1.0f);
+  ImGui::DragFloat("Velocity HL", &vel_halflife, 0.001f, 0.0f, 1.0f);
+  ImGui::DragFloat("Walk Velocity", &sim_move_speed_walk, 0.01f, 0.0f, 10.0f);
+  ImGui::DragFloat("Run Velocity", &sim_move_speed_run, 0.01f, 0.0f, 10.0f);
 
   // ImGui::SeparatorText("Commands");
   // ImGui::TextColored({0, 1, 0, 1}, "LCTRL+LMB");
@@ -88,6 +93,10 @@ void camdmpp::debug_draw() {
         traj_points_pos.push_back(math::vector3(
             sample_xz.x(), _traj_world_height[i][j], sample_xz.y()));
       }
+
+      draw_arrow(math::vector3(_xz.x(), sample_terrain_height(_xz, 0.0f), _xz.y()),
+                 math::vector3(_xz.x(), sample_terrain_height(_xz, 0.0f), _xz.y()) + 0.2f * _traj_world_dir[i],
+                 cam_comp.vp, Green, 0.01f, 1.0f, false);
       // traj_points_dir.push_back(
       //     std::make_pair(_traj_world_pos[i] + math::vector3(0.0f, 0.01f,
       //     0.0f),

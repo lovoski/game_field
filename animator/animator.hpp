@@ -30,6 +30,7 @@ private:
   std::vector<math::quat> char_repair_c;
   std::vector<int> char_joint_parents;
   std::map<int, int> char_data_to_actor;
+  std::map<int, int> tpose_data_motion_data;
 
   void debug_draw();
 };
