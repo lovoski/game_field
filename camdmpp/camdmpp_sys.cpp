@@ -428,9 +428,23 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
 
   auto build_foot_targets = [&](const std::vector<math::vector3> &foot_fk,
                                 const std::array<float, cache_size> &labels,
-                                int actual_frame_count) {
+                                int actual_frame_count,
+                                const math::vector3 &handoff_foot_pos,
+                                float handoff_ik_label) {
     std::vector<ik_foot_target> targets(actual_frame_count);
     std::vector<float> contact_weights(actual_frame_count, 0.0f);
+    const math::vector2 handoff_foot_xz(handoff_foot_pos.x(),
+                                        handoff_foot_pos.z());
+    const float handoff_terrain_height =
+        sample_terrain_height(handoff_foot_xz, handoff_foot_pos.y());
+    const float handoff_height_offset =
+        std::clamp(handoff_foot_pos.y() - handoff_terrain_height,
+                   ik_contact_height_offset_min, ik_contact_height_offset_max);
+    const math::vector3 handoff_contact_target(
+        handoff_foot_pos.x(), handoff_terrain_height + handoff_height_offset,
+        handoff_foot_pos.z());
+    const float handoff_contact_weight = smoothstep(
+        ik_label_blend_low, ik_label_blend_high, saturate(handoff_ik_label));
 
     for (int frame_offset = 0; frame_offset < actual_frame_count;
          frame_offset++) {
@@ -447,6 +461,21 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
           math::vector3(foot_pos.x(), terrain_height, foot_pos.z());
       targets[frame_offset].weight = penetration_weight;
     }
+
+    std::vector<float> smoothed_contact_weights = contact_weights;
+    for (int frame_offset = 0; frame_offset < actual_frame_count;
+         frame_offset++) {
+      const float previous_weight = frame_offset > 0
+                                        ? contact_weights[frame_offset - 1]
+                                        : handoff_contact_weight;
+      const float next_weight = frame_offset + 1 < actual_frame_count
+                                    ? contact_weights[frame_offset + 1]
+                                    : contact_weights[frame_offset];
+      smoothed_contact_weights[frame_offset] =
+          previous_weight * 0.25f + contact_weights[frame_offset] * 0.5f +
+          next_weight * 0.25f;
+    }
+    contact_weights.swap(smoothed_contact_weights);
 
     int frame_offset = 0;
     while (frame_offset < actual_frame_count) {
@@ -476,7 +505,8 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
         const math::vector2 foot_xz(foot_pos.x(), foot_pos.z());
         const float terrain_height =
             sample_terrain_height(foot_xz, foot_pos.y());
-        const float sample_weight = std::max(contact_weights[sample_offset], 1e-3f);
+        const float sample_weight =
+            std::max(contact_weights[sample_offset], 1e-3f);
         averaged_xz += foot_xz * sample_weight;
         averaged_height_offset +=
             (foot_pos.y() - terrain_height) * sample_weight;
@@ -489,23 +519,31 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
             averaged_height_offset / total_weight, ik_contact_height_offset_min,
             ik_contact_height_offset_max);
 
-        const float target_height = sample_terrain_height(
-                                        averaged_xz, foot_fk[frame_offset].y()) +
-                                    averaged_height_offset;
+        const float target_height =
+            sample_terrain_height(averaged_xz, foot_fk[frame_offset].y()) +
+            averaged_height_offset;
         const math::vector3 contact_target(averaged_xz.x(), target_height,
                                            averaged_xz.y());
+        const bool carried_contact =
+            contact_start == 0 &&
+            handoff_contact_weight > ik_lock_off_threshold;
+        const math::vector3 segment_target =
+            carried_contact ? handoff_contact_target : contact_target;
         for (int apply_offset = contact_start; apply_offset < contact_end;
              apply_offset++) {
-          const float blend_in = smoothstep(
-              0.0f, static_cast<float>(ik_lock_transition_frames),
-              static_cast<float>(apply_offset - contact_start + 1));
-          const float blend_out = smoothstep(
-              0.0f, static_cast<float>(ik_lock_transition_frames),
-              static_cast<float>(contact_end - apply_offset));
+          const float blend_in =
+              carried_contact
+                  ? 1.0f
+                  : smoothstep(
+                        0.0f, static_cast<float>(ik_lock_transition_frames),
+                        static_cast<float>(apply_offset - contact_start + 1));
+          const float blend_out =
+              smoothstep(0.0f, static_cast<float>(ik_lock_transition_frames),
+                         static_cast<float>(contact_end - apply_offset));
           const float target_blend = std::min(blend_in, blend_out);
           targets[apply_offset].target =
               targets[apply_offset].target +
-              (contact_target - targets[apply_offset].target) * target_blend;
+              (segment_target - targets[apply_offset].target) * target_blend;
           targets[apply_offset].weight =
               std::max(targets[apply_offset].weight,
                        contact_weights[apply_offset] * target_blend);
@@ -520,8 +558,7 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
 
   auto solve_leg_to_foot = [&](int frame_idx,
                                const ik_chain_indices &chain_indices,
-                               float leg_length,
-                               const math::vector3 &root_pos,
+                               float leg_length, const math::vector3 &root_pos,
                                const math::quat &network_root,
                                const ik_foot_target &foot_target,
                                std::vector<ik_joint_pose> &pose) {
@@ -540,28 +577,32 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
     }
 
     std::array<math::quat, 2> original_local_rot;
-    std::array<int, 2> solver_joints = {chain_indices.shin, chain_indices.thigh};
-    for (int solver_slot = 0; solver_slot < static_cast<int>(solver_joints.size());
-         solver_slot++) {
+    std::array<int, 2> solver_joints = {chain_indices.shin,
+                                        chain_indices.thigh};
+    for (int solver_slot = 0;
+         solver_slot < static_cast<int>(solver_joints.size()); solver_slot++) {
       original_local_rot[solver_slot] =
           cache_local_rotation(frame_idx, solver_joints[solver_slot]);
     }
 
     for (int iteration_idx = 0; iteration_idx < ik_solver_iterations;
          iteration_idx++) {
-      for (int solver_slot = 0; solver_slot < static_cast<int>(solver_joints.size());
-          solver_slot++) {
+      for (int solver_slot = 0;
+           solver_slot < static_cast<int>(solver_joints.size());
+           solver_slot++) {
         const int joint_actor_idx = solver_joints[solver_slot];
         const int effector_actor_idx = chain_indices.foot;
         const math::vector3 joint_pos = pose[joint_actor_idx].pos;
-        const math::vector3 effector_delta = pose[effector_actor_idx].pos - joint_pos;
+        const math::vector3 effector_delta =
+            pose[effector_actor_idx].pos - joint_pos;
         const math::vector3 target_delta = reachable_target - joint_pos;
         if (effector_delta.squaredNorm() <= 1e-8f ||
             target_delta.squaredNorm() <= 1e-8f) {
           continue;
         }
 
-        const math::quat delta_rot = math::from_to_rot(effector_delta, target_delta);
+        const math::quat delta_rot =
+            math::from_to_rot(effector_delta, target_delta);
         const math::quat solved_world_rot =
             (delta_rot * pose[joint_actor_idx].rot).normalized();
         const int parent_idx = char_joint_parents[joint_actor_idx];
@@ -574,8 +615,8 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
       }
     }
 
-    for (int solver_slot = 0; solver_slot < static_cast<int>(solver_joints.size());
-         solver_slot++) {
+    for (int solver_slot = 0;
+         solver_slot < static_cast<int>(solver_joints.size()); solver_slot++) {
       const int joint_actor_idx = solver_joints[solver_slot];
       const math::quat solved_local_rot =
           cache_local_rotation(frame_idx, joint_actor_idx);
@@ -587,59 +628,58 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
     compute_fk_pose(frame_idx, root_pos, network_root, pose);
   };
 
-  auto fit_toe_to_terrain = [&](int frame_idx,
-                                const ik_chain_indices &chain_indices,
-                                const math::vector3 &root_pos,
-                                const math::quat &network_root,
-                                float blend_weight,
-                                std::vector<ik_joint_pose> &pose) {
-    blend_weight = saturate(blend_weight);
-    if (blend_weight <= 1e-4f)
-      return;
+  auto fit_toe_to_terrain =
+      [&](int frame_idx, const ik_chain_indices &chain_indices,
+          const math::vector3 &root_pos, const math::quat &network_root,
+          float blend_weight, std::vector<ik_joint_pose> &pose) {
+        blend_weight = saturate(blend_weight);
+        if (blend_weight <= 1e-4f)
+          return;
 
-    compute_fk_pose(frame_idx, root_pos, network_root, pose);
-    const math::vector3 toe_pos = pose[chain_indices.toe].pos;
-    math::vector3 toe_forward = pose[chain_indices.toe].rot *
-                                math::vector3(0.0f, 0.0f, 1.0f);
-    toe_forward.y() = 0.0f;
-    if (toe_forward.squaredNorm() <= 1e-8f)
-      toe_forward = planar_forward_from_quat(pose[chain_indices.foot].rot);
-    toe_forward.normalize();
+        compute_fk_pose(frame_idx, root_pos, network_root, pose);
+        const math::vector3 toe_pos = pose[chain_indices.toe].pos;
+        math::vector3 toe_forward =
+            pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
+        toe_forward.y() = 0.0f;
+        if (toe_forward.squaredNorm() <= 1e-8f)
+          toe_forward = planar_forward_from_quat(pose[chain_indices.foot].rot);
+        toe_forward.normalize();
 
-    const math::vector2 toe_xz(toe_pos.x(), toe_pos.z());
-    const math::vector2 probe_xz(
-        toe_pos.x() + toe_forward.x() * ik_toe_probe_distance,
-        toe_pos.z() + toe_forward.z() * ik_toe_probe_distance);
-    const float toe_height = sample_terrain_height(toe_xz, toe_pos.y());
-    const float probe_height = sample_terrain_height(probe_xz, toe_pos.y());
+        const math::vector2 toe_xz(toe_pos.x(), toe_pos.z());
+        const math::vector2 probe_xz(
+            toe_pos.x() + toe_forward.x() * ik_toe_probe_distance,
+            toe_pos.z() + toe_forward.z() * ik_toe_probe_distance);
+        const float toe_height = sample_terrain_height(toe_xz, toe_pos.y());
+        const float probe_height = sample_terrain_height(probe_xz, toe_pos.y());
 
-    math::vector3 terrain_forward(toe_forward.x(),
-                                  (probe_height - toe_height) /
-                                      ik_toe_probe_distance,
-                                  toe_forward.z());
-    if (terrain_forward.squaredNorm() <= 1e-8f)
-      return;
-    terrain_forward.normalize();
+        math::vector3 terrain_forward(toe_forward.x(),
+                                      (probe_height - toe_height) /
+                                          ik_toe_probe_distance,
+                                      toe_forward.z());
+        if (terrain_forward.squaredNorm() <= 1e-8f)
+          return;
+        terrain_forward.normalize();
 
-    const math::vector3 current_forward =
-        pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
-    if (current_forward.squaredNorm() <= 1e-8f)
-      return;
+        const math::vector3 current_forward =
+            pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
+        if (current_forward.squaredNorm() <= 1e-8f)
+          return;
 
-    const math::quat desired_world_rot =
-        (math::from_to_rot(current_forward, terrain_forward) *
-         pose[chain_indices.toe].rot)
-            .normalized();
-    const math::quat desired_local_rot =
-        (pose[chain_indices.foot].rot.inverse() * desired_world_rot).normalized();
-    const math::quat original_local_rot =
-        cache_local_rotation(frame_idx, chain_indices.toe);
-    set_cache_local_rotation(
-        frame_idx, chain_indices.toe,
-        normalized_shortest_slerp(original_local_rot, desired_local_rot,
-                                  blend_weight));
-    compute_fk_pose(frame_idx, root_pos, network_root, pose);
-  };
+        const math::quat desired_world_rot =
+            (math::from_to_rot(current_forward, terrain_forward) *
+             pose[chain_indices.toe].rot)
+                .normalized();
+        const math::quat desired_local_rot =
+            (pose[chain_indices.foot].rot.inverse() * desired_world_rot)
+                .normalized();
+        const math::quat original_local_rot =
+            cache_local_rotation(frame_idx, chain_indices.toe);
+        set_cache_local_rotation(frame_idx, chain_indices.toe,
+                                 normalized_shortest_slerp(original_local_rot,
+                                                           desired_local_rot,
+                                                           blend_weight));
+        compute_fk_pose(frame_idx, root_pos, network_root, pose);
+      };
 
   math::vector3 root_pos = root_trans.world_pos();
   math::quat sequence_network_root = network_root_rot;
@@ -651,6 +691,27 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
     }
   }
 
+  std::vector<ik_joint_pose> pose;
+  math::vector3 left_handoff_foot_pos =
+      registry
+          .get<transform>(
+              player_actor.ordered_entities[left_chain_indices.foot])
+          .world_pos();
+  math::vector3 right_handoff_foot_pos =
+      registry
+          .get<transform>(
+              player_actor.ordered_entities[right_chain_indices.foot])
+          .world_pos();
+  float left_handoff_ik_label = ik_value_left;
+  float right_handoff_ik_label = ik_value_right;
+  if (cache_frame_is_valid(transition_from_idx)) {
+    compute_fk_pose(transition_from_idx, root_pos, sequence_network_root, pose);
+    left_handoff_foot_pos = pose[left_chain_indices.foot].pos;
+    right_handoff_foot_pos = pose[right_chain_indices.foot].pos;
+    left_handoff_ik_label = ik_left_cache[transition_from_idx];
+    right_handoff_ik_label = ik_right_cache[transition_from_idx];
+  }
+
   const int clamped_frame_count =
       std::min({frame_count, cache_size - buffer_start_idx, cache_size / 2});
   if (clamped_frame_count <= 0)
@@ -660,10 +721,10 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
   std::vector<math::quat> frame_network_root(clamped_frame_count);
   std::vector<math::vector3> left_foot_fk(clamped_frame_count);
   std::vector<math::vector3> right_foot_fk(clamped_frame_count);
-  std::vector<ik_joint_pose> pose;
 
   int actual_frame_count = 0;
-  for (int frame_offset = 0; frame_offset < clamped_frame_count; frame_offset++) {
+  for (int frame_offset = 0; frame_offset < clamped_frame_count;
+       frame_offset++) {
     const int frame_idx = buffer_start_idx + frame_offset;
     if (!cache_frame_is_valid(frame_idx))
       break;
@@ -680,18 +741,21 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
     return;
 
   const auto left_targets =
-      build_foot_targets(left_foot_fk, ik_left_cache, actual_frame_count);
+      build_foot_targets(left_foot_fk, ik_left_cache, actual_frame_count,
+                         left_handoff_foot_pos, left_handoff_ik_label);
   const auto right_targets =
-      build_foot_targets(right_foot_fk, ik_right_cache, actual_frame_count);
+      build_foot_targets(right_foot_fk, ik_right_cache, actual_frame_count,
+                         right_handoff_foot_pos, right_handoff_ik_label);
 
-  for (int frame_offset = 0; frame_offset < actual_frame_count; frame_offset++) {
+  for (int frame_offset = 0; frame_offset < actual_frame_count;
+       frame_offset++) {
     const int frame_idx = buffer_start_idx + frame_offset;
     compute_fk_pose(frame_idx, frame_root_pos[frame_offset],
                     frame_network_root[frame_offset], pose);
     solve_leg_to_foot(frame_idx, right_chain_indices, right_leg_length,
                       frame_root_pos[frame_offset],
-                      frame_network_root[frame_offset], right_targets[frame_offset],
-                      pose);
+                      frame_network_root[frame_offset],
+                      right_targets[frame_offset], pose);
     solve_leg_to_foot(frame_idx, left_chain_indices, left_leg_length,
                       frame_root_pos[frame_offset],
                       frame_network_root[frame_offset], left_targets[frame_offset],
