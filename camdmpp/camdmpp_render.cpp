@@ -5,13 +5,14 @@ namespace toolkit::opengl3d {
 
 void camdmpp::handle_engine_gui() {
   ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(ImVec2(450, 500), ImGuiCond_Always);
+  ImGui::SetNextWindowSize(ImVec2(450, 650), ImGuiCond_Always);
   ImGui::SetNextWindowBgAlpha(0.7f);
   ImGui::Begin("Settings", nullptr,
                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-  ImGui::SeparatorText("Inertia Blending");
-  ImGui::Checkbox("Camera As Facing Direction", &camera_as_facing_direction);
+  ImGui::SeparatorText("System Settings");
+  ImGui::Checkbox("Camera Facing", &camera_as_facing_direction);
+  ImGui::DragFloat("Camera Dist", &camera_distance, 0.01f, 0.0f, 20.0f);
   ImGui::DragFloat("Rotation HL", &rot_halflife, 0.001f, 0.0f, 1.0f);
   ImGui::DragFloat("Velocity HL", &vel_halflife, 0.001f, 0.0f, 1.0f);
   ImGui::DragFloat("Walk Velocity", &sim_move_speed_walk, 0.01f, 0.0f, 10.0f);
@@ -45,13 +46,16 @@ void camdmpp::handle_engine_gui() {
   // int cur_style_idx = static_cast<int>(model.style_idx_data[0]);
   // ImGui::Text("Current Style: %s (%d)",
   //             model.style_names[cur_style_idx].c_str(), cur_style_idx);
+  ImGui::TextColored({0, 1, 0, 1}, "Idle: %s", char_idle ? "Yes" : "No");
+  ImGui::TextColored({0, 1, 0, 1}, "Running: %s", char_running ? "Yes" : "No");
+  ImGui::TextColored({0, 1, 0, 1}, "Crouching: %s", char_crouching ? "Yes" : "No");
   ImGui::Text("Buffer In Use: %s", use_front_buffer ? "Front" : "Back");
   ImGui::Text("Inference Time: %.3f ms", display_inference_time);
   ImGui::Text("Applied Frames: %d", applied_frames);
 
   ImGui::SeparatorText("Post Processing");
   ImGui::Checkbox("Enable Foot Locking", &enable_foot_locking);
-  ImGui::Checkbox("Motion Terrain Adjustment", &enable_motion_terrain_adjustment);
+  // ImGui::Checkbox("Motion Terrain Adjustment", &enable_motion_terrain_adjustment);
   ImGui::Text("IK Value Right: %.3f", ik_value_right);
   ImGui::Text("IK Value Left:  %.3f", ik_value_left);
 

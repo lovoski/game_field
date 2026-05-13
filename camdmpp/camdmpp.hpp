@@ -25,7 +25,7 @@ private:
   float ik_value_left = 0.0f, ik_value_right = 0.0f;
 
   // character locomotion states
-  bool char_running = false, char_crouching = false;
+  bool char_running = false, char_crouching = false, char_idle = false;
   void update_character_states(float dt);
 
   // camera related

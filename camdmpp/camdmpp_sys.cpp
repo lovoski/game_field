@@ -9,18 +9,26 @@ namespace {
 // scalar derived from the network's contact label. There is no second blend
 // (this used to multiply the slerp weight by an in/out triangle and was the
 // main cause of foot snap at contact edges).
-constexpr float ik_lock_on_threshold     = 0.55f;  // span starts when raw label > this
-constexpr float ik_lock_off_threshold    = 0.20f;  // span extends while raw label > this
-constexpr float ik_label_blend_low       = 0.20f;  // smoothstep edges for raw label
-constexpr float ik_label_blend_high      = 0.80f;
+constexpr float ik_lock_on_threshold =
+    0.55f; // span starts when raw label > this
+constexpr float ik_lock_off_threshold =
+    0.20f; // span extends while raw label > this
+constexpr float ik_label_blend_low = 0.20f; // smoothstep edges for raw label
+constexpr float ik_label_blend_high = 0.80f;
 constexpr float ik_contact_height_offset_min = -0.02f;
-constexpr float ik_contact_height_offset_max =  0.08f;
-constexpr float ik_toe_probe_distance    = 0.18f;
-constexpr float ik_toe_lock_gate_low     = 0.40f;  // toe alignment starts fading in here
-constexpr float ik_toe_lock_gate_high    = 0.75f;  // toe alignment fully on here
-constexpr int   ik_lock_edge_taper_frames = 3;     // soft ramp at span boundaries
-constexpr int   ik_solver_iterations     = 2;     // 2 is enough for a 2-segment leg
-constexpr float ik_max_reach_factor      = 0.985f;
+constexpr float ik_contact_height_offset_max = 0.08f;
+constexpr float ik_anchor_weight_low = 0.45f; // ignore weak contact edges
+constexpr float ik_anchor_weight_high = 0.90f;
+constexpr float ik_anchor_low_offset_bias =
+    0.65f; // prefer the lowest grounded sample over the mean
+constexpr float ik_anchor_handoff_max_delta = 0.25f;
+constexpr float ik_toe_probe_distance = 0.18f;
+constexpr float ik_toe_lock_gate_low =
+    0.40f; // toe alignment starts fading in here
+constexpr float ik_toe_lock_gate_high = 0.75f; // toe alignment fully on here
+constexpr int ik_lock_edge_taper_frames = 3;   // soft ramp at span boundaries
+constexpr int ik_solver_iterations = 2; // 2 is enough for a 2-segment leg
+constexpr float ik_max_reach_factor = 0.985f;
 
 struct ik_joint_pose {
   math::vector3 pos = math::vector3::Zero();
@@ -44,8 +52,11 @@ struct ik_chain_indices {
 //   lock_weight  > 0 : drive the foot toward `target` (in world space) and,
 //                      gated by `ik_toe_lock_gate_*`, align the toe with the
 //                      terrain slope sampled at `slope_anchor_xz`.
+// `stable_target` is the final planted anchor used for cross-buffer carry;
+// `target` may be eased for the first few frames of a new contact.
 struct ik_foot_anchor {
   math::vector3 target = math::vector3::Zero();
+  math::vector3 stable_target = math::vector3::Zero();
   math::vector2 slope_anchor_xz = math::vector2::Zero();
   float slope_baseline_y = 0.0f;
   float lock_weight = 0.0f;
@@ -307,7 +318,8 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
   auto &player_actor = registry.get<actor>(bundle_data.actor_entities[0]);
   auto &root_trans = registry.get<transform>(player_actor.ordered_entities[0]);
 
-  const int actor_count = static_cast<int>(player_actor.ordered_entities.size());
+  const int actor_count =
+      static_cast<int>(player_actor.ordered_entities.size());
   if (actor_count == 0 || char_joint_parents.size() != actor_count ||
       char_repair_c.size() != actor_count || frame_count <= 0) {
     return;
@@ -373,8 +385,8 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
         player_actor.ordered_entities[chain_indices.shin]);
     auto &foot_trans = registry.get<transform>(
         player_actor.ordered_entities[chain_indices.foot]);
-    const float length = shin_trans.local_pos().norm() +
-                         foot_trans.local_pos().norm();
+    const float length =
+        shin_trans.local_pos().norm() + foot_trans.local_pos().norm();
     return std::max(length, 1e-3f);
   };
 
@@ -411,12 +423,12 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
 
     for (int actor_idx = 1; actor_idx < actor_count; actor_idx++) {
       const int parent_idx = char_joint_parents[actor_idx];
-      auto &joint_trans = registry.get<transform>(
-          player_actor.ordered_entities[actor_idx]);
+      auto &joint_trans =
+          registry.get<transform>(player_actor.ordered_entities[actor_idx]);
       const math::quat local_rot = cache_local_rotation(frame_idx, actor_idx);
       if (parent_idx >= 0 && parent_idx < actor_count) {
-        pose[actor_idx].pos =
-            pose[parent_idx].pos + pose[parent_idx].rot * joint_trans.local_pos();
+        pose[actor_idx].pos = pose[parent_idx].pos +
+                              pose[parent_idx].rot * joint_trans.local_pos();
         pose[actor_idx].rot = (pose[parent_idx].rot * local_rot).normalized();
       } else {
         pose[actor_idx].pos = joint_trans.local_pos();
@@ -430,8 +442,9 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
     if (!cache_frame_is_valid(frame_idx))
       return;
 
-    math::quat network_heading = math::from_to_rot(
-        math::vector3(0.0f, 0.0f, 1.0f), planar_forward_from_quat(network_root));
+    math::quat network_heading =
+        math::from_to_rot(math::vector3(0.0f, 0.0f, 1.0f),
+                          planar_forward_from_quat(network_root));
     if (root_rel_pos_cache[frame_idx].squaredNorm() > 1e-10f)
       root_pos += network_heading * root_rel_pos_cache[frame_idx];
 
@@ -471,16 +484,18 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
   // After the loop the caller writes the final frame's state back into
   // the carry, ready for the next prediction.
   //
-  // The rest is unchanged: per-span single anchor (terrain sampled at
-  // anchor xz, not at moving foot xz), edge taper for fresh spans only,
-  // anchor xz/y constant for the whole span.
+  // Targets are generated from high-confidence contact samples only, then
+  // projected back to the terrain. Weak contact edges are used for the IK
+  // strength/taper, but not for selecting the planted point; otherwise uphill
+  // or downhill spans can average in swing frames and make the foot chatter.
   auto build_foot_anchors = [&](const std::vector<math::vector3> &foot_fk,
                                 const std::array<float, cache_size> &labels,
                                 int actual_frame_count,
                                 const ik_foot_carry &carry,
                                 const math::vector3 &handoff_foot_pos) {
     std::vector<ik_foot_anchor> anchors(actual_frame_count);
-    if (actual_frame_count <= 0) return anchors;
+    if (actual_frame_count <= 0)
+      return anchors;
 
     // (1) raw weight = smoothstep(label).
     std::vector<float> w(actual_frame_count, 0.0f);
@@ -511,23 +526,30 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
       int end = 1;
       while (end < actual_frame_count && w_smooth[end] > ik_lock_off_threshold)
         ++end;
-      const math::vector3 anchor_target = carry.anchor_pos;
+      math::vector3 anchor_target = carry.anchor_pos;
       const math::vector2 anchor_xz(anchor_target.x(), anchor_target.z());
-      const float         anchor_y     = anchor_target.y();
-      const int           taper        = std::max(1, ik_lock_edge_taper_frames);
+      const float anchor_terrain_y =
+          sample_terrain_height(anchor_xz, anchor_target.y());
+      anchor_target.y() =
+          anchor_terrain_y + std::clamp(anchor_target.y() - anchor_terrain_y,
+                                        ik_contact_height_offset_min,
+                                        ik_contact_height_offset_max);
+      const int taper = std::max(1, ik_lock_edge_taper_frames);
       for (int k = 0; k < end; ++k) {
         // No fade-in: weight continues smoothly from the carry value.
         // Fade-out only when we're approaching the end of the carried
         // span *within this buffer*; if the span runs to the very last
         // frame we let it stay full-strength so the next buffer can carry
         // it forward in turn.
-        const float fade_out = (end == actual_frame_count)
-            ? 1.0f
-            : smoothstep(0.0f, float(taper), float(end - k));
-        anchors[k].target           = anchor_target;
-        anchors[k].slope_anchor_xz  = anchor_xz;
-        anchors[k].slope_baseline_y = anchor_y;
-        anchors[k].lock_weight      = saturate(w_smooth[k]) * fade_out;
+        const float fade_out =
+            (end == actual_frame_count)
+                ? 1.0f
+                : smoothstep(0.0f, float(taper), float(end - k));
+        anchors[k].target = anchor_target;
+        anchors[k].stable_target = anchor_target;
+        anchors[k].slope_anchor_xz = anchor_xz;
+        anchors[k].slope_baseline_y = anchor_target.y();
+        anchors[k].lock_weight = saturate(w_smooth[k]) * fade_out;
       }
       t = end;
     }
@@ -544,23 +566,48 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
       while (end < actual_frame_count && w_smooth[end] > ik_lock_off_threshold)
         ++end;
 
-      // Weighted-average xz + height offset over the span.
+      // Weighted-average xz + height offset over the confident middle of the
+      // span. Contact-edge samples still contribute to the fade in/out, but
+      // not to the planted target because they often contain swing motion.
       math::vector2 anchor_xz = math::vector2::Zero();
-      float         anchor_height_offset = 0.0f;
-      float         total_w = 0.0f;
+      float anchor_height_offset = 0.0f;
+      float total_w = 0.0f;
+      float lowest_height_offset = ik_contact_height_offset_max;
       for (int k = start; k < end; ++k) {
-        const float ww = std::max(w_smooth[k], 1e-3f);
+        const float ww = smoothstep(ik_anchor_weight_low, ik_anchor_weight_high,
+                                    saturate(w_smooth[k]));
+        if (ww <= 1e-4f)
+          continue;
         const math::vector2 fxz(foot_fk[k].x(), foot_fk[k].z());
         const float h = sample_terrain_height(fxz, foot_fk[k].y());
-        anchor_xz             += fxz * ww;
-        anchor_height_offset  += (foot_fk[k].y() - h) * ww;
-        total_w               += ww;
+        const float height_offset = foot_fk[k].y() - h;
+        anchor_xz += fxz * ww;
+        anchor_height_offset += height_offset * ww;
+        lowest_height_offset = std::min(lowest_height_offset, height_offset);
+        total_w += ww;
       }
-      if (total_w <= 1e-6f) { t = end; continue; }
-      anchor_xz             /= total_w;
-      anchor_height_offset   = std::clamp(anchor_height_offset / total_w,
-                                          ik_contact_height_offset_min,
-                                          ik_contact_height_offset_max);
+      if (total_w <= 1e-6f) {
+        for (int k = start; k < end; ++k) {
+          const float ww = std::max(w_smooth[k], 1e-3f);
+          const math::vector2 fxz(foot_fk[k].x(), foot_fk[k].z());
+          const float h = sample_terrain_height(fxz, foot_fk[k].y());
+          const float height_offset = foot_fk[k].y() - h;
+          anchor_xz += fxz * ww;
+          anchor_height_offset += height_offset * ww;
+          lowest_height_offset = std::min(lowest_height_offset, height_offset);
+          total_w += ww;
+        }
+      }
+      if (total_w <= 1e-6f) {
+        t = end;
+        continue;
+      }
+      anchor_xz /= total_w;
+      const float mean_height_offset = anchor_height_offset / total_w;
+      anchor_height_offset = std::clamp(
+          mean_height_offset * (1.0f - ik_anchor_low_offset_bias) +
+              lowest_height_offset * ik_anchor_low_offset_bias,
+          ik_contact_height_offset_min, ik_contact_height_offset_max);
       const float anchor_y_terrain =
           sample_terrain_height(anchor_xz, foot_fk[start].y());
       const math::vector3 anchor_target(anchor_xz.x(),
@@ -568,21 +615,44 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
                                         anchor_xz.y());
 
       const int taper = std::max(1, ik_lock_edge_taper_frames);
+      const math::vector3 span_handoff_pos =
+          start > 0 ? foot_fk[start - 1] : handoff_foot_pos;
+      const math::vector2 handoff_xz(span_handoff_pos.x(),
+                                     span_handoff_pos.z());
+      const float handoff_terrain_y =
+          sample_terrain_height(handoff_xz, span_handoff_pos.y());
+      const float handoff_height_offset = std::clamp(
+          span_handoff_pos.y() - handoff_terrain_y,
+          ik_contact_height_offset_min, ik_contact_height_offset_max);
+      math::vector3 ramp_start(handoff_xz.x(),
+                               handoff_terrain_y + handoff_height_offset,
+                               handoff_xz.y());
+      const math::vector3 ramp_delta = ramp_start - anchor_target;
+      const float ramp_distance = ramp_delta.norm();
+      if (ramp_distance > ik_anchor_handoff_max_delta &&
+          ramp_distance > 1e-5f) {
+        ramp_start = anchor_target +
+                     ramp_delta / ramp_distance * ik_anchor_handoff_max_delta;
+      }
       for (int k = start; k < end; ++k) {
         const float fade_in =
             smoothstep(0.0f, float(taper), float(k - start + 1));
-        const float fade_out = (end == actual_frame_count)
-            ? 1.0f
-            : smoothstep(0.0f, float(taper), float(end - k));
+        const float fade_out =
+            (end == actual_frame_count)
+                ? 1.0f
+                : smoothstep(0.0f, float(taper), float(end - k));
         const float gate = std::min(fade_in, fade_out);
-        anchors[k].target           = anchor_target;
-        anchors[k].slope_anchor_xz  = anchor_xz;
-        anchors[k].slope_baseline_y = anchor_target.y();
-        anchors[k].lock_weight      = saturate(w_smooth[k]) * gate;
+        const math::vector3 smoothed_target =
+            ramp_start + (anchor_target - ramp_start) * fade_in;
+        anchors[k].target = smoothed_target;
+        anchors[k].stable_target = anchor_target;
+        anchors[k].slope_anchor_xz =
+            math::vector2(smoothed_target.x(), smoothed_target.z());
+        anchors[k].slope_baseline_y = smoothed_target.y();
+        anchors[k].lock_weight = saturate(w_smooth[k]) * gate;
       }
       t = end;
     }
-    (void)handoff_foot_pos; // kept for caller symmetry; not used here.
     return anchors;
   };
 
@@ -671,61 +741,62 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
   //   * we gate by `lock_weight` through `ik_toe_lock_gate_*`, so the toe
   //     is only adjusted when the foot is actually planted, not while it
   //     is still ramping in or out.
-  auto fit_toe_to_terrain =
-      [&](int frame_idx, const ik_chain_indices &chain_indices,
-          const math::vector3 &root_pos, const math::quat &network_root,
-          const ik_foot_anchor &anchor, std::vector<ik_joint_pose> &pose) {
-        const float gate = smoothstep(ik_toe_lock_gate_low,
-                                      ik_toe_lock_gate_high,
-                                      saturate(anchor.lock_weight));
-        if (gate <= 1e-4f)
-          return;
+  auto fit_toe_to_terrain = [&](int frame_idx,
+                                const ik_chain_indices &chain_indices,
+                                const math::vector3 &root_pos,
+                                const math::quat &network_root,
+                                const ik_foot_anchor &anchor,
+                                std::vector<ik_joint_pose> &pose) {
+    const float gate = smoothstep(ik_toe_lock_gate_low, ik_toe_lock_gate_high,
+                                  saturate(anchor.lock_weight));
+    if (gate <= 1e-4f)
+      return;
 
-        compute_fk_pose(frame_idx, root_pos, network_root, pose);
-        math::vector3 toe_forward =
-            pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
-        toe_forward.y() = 0.0f;
-        if (toe_forward.squaredNorm() <= 1e-8f)
-          toe_forward = planar_forward_from_quat(pose[chain_indices.foot].rot);
-        toe_forward.normalize();
+    compute_fk_pose(frame_idx, root_pos, network_root, pose);
+    math::vector3 toe_forward =
+        pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
+    toe_forward.y() = 0.0f;
+    if (toe_forward.squaredNorm() <= 1e-8f)
+      toe_forward = planar_forward_from_quat(pose[chain_indices.foot].rot);
+    toe_forward.normalize();
 
-        // Sample the slope along the toe's heading at the anchor xz, so the
-        // slope estimate is constant for the whole contact span.
-        const math::vector2 base_xz = anchor.slope_anchor_xz;
-        const math::vector2 probe_xz(
-            base_xz.x() + toe_forward.x() * ik_toe_probe_distance,
-            base_xz.y() + toe_forward.z() * ik_toe_probe_distance);
-        const float base_height  = sample_terrain_height(base_xz, anchor.slope_baseline_y);
-        const float probe_height = sample_terrain_height(probe_xz, anchor.slope_baseline_y);
+    // Sample the slope along the toe's heading at the anchor xz, so the
+    // slope estimate is constant for the whole contact span.
+    const math::vector2 base_xz = anchor.slope_anchor_xz;
+    const math::vector2 probe_xz(
+        base_xz.x() + toe_forward.x() * ik_toe_probe_distance,
+        base_xz.y() + toe_forward.z() * ik_toe_probe_distance);
+    const float base_height =
+        sample_terrain_height(base_xz, anchor.slope_baseline_y);
+    const float probe_height =
+        sample_terrain_height(probe_xz, anchor.slope_baseline_y);
 
-        math::vector3 terrain_forward(toe_forward.x(),
-                                      (probe_height - base_height) /
-                                          ik_toe_probe_distance,
-                                      toe_forward.z());
-        if (terrain_forward.squaredNorm() <= 1e-8f)
-          return;
-        terrain_forward.normalize();
+    math::vector3 terrain_forward(
+        toe_forward.x(), (probe_height - base_height) / ik_toe_probe_distance,
+        toe_forward.z());
+    if (terrain_forward.squaredNorm() <= 1e-8f)
+      return;
+    terrain_forward.normalize();
 
-        const math::vector3 current_forward =
-            pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
-        if (current_forward.squaredNorm() <= 1e-8f)
-          return;
+    const math::vector3 current_forward =
+        pose[chain_indices.toe].rot * math::vector3(0.0f, 0.0f, 1.0f);
+    if (current_forward.squaredNorm() <= 1e-8f)
+      return;
 
-        const math::quat desired_world_rot =
-            (math::from_to_rot(current_forward, terrain_forward) *
-             pose[chain_indices.toe].rot)
-                .normalized();
-        const math::quat desired_local_rot =
-            (pose[chain_indices.foot].rot.inverse() * desired_world_rot)
-                .normalized();
-        const math::quat original_local_rot =
-            cache_local_rotation(frame_idx, chain_indices.toe);
-        set_cache_local_rotation(frame_idx, chain_indices.toe,
-                                 normalized_shortest_slerp(original_local_rot,
-                                                           desired_local_rot,
-                                                           gate));
-        compute_fk_pose(frame_idx, root_pos, network_root, pose);
-      };
+    const math::quat desired_world_rot =
+        (math::from_to_rot(current_forward, terrain_forward) *
+         pose[chain_indices.toe].rot)
+            .normalized();
+    const math::quat desired_local_rot =
+        (pose[chain_indices.foot].rot.inverse() * desired_world_rot)
+            .normalized();
+    const math::quat original_local_rot =
+        cache_local_rotation(frame_idx, chain_indices.toe);
+    set_cache_local_rotation(
+        frame_idx, chain_indices.toe,
+        normalized_shortest_slerp(original_local_rot, desired_local_rot, gate));
+    compute_fk_pose(frame_idx, root_pos, network_root, pose);
+  };
 
   math::vector3 root_pos = root_trans.world_pos();
   math::quat sequence_network_root = network_root_rot;
@@ -811,14 +882,12 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
                       frame_root_pos[frame_offset],
                       frame_network_root[frame_offset],
                       left_anchors[frame_offset], pose);
-    fit_toe_to_terrain(frame_idx, right_chain_indices,
-                       frame_root_pos[frame_offset],
-                       frame_network_root[frame_offset],
-                       right_anchors[frame_offset], pose);
-    fit_toe_to_terrain(frame_idx, left_chain_indices,
-                       frame_root_pos[frame_offset],
-                       frame_network_root[frame_offset],
-                       left_anchors[frame_offset], pose);
+    fit_toe_to_terrain(
+        frame_idx, right_chain_indices, frame_root_pos[frame_offset],
+        frame_network_root[frame_offset], right_anchors[frame_offset], pose);
+    fit_toe_to_terrain(
+        frame_idx, left_chain_indices, frame_root_pos[frame_offset],
+        frame_network_root[frame_offset], left_anchors[frame_offset], pose);
   }
 
   // Persist the IK state into the per-foot carry so the next prediction
@@ -836,21 +905,20 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
   // `buffer_start_idx + switch_prediction_interval - 1`; that frame is
   // the boundary, and frame_offset = switch_prediction_interval - 1
   // within this buffer corresponds to it exactly.
-  const int carry_frame_offset =
-      std::min(static_cast<int>(switch_prediction_interval) - 1,
-               actual_frame_count - 1);
+  const int carry_frame_offset = std::min(
+      static_cast<int>(switch_prediction_interval) - 1, actual_frame_count - 1);
   const auto write_carry = [&](const std::vector<ik_foot_anchor> &anchors,
                                ik_foot_carry &carry) {
     const ik_foot_anchor &boundary = anchors[carry_frame_offset];
     carry.lock_weight = boundary.lock_weight;
     if (boundary.lock_weight > ik_lock_off_threshold) {
-      carry.anchor_pos = boundary.target;
-      carry.active     = true;
+      carry.anchor_pos = boundary.stable_target;
+      carry.active = true;
     } else {
       carry.active = false;
     }
   };
-  write_carry(left_anchors,  ik_left_carry);
+  write_carry(left_anchors, ik_left_carry);
   write_carry(right_anchors, ik_right_carry);
 }
 

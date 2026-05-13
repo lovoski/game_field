@@ -57,6 +57,8 @@ void camdmpp::predict_trajectory() {
     move_input += math::vector3(1.0f, 0.0f, 0.0f);
   move_input = camera_forward_rot * move_input.normalized();
 
+  char_idle = move_input.norm() < 1e-6f;
+
   player_vel = (player_curr_pos - player_last_pos) / fixed_interval;
   player_last_pos = player_curr_pos;
   player_curr_pos = math::vector3(root_trans.world_pos().x(), 0.0f,
@@ -204,14 +206,17 @@ void camdmpp::apply_pose_and_refill() {
     // gait
     if (true) {
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 4] =
-          0.0f; // stand
+          char_idle ? 1.0f : 0.0f; // stand
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 5] =
-          (char_running ? 0.0f : 1.0f) * (char_crouching ? 0.0f : 1.0f); // walk
+          char_idle ? 0.0f
+                    : ((char_running ? 0.0f : 1.0f) *
+                       (char_crouching ? 0.0f : 1.0f)); // walk
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 6] =
-          (char_running ? 1.0f : 0.0f) *
-          (char_crouching ? 0.0f : 1.0f); // jog_run
+          char_idle ? 0.0f
+                    : ((char_running ? 1.0f : 0.0f) *
+                       (char_crouching ? 0.0f : 1.0f)); // jog_run
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 7] =
-          char_crouching ? 1.0f : 0.0f; // crouch_crawl
+          char_idle ? 0.0f : (char_crouching ? 1.0f : 0.0f); // crouch_crawl
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 8] =
           0.0f; // jump
       i_traj[model.traj_shape[2] * i + 2 * model.lateral_offsets_m.size() + 9] =
@@ -398,9 +403,6 @@ void camdmpp::predict_new_tokens() {
       if (enable_foot_locking)
         postprocessing_ik(target_buffer_start_idx, transition_from_idx,
                           model.future_points);
-
-      // // motion terrain adjustment
-      // if (enable_motion_terrain_adjustment) {}
     });
   }
 }
