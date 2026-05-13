@@ -62,7 +62,8 @@ void camdmpp::predict_trajectory() {
   player_curr_pos = math::vector3(root_trans.world_pos().x(), 0.0f,
                                   root_trans.world_pos().z());
 
-  player_ang = shortest_arc_rot_vec(player_last_rot, player_curr_rot) / fixed_interval;
+  player_ang =
+      shortest_arc_rot_vec(player_last_rot, player_curr_rot) / fixed_interval;
   player_last_rot = player_curr_rot;
   player_curr_rot = math::from_to_rot(math::vector3(0, 0, 1), root_forward);
 
@@ -79,8 +80,7 @@ void camdmpp::predict_trajectory() {
   auto qt = math::from_to_rot(math::vector3(0, 0, 1), target_dir);
   if (q0.dot(qt) < 0.0f)
     qt = toolkit::math::quat(-qt.w(), -qt.x(), -qt.y(), -qt.z());
-  toolkit::math::vector3 q =
-      toolkit::math::quat_to_rot_vec(q0 * qt.inverse());
+  toolkit::math::vector3 q = toolkit::math::quat_to_rot_vec(q0 * qt.inverse());
   math::vector3 angular_velocity = player_ang;
   const float e = 2.71828f;
   float lambda = log(2) / (rot_halflife * log(e));
@@ -108,9 +108,11 @@ void camdmpp::predict_trajectory() {
     q = (q_prev + (angular_velocity + lambda * q_prev) * fixed_interval) *
         exp(-lambda * fixed_interval);
     angular_velocity =
-        (angular_velocity + lambda * q_prev) * exp(-lambda * fixed_interval) - lambda * q;
+        (angular_velocity + lambda * q_prev) * exp(-lambda * fixed_interval) -
+        lambda * q;
 
-    _traj_world_dir[i] = (math::rot_vec_to_quat(q) * qt) * math::vector3(0, 0, 1);
+    _traj_world_dir[i] =
+        (math::rot_vec_to_quat(q) * qt) * math::vector3(0, 0, 1);
     _traj_world_dir[i].y() = 0.0f;
     _traj_world_dir[i].normalize();
 
@@ -137,7 +139,7 @@ void camdmpp::apply_pose_and_refill() {
   math::quat network_root_y_comp =
       math::from_to_rot(math::vector3(0, 0, 1), root_forward);
 
-  printf("applied_frames=%d\n", applied_frames);
+  // printf("applied_frames=%d\n", applied_frames);
 
   // find matching joint names and apply transform
   int da_entry_idx = 0;
@@ -146,14 +148,14 @@ void camdmpp::apply_pose_and_refill() {
         registry.get<transform>(player_actor.ordered_entities[ai]);
     if (ai == 0) {
       // root joint
-      if (root_rel_pos_cache[applied_frames].norm() > 1e-5f) {
+      if (root_rel_pos_cache[applied_frames].norm() > 1e-3f) {
         char_pos =
             char_pos + network_root_y_comp * root_rel_pos_cache[applied_frames];
       }
-      char_pos.y() = root_height_cache[applied_frames] +
-                     sample_terrain_height(
-                         math::vector2(char_pos.x(), char_pos.z()),
-                         joint_trans.world_pos().y());
+      char_pos.y() =
+          root_height_cache[applied_frames] +
+          sample_terrain_height(math::vector2(char_pos.x(), char_pos.z()),
+                                joint_trans.world_pos().y());
       network_root_y_comp =
           root_rel_rot_cache[applied_frames] * network_root_y_comp;
       network_root_rot = network_root_y_comp *
@@ -168,7 +170,7 @@ void camdmpp::apply_pose_and_refill() {
   }
   ik_value_right = std::clamp(ik_right_cache[applied_frames], 0.0f, 1.0f);
   ik_value_left = std::clamp(ik_left_cache[applied_frames], 0.0f, 1.0f);
-  std::cout << ik_value_right << ", " << ik_value_left << std::endl;
+  // std::cout << ik_value_right << ", " << ik_value_left << std::endl;
   player_trans.force_update_hierarchy();
 
   // update network input cache
@@ -249,19 +251,20 @@ void camdmpp::predict_new_tokens() {
       (submit_prediction_interval + (use_front_buffer ? 0 : cache_size / 2))) {
     const bool submitted_from_front_buffer = use_front_buffer;
     const int target_buffer_start_idx = use_front_buffer ? cache_size / 2 : 0;
-    const int transition_from_idx =
-        (use_front_buffer ? 0 : cache_size / 2) + switch_prediction_interval - 1;
+    const int transition_from_idx = (use_front_buffer ? 0 : cache_size / 2) +
+                                    switch_prediction_interval - 1;
 
     // fill in model input data
     model.past_motion_data = i_past_motion;
     model.traj_data = i_traj;
-    printf("Dispatch inference when applied_frames=%d\n", applied_frames);
+    // printf("Dispatch inference when applied_frames=%d\n", applied_frames);
     model.submit_inference([this, submitted_from_front_buffer,
                             target_buffer_start_idx, transition_from_idx](
                                std::vector<float> model_output,
                                float inference_time) {
-      printf("Inference finished when applied_frames=%d, update pose cache\n",
-             applied_frames);
+      // printf("Inference finished when applied_frames=%d, update pose
+      // cache\n",
+      //        applied_frames);
       if (use_front_buffer != submitted_from_front_buffer) {
         std::cout << "Discard late inference result after prediction buffer "
                      "swap."

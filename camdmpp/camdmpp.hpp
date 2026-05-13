@@ -137,6 +137,21 @@ private:
 
   // post processing
   std::array<entt::entity, 4> biped_chain_left, biped_chain_right;
+  // Per-foot IK state that has to survive across buffer swaps and async
+  // re-predictions. Without this the IK target/strength would re-derive
+  // from scratch each prediction, which causes the foot to pop at the
+  // boundary even though the cached pose itself is continuous (inertia
+  // blending only smooths the network's joint rotations, not the IK
+  // residual on top). `anchor_pos` is the world-space target the IK was
+  // driving the foot toward; `lock_weight` is the IK strength applied at
+  // the last frame of the previous buffer; `active` flags whether that
+  // last frame was inside a contact span.
+  struct ik_foot_carry {
+    math::vector3 anchor_pos = math::vector3::Zero();
+    float         lock_weight = 0.0f;
+    bool          active = false;
+  };
+  ik_foot_carry ik_left_carry, ik_right_carry;
   void postprocessing_ik(int buffer_start_idx, int transition_from_idx,
                          int frame_count);
 };

@@ -13,6 +13,28 @@ inline std::size_t __shape_to_size(std::vector<std::int64_t> &shape) {
   return size;
 }
 
+namespace {
+
+bool try_enable_cuda_execution_provider(Ort::SessionOptions &session_options) {
+#if defined(ONNXRUNTIME_USE_CUDA_EP)
+  try {
+    OrtCUDAProviderOptions cuda_options{};
+    cuda_options.device_id = 0;
+    session_options.AppendExecutionProvider_CUDA(cuda_options);
+    std::cout << "Using ONNX Runtime CUDA execution provider on device 0"
+              << std::endl;
+    return true;
+  } catch (const Ort::Exception &e) {
+    std::cout << "Falling back to CPU ONNX inference: failed to enable CUDA "
+                 "execution provider ("
+              << e.what() << ")" << std::endl;
+  }
+#endif
+  return false;
+}
+
+} // namespace
+
 void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   std::ifstream config_file(config_filepath);
   // load config file
@@ -76,6 +98,8 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   // Avoid OOM error for large models
   session_options.EnableCpuMemArena();
   session_options.EnableMemPattern();
+
+  try_enable_cuda_execution_provider(session_options);
 
   try {
     session =
