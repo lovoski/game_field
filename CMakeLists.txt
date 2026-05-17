@@ -76,23 +76,3 @@ if(ONNXRUNTIME_CUDA_PROVIDER_AVAILABLE)
   target_compile_definitions(camdmpp PRIVATE ONNXRUNTIME_USE_CUDA_EP=1)
 endif()
 copy_onnxruntime_runtime(camdmpp)
-
-add_executable(
-  animator
-  animator/main.cpp
-  animator/animator.cpp
-  animator/animator_render.cpp
-)
-target_link_libraries(animator PRIVATE toolkit)
-target_include_directories(animator PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
-
-add_executable(
-  retarget
-  retarget/main.cpp
-  retarget/retarget_app.cpp
-  retarget/retarget_app_render.cpp
-  retarget/retarget_core.cpp
-  retarget/retarget_io.cpp
-)
-target_link_libraries(retarget PRIVATE toolkit)
-target_include_directories(retarget PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})

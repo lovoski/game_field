@@ -1,9 +1,13 @@
 #include "toolkit/opengl3d/components/actor.hpp"
 #include "toolkit/opengl3d/components/mesh.hpp"
+#include "toolkit/opengl3d/components/motion_player.hpp"
 #include "toolkit/opengl3d/components/physics_body.hpp"
 #include "toolkit/opengl3d/components/physics_constraint.hpp"
 #include "toolkit/opengl3d/engine.hpp"
 #include "toolkit/opengl3d/gui.hpp"
+#include "toolkit/opengl3d/motion_track.hpp"
+
+#include <cstdio>
 
 namespace toolkit::opengl3d {
 
@@ -438,6 +442,63 @@ void engine3d::draw_main_menubar() {
           }
         }
       }
+      ImGui::Separator();
+
+      // ---------------------- Animator: armature & motion ---------------
+      ImGui::MenuItem("Animation", nullptr, false, false);
+      if (ImGui::MenuItem("Import Armature (BVH)")) {
+        std::string filepath;
+        if (open_file_dialog("Import armature from BVH",
+                             {"*.bvh", "*.BVH"}, filepath)) {
+          auto data = assets::load_bvh(filepath);
+          if (!data.names.empty()) {
+            auto container = registry.create();
+            auto &tr = registry.emplace<transform>(container);
+            tr.name = std::filesystem::path(filepath).filename().string();
+            create_bvh_actor(registry, data, container);
+            auto &bundle = registry.emplace<skinned_mesh_bundle>(container);
+            bundle.actor_entities = {container};
+            bundle.actor_draw = {true};
+            bundle.actor_draw_skeleton = true;
+            bundle.actor_draw_spheres = true;
+            registry.emplace<motion_player>(container);
+            selected_entity = container;
+            SDL_Log("Imported BVH armature %s", filepath.c_str());
+          } else {
+            SDL_Log("Failed: empty BVH at %s", filepath.c_str());
+          }
+        }
+      }
+      if (ImGui::MenuItem("Import Motion Track (BVH)")) {
+        std::string filepath;
+        if (open_file_dialog("Import motion track from BVH",
+                             {"*.bvh", "*.BVH"}, filepath)) {
+          auto t = motion_track_from_bvh_file(filepath);
+          if (t && t->num_frames() > 0) {
+            auto key = motion_library_add(t);
+            SDL_Log("Added BVH motion track '%s' to library", key.c_str());
+            show_motion_library = true;
+          } else {
+            SDL_Log("Failed: empty BVH motion at %s", filepath.c_str());
+          }
+        }
+      }
+      if (ImGui::MenuItem("Import FBX...")) {
+        std::string filepath;
+        if (open_file_dialog("Import FBX (armature + motion tracks)",
+                             {"*.fbx", "*.FBX"}, filepath)) {
+          fbx_import = fbx_import_state{};
+          fbx_import.filepath = filepath;
+          fbx_import.show = true;
+          if (!scan_fbx(filepath, fbx_import.scan)) {
+            SDL_Log("Failed to scan FBX %s: %s", filepath.c_str(),
+                    fbx_import.scan.error.c_str());
+          }
+          fbx_import.import_armature = fbx_import.scan.has_armature;
+          fbx_import.import_stack.assign(fbx_import.scan.anim_stack_names.size(),
+                                         true);
+        }
+      }
       ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Settings")) {
@@ -484,6 +545,15 @@ void engine3d::draw_main_menubar() {
       if (ImGui::Button("Open Named Field Window", {-1, 30}))
         open_named_field_window = true;
 
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("View")) {
+      ImGui::MenuItem("Entities",          nullptr, &show_hierarchy);
+      ImGui::MenuItem("Components",        nullptr, &show_components);
+      ImGui::Separator();
+      ImGui::MenuItem("Animator Timeline", nullptr, &show_animator_timeline);
+      ImGui::MenuItem("Motion Library",    nullptr, &show_motion_library);
       ImGui::EndMenu();
     }
 
@@ -666,7 +736,10 @@ void engine3d::draw_hierarchy_window() {
   static ImGuiTreeNodeFlags guiTreeNodeFlags =
       ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick |
       ImGuiTreeNodeFlags_SpanAvailWidth;
-  ImGui::Begin("Entities");
+  if (!ImGui::Begin("Entities", &show_hierarchy)) {
+    ImGui::End();
+    return;
+  }
 
   static char headerBuffer[200] = {0};
   bool selectedEntityValid = registry.valid(selected_entity);
@@ -754,7 +827,10 @@ void engine3d::draw_hierarchy_window() {
 }
 
 void engine3d::draw_components_window() {
-  ImGui::Begin("Components");
+  if (!ImGui::Begin("Components", &show_components)) {
+    ImGui::End();
+    return;
+  }
   static char headerBuffer[200] = {0};
   static entt::entity current_entity = entt::null;
   bool selectedEntityValid = registry.valid(current_entity);
@@ -863,6 +939,10 @@ void engine3d::draw_components_gui(entt::entity current_entity) {
     if (ImGui::CollapsingHeader("Controller"))
       controller_comp->draw_gui(registry, current_entity);
   }
+  if (auto mp_comp = registry.try_get<motion_player>(current_entity)) {
+    if (ImGui::CollapsingHeader("Motion Player"))
+      mp_comp->draw_gui(registry, current_entity);
+  }
   ss_handler_system->proxy_draw_gui(registry, current_entity);
 }
 
@@ -878,6 +958,467 @@ void engine3d::draw_systems_gui() {
   if (ImGui::BeginMenu("Physics World System")) {
     physics_world_sys->draw_menu_gui();
     ImGui::EndMenu();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Animator Timeline — scene-scoped playback panel.
+// Operates on the currently-selected armature (entity with `actor`). Lets
+// the user pick the active track and drag a single time slider; playback
+// state lives on the entity's `motion_player` component.
+// ---------------------------------------------------------------------------
+void engine3d::draw_animator_timeline_window() {
+  if (!ImGui::Begin("Animator Timeline", &show_animator_timeline)) {
+    ImGui::End();
+    return;
+  }
+
+  // Pick the armature: the selected entity if it owns an actor, otherwise
+  // grey-out the panel with a hint.
+  entt::entity armature = entt::null;
+  if (selected_entity != entt::null && registry.valid(selected_entity) &&
+      registry.all_of<actor>(selected_entity))
+    armature = selected_entity;
+
+  if (armature == entt::null) {
+    ImGui::TextDisabled(
+        "Select an armature (entity with an Actor component) to scrub.");
+    ImGui::TextDisabled(
+        "Use File > Animation > Import Armature... to create one.");
+    ImGui::End();
+    return;
+  }
+
+  // Require an explicit motion_player component — do not silently add one.
+  if (!registry.all_of<motion_player>(armature)) {
+    ImGui::TextDisabled("This armature has no motion_player component.");
+    ImGui::TextDisabled(
+        "Add one via the Components panel (Animation > motion_player).");
+    ImGui::End();
+    return;
+  }
+  auto &mp = registry.get<motion_player>(armature);
+  auto &arm_trans = registry.get<transform>(armature);
+
+  ImGui::Text("Armature: %s", arm_trans.name.empty() ? "<unnamed>"
+                                                     : arm_trans.name.c_str());
+  ImGui::SameLine();
+  ImGui::TextDisabled("(%d joints, %d tracks)",
+                      (int)registry.get<actor>(armature).ordered_entities.size(),
+                      (int)mp.tracks.size());
+
+  // Active track selection.
+  const char *cur = "<none>";
+  if (auto t = mp.active())
+    cur = t->name.c_str();
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  if (ImGui::BeginCombo("##atl_track", cur)) {
+    if (ImGui::Selectable("<none>", mp.active_track < 0))
+      mp.set_active(registry, armature, -1);
+    for (int k = 0; k < (int)mp.tracks.size(); k++) {
+      bool sel = (k == mp.active_track);
+      if (ImGui::Selectable(mp.tracks[k]->name.c_str(), sel))
+        mp.set_active(registry, armature, k);
+    }
+    ImGui::EndCombo();
+  }
+
+  auto t = mp.active();
+
+  // Bind-from-library combo is always visible so the user can add tracks even
+  // when nothing is active yet.
+  ImGui::Separator();
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  if (ImGui::BeginCombo("##atl_bind_from_lib",
+                        motion_library.empty() ? "Library empty — import a motion track first"
+                                               : "Bind track from Library...")) {
+    if (motion_library.empty()) {
+      ImGui::TextDisabled(
+          "Use File > Animation > Import Motion Track / FBX.");
+    } else {
+      for (auto &kv : motion_library) {
+        auto &libtrack = kv.second;
+        bool already_bound = false;
+        for (auto &bt : mp.tracks)
+          if (bt == libtrack) { already_bound = true; break; }
+        std::string label = kv.first;
+        if (already_bound)
+          label += "  (already bound)";
+        if (ImGui::Selectable(label.c_str(), false)) {
+          if (!already_bound) {
+            mp.add_track(libtrack);
+            mp.resolve(registry, armature);
+          }
+        }
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  if (!t) {
+    ImGui::TextDisabled("No active track — select one in the combo above.");
+    ImGui::End();
+    return;
+  }
+
+  ImGui::Separator();
+  int matched = 0;
+  for (int v : mp.track_to_actor)
+    if (v >= 0)
+      matched++;
+  ImGui::TextDisabled("Joint match: %d / %d", matched, t->num_joints());
+  if (matched < t->num_joints()) {
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Re-resolve"))
+      mp.resolve(registry, armature);
+  }
+
+  // Transport row.
+  if (ImGui::Button(mp.playing ? "Pause##atl" : "Play##atl"))
+    mp.playing = !mp.playing;
+  ImGui::SameLine();
+  if (ImGui::Button("Stop##atl")) {
+    mp.playing = false;
+    mp.time = 0.0f;
+    mp.apply_pose(registry, armature);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("|<##atl")) {
+    mp.time = 0.0f;
+    mp.apply_pose(registry, armature);
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Go to start");
+  ImGui::SameLine();
+  if (ImGui::Button(">|##atl")) {
+    mp.time = t->duration();
+    mp.apply_pose(registry, armature);
+  }
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Go to end");
+
+  // Big scrub slider — main interaction surface.
+  float dur = t->duration();
+  ImGui::SetNextItemWidth(-FLT_MIN);
+  if (ImGui::SliderFloat("##atl_time", &mp.time, 0.0f, std::max(dur, 1e-3f),
+                         "t = %.3fs"))
+    mp.apply_pose(registry, armature);
+
+  ImGui::SetNextItemWidth(120);
+  ImGui::DragFloat("Speed##atl", &mp.speed, 0.01f, -10.0f, 10.0f);
+  ImGui::SameLine();
+  ImGui::Checkbox("Loop##atl", &mp.loop);
+  ImGui::SameLine();
+  ImGui::Checkbox("Root pos##atl", &mp.apply_root_position);
+
+  ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+// Motion library — engine-owned registry of motion tracks. Tracks live here
+// once; `motion_player` components on armatures hold shared_ptr bindings into
+// this map. The window shows everything and lets you bind to / unbind from
+// the currently-selected armature.
+// ---------------------------------------------------------------------------
+std::string engine3d::motion_library_add(motion_track_ptr track) {
+  if (!track)
+    return {};
+  std::string base = track->name.empty() ? "track" : track->name;
+  std::string key = base;
+  int n = 2;
+  while (motion_library.count(key))
+    key = base + "_" + std::to_string(n++);
+  track->name = key;
+  motion_library.emplace(key, track);
+  return key;
+}
+
+void engine3d::draw_motion_library_window() {
+  if (!ImGui::Begin("Motion Library", &show_motion_library)) {
+    ImGui::End();
+    return;
+  }
+
+  ImGui::Text("Tracks: %d", (int)motion_library.size());
+  ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6f, 0.1f, 0.1f, 1.0f));
+  if (ImGui::SmallButton("Clear All")) {
+    // Only sever library entries; existing motion_player bindings (shared_ptr)
+    // remain valid until the user unbinds them explicitly.
+    motion_library.clear();
+  }
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Remove all tracks from the library.\n"
+                      "Existing armature bindings keep working until unbound.");
+  ImGui::Separator();
+
+  if (motion_library.empty()) {
+    ImGui::TextDisabled(
+        "Library is empty. Use File > Animation > Import Motion Track / FBX.");
+    ImGui::End();
+    return;
+  }
+
+  // Track armature target for bind buttons.
+  entt::entity arm = entt::null;
+  if (selected_entity != entt::null && registry.valid(selected_entity) &&
+      registry.all_of<actor>(selected_entity))
+    arm = selected_entity;
+
+  std::string remove_key;
+  for (auto &kv : motion_library) {
+    auto &name = kv.first;
+    auto &track = kv.second;
+    ImGui::PushID(name.c_str());
+    bool open = ImGui::TreeNode(name.c_str());
+    ImGui::SameLine();
+    ImGui::TextDisabled("%dj  %df  %.2fs", track->num_joints(),
+                        track->num_frames(), track->duration());
+    if (ImGui::IsItemHovered() && !track->source_file.empty()) {
+      ImGui::SetTooltip("Source: %s\nType: %s%s",
+                        track->source_file.c_str(),
+                        track->source_type.c_str(),
+                        track->source_stack_name.empty()
+                            ? ""
+                            : ("\nStack: " + track->source_stack_name).c_str());
+    }
+    if (open) {
+      if (!track->source_file.empty())
+        ImGui::TextDisabled("  %s", track->source_file.c_str());
+      if (arm != entt::null) {
+        if (ImGui::SmallButton("Bind to selected")) {
+          if (!registry.all_of<motion_player>(arm))
+            registry.emplace<motion_player>(arm);
+          auto &mp = registry.get<motion_player>(arm);
+          bool dup = false;
+          for (auto &t : mp.tracks)
+            if (t == track) { dup = true; break; }
+          if (!dup) {
+            mp.add_track(track);
+            mp.resolve(registry, arm);
+          }
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Unbind from selected")) {
+          if (auto *mp = registry.try_get<motion_player>(arm)) {
+            for (int i = (int)mp->tracks.size() - 1; i >= 0; i--) {
+              if (mp->tracks[i] == track) {
+                mp->tracks.erase(mp->tracks.begin() + i);
+                if (mp->active_track == i)
+                  mp->active_track = mp->tracks.empty() ? -1 : 0;
+                else if (mp->active_track > i)
+                  mp->active_track--;
+              }
+            }
+            mp->resolve(registry, arm);
+          }
+        }
+      } else {
+        ImGui::TextDisabled("(select an armature to bind/unbind)");
+      }
+      if (ImGui::SmallButton("Delete from library"))
+        remove_key = name;
+      ImGui::TreePop();
+    }
+    ImGui::PopID();
+  }
+
+  if (!remove_key.empty()) {
+    // Drop the library entry. motion_player components that still hold a
+    // shared_ptr keep working until the user unbinds them; the shared_ptr
+    // simply outlives the library slot.
+    motion_library.erase(remove_key);
+  }
+
+  ImGui::End();
+}
+
+// ---------------------------------------------------------------------------
+// FBX import preview — opened from File > Animation > Import FBX. Shows the
+// scan summary and lets the user pick what to commit (armature instantiation
+// + which animation stacks become library tracks). Optional auto-bind wires
+// the freshly-imported tracks to the freshly-imported armature.
+// ---------------------------------------------------------------------------
+void engine3d::draw_fbx_import_preview_window() {
+  if (!ImGui::Begin("Import FBX", &fbx_import.show,
+                    ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::End();
+    return;
+  }
+
+  ImGui::Text("File: %s", fbx_import.filepath.c_str());
+  ImGui::Separator();
+
+  if (!fbx_import.scan.ok) {
+    ImGui::TextColored({1, 0.4f, 0.4f, 1}, "Scan failed: %s",
+                       fbx_import.scan.error.c_str());
+    if (ImGui::Button("Close"))
+      fbx_import.show = false;
+    ImGui::End();
+    return;
+  }
+
+  ImGui::Text("Contents:");
+  ImGui::BulletText("Armature: %s (%d bones)",
+                    fbx_import.scan.has_armature ? "yes" : "no",
+                    fbx_import.scan.num_bones);
+  ImGui::BulletText("Meshes: %d", fbx_import.scan.num_meshes);
+  ImGui::BulletText("Animation stacks: %d",
+                    (int)fbx_import.scan.anim_stack_names.size());
+  ImGui::Separator();
+
+  if (fbx_import.scan.has_armature || fbx_import.scan.num_meshes > 0) {
+    std::string model_label =
+        "Import 3D model into the scene"
+        " (" + std::to_string(fbx_import.scan.num_meshes) + " mesh(es)" +
+        (fbx_import.scan.has_armature
+             ? ", " + std::to_string(fbx_import.scan.num_bones) + " bone(s)"
+             : "") +
+        ")";
+    ImGui::Checkbox(model_label.c_str(), &fbx_import.import_armature);
+  } else {
+    ImGui::TextDisabled("No armature or mesh data to instantiate.");
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Motion tracks (added to library):");
+  if (fbx_import.scan.anim_stack_names.empty()) {
+    ImGui::TextDisabled("None.");
+  } else {
+    if (ImGui::SmallButton("All")) {
+      std::fill(fbx_import.import_stack.begin(),
+                fbx_import.import_stack.end(), true);
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("None")) {
+      std::fill(fbx_import.import_stack.begin(),
+                fbx_import.import_stack.end(), false);
+    }
+    for (size_t i = 0; i < fbx_import.scan.anim_stack_names.size(); i++) {
+      ImGui::PushID((int)i);
+      bool v = fbx_import.import_stack[i];
+      auto &range = fbx_import.scan.anim_stack_times[i];
+      char dur_buf[32];
+      std::snprintf(dur_buf, sizeof(dur_buf), "%.2fs",
+                    range.second - range.first);
+      std::string lbl =
+          fbx_import.scan.anim_stack_names[i] + "  (" + dur_buf + ")";
+      if (ImGui::Checkbox(lbl.c_str(), &v))
+        fbx_import.import_stack[i] = v;
+      ImGui::PopID();
+    }
+  }
+
+  ImGui::Separator();
+  ImGui::SetNextItemWidth(120);
+  ImGui::DragFloat("Sample FPS", &fbx_import.sample_fps, 1.0f, 1.0f, 240.0f,
+                   "%.0f");
+  ImGui::Checkbox("Auto-bind tracks to imported armature",
+                  &fbx_import.auto_bind);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip(
+        "When enabled, each imported motion track is automatically bound\n"
+        "to the armature imported from this FBX (or to the currently\n"
+        "selected armature if no armature is imported).");
+
+  ImGui::Separator();
+  if (ImGui::Button("Import", {120, 0})) {
+    entt::entity new_armature = entt::null;
+    if (fbx_import.import_armature &&
+        (fbx_import.scan.has_armature || fbx_import.scan.num_meshes > 0)) {
+      auto root_entity =
+          assets::open_model_ufbx(registry, fbx_import.filepath);
+      if (root_entity != entt::null) {
+        registry.view<actor>().each([&](entt::entity e, actor &) {
+          if (new_armature != entt::null)
+            return;
+          entt::entity cur = e;
+          while (cur != entt::null) {
+            if (cur == root_entity) {
+              new_armature = e;
+              return;
+            }
+            auto *t = registry.try_get<transform>(cur);
+            auto p = t ? t->parent() : nullptr;
+            cur = p ? p->self : entt::null;
+          }
+        });
+        if (new_armature == entt::null && registry.all_of<actor>(root_entity))
+          new_armature = root_entity;
+        if (new_armature != entt::null &&
+            !registry.all_of<motion_player>(new_armature))
+          registry.emplace<motion_player>(new_armature);
+        if (new_armature != entt::null)
+          selected_entity = new_armature;
+        else
+          selected_entity = root_entity;
+        SDL_Log("FBX armature imported from %s", fbx_import.filepath.c_str());
+      }
+    }
+
+    std::vector<int> picked;
+    for (int i = 0; i < (int)fbx_import.import_stack.size(); i++)
+      if (fbx_import.import_stack[i])
+        picked.push_back(i);
+    if (!picked.empty()) {
+      auto tracks = motion_tracks_from_fbx_file(
+          fbx_import.filepath, fbx_import.sample_fps, &picked);
+
+      // Resolve auto-bind target: the freshly-imported armature, otherwise
+      // fall back to whatever's currently selected if it owns an actor.
+      entt::entity bind_target = new_armature;
+      if (fbx_import.auto_bind && bind_target == entt::null &&
+          selected_entity != entt::null && registry.valid(selected_entity) &&
+          registry.all_of<actor>(selected_entity))
+        bind_target = selected_entity;
+
+      for (auto &t : tracks) {
+        if (!t)
+          continue;
+        motion_library_add(t);
+        if (fbx_import.auto_bind && bind_target != entt::null) {
+          if (!registry.all_of<motion_player>(bind_target))
+            registry.emplace<motion_player>(bind_target);
+          auto &mp = registry.get<motion_player>(bind_target);
+          mp.add_track(t);
+          mp.resolve(registry, bind_target);
+        }
+      }
+      SDL_Log("Added %d motion track(s) from %s to library",
+              (int)tracks.size(), fbx_import.filepath.c_str());
+    }
+
+    fbx_import.show = false;
+    show_motion_library = true;
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Cancel", {120, 0}))
+    fbx_import.show = false;
+
+  ImGui::End();
+}
+
+void engine3d::update_motion_players(float dt) {
+  // Snapshot the candidates first so component creation in the loop body
+  // (none today, but be defensive) doesn't invalidate the view iterators.
+  std::vector<entt::entity> candidates;
+  registry.view<actor, motion_player>().each(
+      [&](entt::entity e, actor &, motion_player &) {
+        candidates.push_back(e);
+      });
+  for (auto e : candidates) {
+    if (!registry.valid(e))
+      continue;
+    auto &mp = registry.get<motion_player>(e);
+    auto t = mp.active();
+    if (!t)
+      continue;
+    // Lazy resolve if the map is missing or sized for a previous track.
+    if ((int)mp.track_to_actor.size() != t->num_joints())
+      mp.resolve(registry, e);
+    mp.tick(dt);
+    mp.apply_pose(registry, e);
   }
 }
 

@@ -8,8 +8,6 @@
 /release
 /Release
 
-/retarget
-
 /*.py
 
 __pycache__

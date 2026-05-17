@@ -1,7 +1,4 @@
-set(_onnxruntime_default_root "D:/repo/onnxruntime-win-x64-gpu-1.23.0")
-if(NOT EXISTS "${_onnxruntime_default_root}")
-  set(_onnxruntime_default_root "D:/repo/onnxruntime-win-x64-1.24.4")
-endif()
+set(_onnxruntime_default_root "D:/repo/onnxruntime-win-x64-1.24.4")
 
 set(ONNXRUNTIME_ROOT
     "${_onnxruntime_default_root}"

@@ -50,9 +50,11 @@
 #include "toolkit/opengl3d/rasterize/system.hpp"
 #include "toolkit/opengl3d/components/physics_world.hpp"
 
+#include "toolkit/opengl3d/motion_track.hpp"
 #include "toolkit/opengl3d/native_subsys.hpp"
 
 #include <ImGuizmo.h>
+#include <map>
 #include <optional>
 
 namespace toolkit::opengl3d {
@@ -119,7 +121,49 @@ public:
   void draw_main_menubar();
   void draw_hierarchy_window();
   void draw_components_window();
+  void draw_animator_timeline_window();
+  void draw_motion_library_window();
+  void draw_fbx_import_preview_window();
   void draw_gizmos(bool enable = true);
+
+  // Advance every entity that has both `actor` and `motion_player` by `dt`
+  // and apply the resulting pose. Component-driven: no-op when unused.
+  void update_motion_players(float dt);
+
+  // Toggleable via the View menu; only consumed by the default
+  // engine3d::handle_engine_gui implementation.
+  bool show_hierarchy = true;
+  bool show_components = true;
+  bool show_animator_timeline = true;
+  bool show_motion_library = true;
+
+  // ---------------------------------------------------------------------------
+  // Motion library — scene-scoped, engine-owned registry of motion tracks.
+  // Tracks live here once and are referenced (via shared_ptr) by any number
+  // of `motion_player` components, decoupling clips from armatures. Same
+  // walk-cycle clip can be bound to multiple rigs; binding is by joint name
+  // (no retargeting today, just copy-by-name).
+  // ---------------------------------------------------------------------------
+  std::map<std::string, motion_track_ptr> motion_library;
+
+  // Insert `track` under a key derived from `track->name`, appending `_2`,
+  // `_3`... on collision. Updates `track->name` to match the chosen key and
+  // returns the final key.
+  std::string motion_library_add(motion_track_ptr track);
+
+  // Two-stage FBX import: a `scan` populates `fbx_import_state`, the preview
+  // window lets the user pick what to commit, "Import" then either
+  // instantiates the armature (open_model_ufbx) and/or pushes the selected
+  // anim_stacks into the motion library.
+  struct fbx_import_state {
+    bool show = false;
+    std::string filepath;
+    fbx_scan_result scan;
+    bool import_armature = true;
+    bool auto_bind = true;
+    float sample_fps = 30.0f;
+    std::vector<bool> import_stack;
+  } fbx_import;
 
   // override this if there's more systems
   void draw_components_gui(entt::entity current_entity);

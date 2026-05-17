@@ -201,7 +201,7 @@ void diffusion::submit_inference(
       timer.reset();
       std::vector<float> result = run_model_inference();
       float inference_time = timer.elapse_ms();
-      printf("Inference complete, takes %.3f ms\n", inference_time);
+      // printf("Inference complete, takes %.3f ms\n", inference_time);
       std::lock_guard<std::mutex> lk2(completion_mutex);
       completion_queue.push([cb = std::move(cb), result = std::move(result),
                              inference_time = inference_time]() mutable {

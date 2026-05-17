@@ -320,10 +320,10 @@ void camdmpp::postprocessing_ik(int buffer_start_idx, int transition_from_idx,
 
   const int actor_count =
       static_cast<int>(player_actor.ordered_entities.size());
-  if (actor_count == 0 || char_joint_parents.size() != actor_count ||
-      char_repair_c.size() != actor_count || frame_count <= 0) {
-    return;
-  }
+  // if (actor_count == 0 || char_joint_parents.size() != actor_count ||
+  //     char_repair_c.size() != actor_count || frame_count <= 0) {
+  //   return;
+  // }
 
   std::vector<int> actor_to_cache(actor_count, -1);
   int cache_entry_idx = 0;

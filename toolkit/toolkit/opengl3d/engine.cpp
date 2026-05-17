@@ -1,7 +1,9 @@
 #include "toolkit/opengl3d/engine.hpp"
 #include "toolkit/opengl3d/components/actor.hpp"
 #include "toolkit/opengl3d/components/mesh.hpp"
+#include "toolkit/opengl3d/components/motion_player.hpp"
 #include "toolkit/opengl3d/gui.hpp"
+#include "toolkit/opengl3d/motion_track.hpp"
 #include "toolkit/opengl3d/rasterize/shaders.hpp"
 
 #include "toolkit/opengl3d/experiments/spring_damper.hpp"
@@ -384,14 +386,113 @@ void engine3d::late_serialize(nlohmann::json &j) {
   nlohmann::json editor_settings;
   editor_settings["active_camera"] = active_camera;
   editor_settings["camera_manipulate_data"] = cam_manip_data;
+
+  // Serialize the motion library so tracks can be re-imported on scene load.
+  nlohmann::json lib = nlohmann::json::array();
+  for (auto &[key, track] : motion_library) {
+    nlohmann::json entry;
+    entry["name"] = key;
+    entry["source_file"] = track->source_file;
+    entry["source_type"] = track->source_type;
+    entry["source_stack_name"] = track->source_stack_name;
+    entry["source_fps"] = track->source_fps;
+    lib.push_back(entry);
+  }
+  editor_settings["motion_library"] = lib;
+
   j["engine3d"] = editor_settings;
 }
 
 void engine3d::late_deserialize(nlohmann::json &j) {
   if (j.contains("engine3d")) {
-    active_camera = j["engine3d"]["active_camera"].get<entt::entity>();
-    cam_manip_data = j["engine3d"]["camera_manipulate_data"]
-                         .get<active_camera_manipulate_data>();
+    auto &e3d = j["engine3d"];
+    active_camera = e3d["active_camera"].get<entt::entity>();
+    cam_manip_data =
+        e3d["camera_manipulate_data"].get<active_camera_manipulate_data>();
+
+    // Rebuild the motion library from source files.
+    motion_library.clear();
+    if (e3d.contains("motion_library")) {
+      for (auto &entry : e3d["motion_library"]) {
+        std::string src_file = entry.value("source_file", "");
+        std::string src_type = entry.value("source_type", "");
+        std::string lib_name = entry.value("name", "");
+        if (src_file.empty() || src_type.empty() || lib_name.empty())
+          continue;
+        motion_track_ptr track;
+        if (src_type == "bvh") {
+          track = motion_track_from_bvh_file(src_file);
+        } else if (src_type == "fbx") {
+          std::string stack_name = entry.value("source_stack_name", "");
+          float fps = entry.value("source_fps", 30.0f);
+          fbx_scan_result scan;
+          if (scan_fbx(src_file, scan)) {
+            std::vector<int> indices;
+            for (int i = 0; i < (int)scan.anim_stack_names.size(); i++) {
+              if (scan.anim_stack_names[i] == stack_name) {
+                indices.push_back(i);
+                break;
+              }
+            }
+            // Fall back to stack 0 if name was not found (e.g. unnamed stacks).
+            if (indices.empty() && !scan.anim_stack_names.empty())
+              indices.push_back(0);
+            if (!indices.empty()) {
+              auto fbx_tracks =
+                  motion_tracks_from_fbx_file(src_file, fps, &indices);
+              if (!fbx_tracks.empty())
+                track = fbx_tracks[0];
+            }
+          }
+        }
+        if (track) {
+          track->name = lib_name;
+          motion_library[lib_name] = track;
+        } else {
+          SDL_Log("engine3d: failed to reload motion track '%s' from '%s'",
+                  lib_name.c_str(), src_file.c_str());
+        }
+      }
+    }
+
+    // Rebind motion_player components to the reconstructed library.
+    // (motion_player::late_deserialize runs before this, so bindings are empty
+    //  at that point — we do the lookup here instead.)
+    auto &reg_json = j["registry"];
+    registry.view<motion_player>().each([&](entt::entity e, motion_player &mp) {
+      mp.tracks.clear();
+      mp.active_track = -1;
+      mp.track_to_actor.clear();
+      auto key = std::to_string(entt::to_integral(e));
+      if (!reg_json.contains(key))
+        return;
+      auto &ej = reg_json[key];
+      if (!ej.contains("motion_player") ||
+          !ej["motion_player"].contains("__late__"))
+        return;
+      auto &late = ej["motion_player"]["__late__"];
+      std::string active_name = late.value("active_track_name", "");
+      if (!late.contains("bound_tracks"))
+        return;
+      for (auto &name_j : late["bound_tracks"]) {
+        std::string name = name_j.get<std::string>();
+        auto it = motion_library.find(name);
+        if (it != motion_library.end())
+          mp.add_track(it->second);
+      }
+      // Restore the active track by name (more robust than the index from
+      // REFLECT, which refers to the old track order before reload).
+      mp.active_track = -1;
+      for (int i = 0; i < (int)mp.tracks.size(); i++) {
+        if (mp.tracks[i]->name == active_name) {
+          mp.active_track = i;
+          break;
+        }
+      }
+      if (mp.active_track < 0 && !mp.tracks.empty())
+        mp.active_track = 0;
+      mp.resolve(registry, e);
+    });
   } else {
     // use the first camera as active camera, otherwise no active camera
     auto cam_view = registry.view<camera>();
@@ -430,8 +531,16 @@ void engine3d::handle_engine_gui() {
     ImGui::End();
 
     draw_main_menubar();
-    draw_hierarchy_window();
-    draw_components_window();
+    if (show_hierarchy)
+      draw_hierarchy_window();
+    if (show_components)
+      draw_components_window();
+    if (show_animator_timeline)
+      draw_animator_timeline_window();
+    if (show_motion_library)
+      draw_motion_library_window();
+    if (fbx_import.show)
+      draw_fbx_import_preview_window();
     editor_shortkeys();
   }
 }
@@ -477,6 +586,11 @@ void engine3d::run() {
       __start_logic_tick_counter++;
     else
       handle_game_logic_tick(dt);
+
+    // Tick scene-scoped motion playback (component-driven; no-op when no
+    // entity carries a motion_player). Must run before the transform flush
+    // below so joint transforms are propagated to world space this frame.
+    update_motion_players(dt);
 
     // Flush transform and camera state after gameplay and camera-follow logic
     // so scene meshes, skeleton debug, and custom debug draws render from the
