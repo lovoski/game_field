@@ -27,16 +27,6 @@ target_link_libraries(editor3d PRIVATE toolkit)
 target_include_directories(editor3d PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
 
 add_executable(
-  craft
-  craft/main.cpp
-  craft/craft.cpp
-  craft/voxel.cpp
-  craft/voxel_render.cpp
-)
-target_link_libraries(craft PRIVATE toolkit)
-target_include_directories(craft PRIVATE ${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR})
-
-add_executable(
   motion_matching_loco
   motion_matching/main_loco.cpp
   motion_matching/motion_matching.cpp

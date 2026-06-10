@@ -298,8 +298,15 @@ void camdmpp::update_camera(float dt) {
       math::angle_axis(math::deg_to_rad(-camera_vertical_angle),
                        math::world_right) *
       math::vector3(0.0f, 0.0f, camera_distance);
-  math::vector3 cam_pos = root_trans.world_pos() +
-                          math::vector3(0.0f, camera_height, 0.0f) + cam_offset;
+  math::vector3 cam_pos =
+      math::vector3(
+          root_trans.world_pos().x(),
+          camera_height +
+              sample_terrain_height(math::vector2(root_trans.world_pos().x(),
+                                                  root_trans.world_pos().z()),
+                                    0.0f),
+          root_trans.world_pos().z()) +
+      cam_offset;
   math::matrix3 cam_rot_mat = math::matrix3::Identity();
   math::vector3 _z = cam_offset.normalized();
   math::vector3 _x = math::world_up.cross(_z).normalized();

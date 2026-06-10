@@ -18,6 +18,13 @@ void camdmpp::handle_engine_gui() {
   ImGui::DragFloat("Walk Velocity", &sim_move_speed_walk, 0.01f, 0.0f, 10.0f);
   ImGui::DragFloat("Run Velocity", &sim_move_speed_run, 0.01f, 0.0f, 10.0f);
 
+  ImGui::SeparatorText("Diffusion Guidance (CFG)");
+  ImGui::Checkbox("Enable CFG", &model.enable_cfg);
+  ImGui::DragFloat("CFG Scale", &model.cfg_scale, 0.01f, 0.0f, 10.0f);
+  ImGui::TextDisabled(
+      "1.0 = plain conditional. >1.0 strengthens past-motion/trajectory "
+      "conditioning (extra unconditional pass per step).");
+
   // ImGui::SeparatorText("Commands");
   // ImGui::TextColored({0, 1, 0, 1}, "LCTRL+LMB");
   // ImGui::SameLine();

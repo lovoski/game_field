@@ -131,6 +131,11 @@ std::vector<float> diffusion::run_model_inference() {
   for (float &v : x_t_data)
     v = ziggurat::r4_nor(ziggurat_jsr, ziggurat_kn, ziggurat_fn, ziggurat_wn);
 
+  // Snapshot the guidance settings once so they stay consistent across the
+  // whole diffusion loop even if the GUI tweaks them mid-inference.
+  const float guidance = cfg_scale;
+  const bool use_cfg = enable_cfg && std::fabs(guidance - 1.0f) > 1e-6f;
+
   std::vector<int64_t> timestep_data(1, 0);
   const std::vector<int64_t> timestep_shape{1};
   std::vector<const char *> _input_names;
@@ -158,17 +163,52 @@ std::vector<float> diffusion::run_model_inference() {
       memory_info, traj_data.data(), traj_data.size(),
       traj_shape.data(), traj_shape.size())));
 
+  // Unconditional inputs: null conditioning is represented by zeroed
+  // past-motion and trajectory tokens. The noisy sample (x_t) and timestep
+  // buffers are shared with the conditional pass so both branches always see
+  // identical x_t / t within a step.
+  std::vector<float> uncond_past_motion_data, uncond_traj_data;
+  std::vector<Ort::Value> uncond_inputs;
+  if (use_cfg) {
+    uncond_past_motion_data.assign(past_motion_data.size(), 0.0f);
+    uncond_traj_data.assign(traj_data.size(), 0.0f);
+    uncond_inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
+        memory_info, x_t_data.data(), x_t_data.size(), x_t_shape.data(),
+        x_t_shape.size())));
+    uncond_inputs.push_back(std::move(Ort::Value::CreateTensor<int64_t>(
+        memory_info, timestep_data.data(), timestep_data.size(),
+        timestep_shape.data(), timestep_shape.size())));
+    uncond_inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
+        memory_info, uncond_past_motion_data.data(),
+        uncond_past_motion_data.size(), past_motion_shape.data(),
+        past_motion_shape.size())));
+    uncond_inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
+        memory_info, uncond_traj_data.data(), uncond_traj_data.size(),
+        traj_shape.data(), traj_shape.size())));
+  }
+
   /* ---------------- Diffusion loop ---------------- */
   for (int t = diffusion_steps - 1; t >= 0; --t) {
-    // Update the value in the buffer; the tensor wrapper sees this change
-    // automatically
-    *(inputs[1].GetTensorMutableData<int64_t>()) = static_cast<int64_t>(t);
+    // Update the shared timestep buffer; both the conditional and
+    // unconditional tensors wrap it, so they stay in sync automatically.
+    timestep_data[0] = static_cast<int64_t>(t);
 
     auto outputs = session.Run(Ort::RunOptions{nullptr}, _input_names.data(),
                                inputs.data(), inputs.size(),
                                _output_names.data(), output_names.size());
     // batch_size (1), pose_token_dim, past_points + future_points
     const float *pred_noise = outputs[0].GetTensorData<float>();
+
+    // Run the unconditional pass and blend with classifier-free guidance.
+    std::vector<Ort::Value> uncond_outputs;
+    const float *pred_uncond = nullptr;
+    if (use_cfg) {
+      uncond_outputs = session.Run(
+          Ort::RunOptions{nullptr}, _input_names.data(), uncond_inputs.data(),
+          uncond_inputs.size(), _output_names.data(), output_names.size());
+      pred_uncond = uncond_outputs[0].GetTensorData<float>();
+    }
+
     float *x_t_ptr = inputs[0].GetTensorMutableData<float>();
     const float coef1 = posterior_mean_coef1[t];
     const float coef2 = posterior_mean_coef2[t];
@@ -180,7 +220,11 @@ std::vector<float> diffusion::run_model_inference() {
       for (int f = 0; f < future_points; f++) {
         int i = 1 * p * future_points + f;
         int j = 1 * p * (future_points + past_points) + f + past_points;
-        float posterior_mean = coef1 * pred_noise[j] + coef2 * x_t_ptr[i];
+        // Classifier-free guidance on the predicted noise.
+        float guided_noise =
+            use_cfg ? pred_uncond[j] + guidance * (pred_noise[j] - pred_uncond[j])
+                    : pred_noise[j];
+        float posterior_mean = coef1 * guided_noise + coef2 * x_t_ptr[i];
         float noise = (t > 0) ? ziggurat::r4_nor(ziggurat_jsr, ziggurat_kn,
                                                  ziggurat_fn, ziggurat_wn)
                               : 0.0f;

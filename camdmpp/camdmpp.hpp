@@ -30,7 +30,7 @@ private:
 
   // camera related
   float camera_horizontal_angle = 180.0f, camera_vertical_angle = 30.0f,
-        camera_distance = 5.0f, camera_height = 0.0f, mouse_sensitivity = 0.3f,
+        camera_distance = 3.0f, camera_height = 1.0f, mouse_sensitivity = 0.3f,
         camera_follow_speed = 8.0f;
   math::vector3 camera_forward;
   float min_vertical_angle = -20.0f, max_vertical_angle = 80.0f;
@@ -72,9 +72,9 @@ private:
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied
-  unsigned int submit_prediction_interval = 6;
+  unsigned int submit_prediction_interval = 3;
   // In each prediction, how many frames are used
-  unsigned int switch_prediction_interval = 12;
+  unsigned int switch_prediction_interval = 13;
 
   // Caches for character's state, converted from model_output
   static const int cache_size = 220;
