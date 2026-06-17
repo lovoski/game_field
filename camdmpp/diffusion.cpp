@@ -91,7 +91,7 @@ void diffusion::setup(std::string onnx_filepath, std::string config_filepath) {
   // InterOp threads: threads used to run independent graph nodes (different
   // ops) concurrently. If the graph has many independent small ops, InterOp>1
   // can run multiple nodes in parallel.
-  session_options.SetInterOpNumThreads(1);
+  session_options.SetInterOpNumThreads(2);
   session_options.SetGraphOptimizationLevel(
       GraphOptimizationLevel::ORT_ENABLE_ALL);
 
@@ -160,8 +160,8 @@ std::vector<float> diffusion::run_model_inference() {
       past_motion_shape.data(), past_motion_shape.size())));
   // trajectory position condition
   inputs.push_back(std::move(Ort::Value::CreateTensor<float>(
-      memory_info, traj_data.data(), traj_data.size(),
-      traj_shape.data(), traj_shape.size())));
+      memory_info, traj_data.data(), traj_data.size(), traj_shape.data(),
+      traj_shape.size())));
 
   // Unconditional inputs: null conditioning is represented by zeroed
   // past-motion and trajectory tokens. The noisy sample (x_t) and timestep
@@ -222,13 +222,14 @@ std::vector<float> diffusion::run_model_inference() {
         int j = 1 * p * (future_points + past_points) + f + past_points;
         // Classifier-free guidance on the predicted noise.
         float guided_noise =
-            use_cfg ? pred_uncond[j] + guidance * (pred_noise[j] - pred_uncond[j])
-                    : pred_noise[j];
+            use_cfg
+                ? pred_uncond[j] + guidance * (pred_noise[j] - pred_uncond[j])
+                : pred_noise[j];
         float posterior_mean = coef1 * guided_noise + coef2 * x_t_ptr[i];
         float noise = (t > 0) ? ziggurat::r4_nor(ziggurat_jsr, ziggurat_kn,
                                                  ziggurat_fn, ziggurat_wn)
                               : 0.0f;
-        x_t_ptr[i] = posterior_mean + std_dev * noise;
+        x_t_ptr[i] = posterior_mean + std_dev * noise * temperature;
       }
     }
   }

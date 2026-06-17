@@ -21,6 +21,7 @@ void camdmpp::handle_engine_gui() {
   ImGui::SeparatorText("Diffusion Guidance (CFG)");
   ImGui::Checkbox("Enable CFG", &model.enable_cfg);
   ImGui::DragFloat("CFG Scale", &model.cfg_scale, 0.01f, 0.0f, 10.0f);
+  ImGui::DragFloat("Temperature", &model.temperature, 0.01f, 0.0f, 10.0f);
   ImGui::TextDisabled(
       "1.0 = plain conditional. >1.0 strengthens past-motion/trajectory "
       "conditioning (extra unconditional pass per step).");

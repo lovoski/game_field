@@ -72,7 +72,7 @@ private:
   // How many frames of motion have been applied to the character
   unsigned int applied_frames = 0;
   // Make a new prediction when these frames are applied
-  unsigned int submit_prediction_interval = 3;
+  unsigned int submit_prediction_interval = 8;
   // In each prediction, how many frames are used
   unsigned int switch_prediction_interval = 13;
 

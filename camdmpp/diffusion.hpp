@@ -51,7 +51,7 @@ public:
   // A cfg_scale of 1.0 is equivalent to plain conditional sampling, in which
   // case the extra unconditional pass is skipped for performance.
   bool enable_cfg = true;
-  float cfg_scale = 1.0f;
+  float cfg_scale = 1.0f, temperature = 1.0f;
 
   nlohmann::json config;
   int joint_num, past_points, pose_token_dim, future_points, diffusion_steps,
